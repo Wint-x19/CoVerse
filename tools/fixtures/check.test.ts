@@ -1,0 +1,57 @@
+import { cp, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { checkFixtures } from "./check.js";
+import { sha256 } from "./collect.js";
+import { createSandbox, removeSandbox, repositoryRoot } from "../test-helpers.js";
+
+let sandbox: string;
+beforeEach(async () => {
+  sandbox = await createSandbox();
+  await cp(path.join(repositoryRoot, "fixtures"), path.join(sandbox, "fixtures"), { recursive: true });
+});
+afterEach(async () => { await removeSandbox(sandbox); });
+
+function root() { return path.join(sandbox, "fixtures"); }
+function fixturePath(filename: string) { return path.join(root(), "codex", "synthetic-v1", filename); }
+async function editManifest(edit: (manifest: {
+  reviewRequired: boolean;
+  nativeFormatVerified: boolean;
+  files: { path: string; sha256: string }[];
+}) => void) {
+  const manifest = JSON.parse(await readFile(fixturePath("manifest.json"), "utf8"));
+  edit(manifest);
+  await writeFile(fixturePath("manifest.json"), JSON.stringify(manifest));
+}
+
+describe("fixture baseline validation", () => {
+  it("verifies all three synthetic baselines", async () => {
+    expect(await checkFixtures(root())).toEqual({ manifests: 3, files: 3 });
+  });
+  it("detects content drift", async () => {
+    await writeFile(fixturePath("sample.jsonl"), '{"changed":true}\n');
+    await expect(checkFixtures(root())).rejects.toThrow("checksum");
+  });
+  it("rejects unreviewed captures", async () => {
+    await editManifest((manifest) => { manifest.reviewRequired = true; });
+    await expect(checkFixtures(root())).rejects.toThrow("unreviewed");
+  });
+  it("rejects unlisted artifacts", async () => {
+    await writeFile(fixturePath("unreviewed.json"), "{}");
+    await expect(checkFixtures(root())).rejects.toThrow("unlisted");
+  });
+  it("rejects paths outside the version directory", async () => {
+    await editManifest((manifest) => { manifest.files[0]!.path = "../outside.jsonl"; });
+    await expect(checkFixtures(root())).rejects.toThrow("file entry");
+  });
+  it("rejects native compatibility claims on scaffold fixtures", async () => {
+    await editManifest((manifest) => { manifest.nativeFormatVerified = true; });
+    await expect(checkFixtures(root())).rejects.toThrow("must not claim");
+  });
+  it("checks syntax even when a checksum matches", async () => {
+    const invalid = "{invalid}\n";
+    await writeFile(fixturePath("sample.jsonl"), invalid);
+    await editManifest((manifest) => { manifest.files[0]!.sha256 = sha256(invalid); });
+    await expect(checkFixtures(root())).rejects.toThrow();
+  });
+});

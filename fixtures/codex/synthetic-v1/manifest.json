@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "agent": "codex",
+  "formatVersion": "synthetic-v1",
+  "provenance": "synthetic",
+  "reviewRequired": false,
+  "nativeFormatVerified": false,
+  "description": "Hand-authored scaffold baseline. No user data; not a native agent format fixture.",
+  "files": [
+    {
+      "path": "sample.jsonl",
+      "format": "jsonl",
+      "sha256": "4166865d084ef8a4554a044cdcb2fbdbc6e511bcd6fcbb94af25138d6f26acc1"
+    }
+  ]
+}

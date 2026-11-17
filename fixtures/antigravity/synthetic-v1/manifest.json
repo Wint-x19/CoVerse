@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "agent": "antigravity",
+  "formatVersion": "synthetic-v1",
+  "provenance": "synthetic",
+  "reviewRequired": false,
+  "nativeFormatVerified": false,
+  "description": "Hand-authored scaffold baseline. No user data; not a native agent format fixture.",
+  "files": [
+    {
+      "path": "sample.jsonl",
+      "format": "jsonl",
+      "sha256": "b67b4878735419ba144f99f82f18bff5d79fa83357ea3ce9fc02312b82e90cc1"
+    }
+  ]
+}

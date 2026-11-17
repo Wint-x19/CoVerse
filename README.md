@@ -25,7 +25,7 @@
 
 ## 状态
 
-🚧 M0 脚手架开发中，路线图见 [DESIGN.md §5](DESIGN.md)。
+M0 脚手架已实现，路线图见 [DESIGN.md §5](DESIGN.md)。
 
 **初期仅开发 Codex、Claude Code、Antigravity 三家的独立插件。** 当前均为占位：不探测任何原生格式，不支持导入、导出或原生续接。协议转换从 M1 开始，会话解析从 M2 开始。
 
@@ -42,9 +42,18 @@ pnpm coverse doctor
 
 如果本机 pnpm 启动器不可用，可将命令中的 `pnpm` 换成 `npx --yes pnpm@10.34.9`，无需修改全局安装。
 
-`pnpm check` 依次构建所有包、严格类型检查、运行 Vitest 和空/二进制管线冒烟测试。`pnpm test` 与 `pnpm smoke` 使用构建后的包，新克隆或修改包代码后先执行 `pnpm build`。CLI 运行构建后的原生 ESM。
+`pnpm check` 依次构建所有包、严格类型检查、运行 Vitest、校验 fixtures 清单及摘要、执行空/二进制管线冒烟测试。`pnpm test` 与 `pnpm smoke` 使用构建后的包，新克隆或修改包代码后先执行 `pnpm build`。CLI 运行构建后的原生 ESM。
 
 核心只定义 CSR、FileSet、LossLedger、插件契约、注册表与转换管线；具体插件在 CLI 组合入口注册。`protocols`、`modes`、`drivers` 仅建立包边界，`ui` 留待 M4。
+
+## 样本采集与脱敏
+
+```sh
+pnpm fixtures:collect --help
+pnpm fixtures:check
+```
+
+首批三家各有一份手写合成样本，用于脚手架验证，不宣称原生格式兼容。采集工具处理显式指定的 UTF-8 JSON/JSONL 文件，输出结构脱敏后的文件与修改计数清单，写入被忽略的 `.local/fixtures/`，经人工审核后才能入库。原始会话不会自动提交。详见 [fixtures 说明](fixtures/README.md)。
 
 ## CI
 

@@ -1,0 +1,2 @@
+{"role":"user","content":[{"type":"text","text":"Synthetic request: retain a tool result."}],"metadata":{"synthetic":true,"case":"claude-code-scaffold"}}
+{"role":"tool","content":[{"type":"tool_result","id":"synthetic-call-1","output":{"synthetic_future_field":[1,2,3]}}]}

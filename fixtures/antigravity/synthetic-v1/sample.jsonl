@@ -1,0 +1,2 @@
+{"role":"user","content":[{"type":"text","text":"合成测试：保留 Unicode 与未知字段结构。"}],"metadata":{"synthetic":true,"case":"antigravity-scaffold"}}
+{"role":"assistant","content":[{"type":"text","text":"This synthetic record does not describe Antigravity storage."}],"synthetic_future_field":{"nested":[true,null,"placeholder"]}}

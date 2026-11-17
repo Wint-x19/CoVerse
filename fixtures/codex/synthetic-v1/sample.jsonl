@@ -1,0 +1,2 @@
+{"role":"user","content":[{"type":"text","text":"Synthetic request: describe an empty workspace."}],"metadata":{"synthetic":true,"case":"codex-scaffold"}}
+{"role":"assistant","content":[{"type":"text","text":"Synthetic response: no files have been changed."}],"metadata":{"synthetic":true}}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "agent": "claude-code",
+  "formatVersion": "synthetic-v1",
+  "provenance": "synthetic",
+  "reviewRequired": false,
+  "nativeFormatVerified": false,
+  "description": "Hand-authored scaffold baseline. No user data; not a native agent format fixture.",
+  "files": [
+    {
+      "path": "sample.jsonl",
+      "format": "jsonl",
+      "sha256": "fe019e125a330ab792563c37de4d50ce193609d7bd19e4323848e44ce943603a"
+    }
+  ]
+}
