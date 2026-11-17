@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "agent": "claude-code",
+  "formatVersion": "transcript-sdk-0_3_326",
+  "provenance": "reconstructed",
+  "reviewRequired": false,
+  "nativeFormatVerified": true,
+  "description": "Independently authored transcript validated by the official SDK reader; no claim of native resume or exhaustive writer compatibility.",
+  "evidence": [
+    "@anthropic-ai/claude-agent-sdk@0.3.326 getSessionMessages read all four records in order on 2026-11-17 using an isolated repository-local config directory.",
+    "Official SDK sdk.mjs parentUuid chain reader and sdk.d.ts SessionMessage contract; npm tarball sha256: 6ad633b9709ab2c50bf5500b206df08ab065e2acc5461e2650fceb9a2a658583",
+    "Writer label 2.1.121 matches the installed release, but the validated capability is this transcript structure, not every record that release can produce."
+  ],
+  "files": [
+    {
+      "path": "sample.jsonl",
+      "format": "jsonl",
+      "sha256": "c3a2275ee35cc995d8e1eec125962c2ae2d97beedb3eb235f3d8a558223d89b3"
+    }
+  ]
+}

@@ -26,7 +26,7 @@ async function editManifest(edit: (manifest: {
 
 describe("fixture baseline validation", () => {
   it("verifies agent scaffolds and all three protocol baselines", async () => {
-    expect(await checkFixtures(root())).toEqual({ manifests: 7, files: 14 });
+    expect(await checkFixtures(root())).toEqual({ manifests: 8, files: 15 });
   });
   it("detects content drift", async () => {
     await writeFile(fixturePath("sample.jsonl"), '{"changed":true}\n');
