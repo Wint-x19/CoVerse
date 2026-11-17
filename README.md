@@ -4,14 +4,14 @@
 
 ## 它解决什么问题
 
-你正在用 codex 写代码，中途想换 Claude Code 继续、或把会话交给 zcode / dsh 接手——各家 Agent 的会话格式互不相通，上下文迁移靠人肉复制粘贴。CoVerse 把这件事变成一次拖拽。
+你正在用 Codex 写代码，中途想换 Claude Code 或 Antigravity 继续——各家 Agent 的会话格式互不相通，上下文迁移依赖手动复制粘贴。CoVerse 的目标是让上下文迁移成为可审计的转换过程。
 
 ## 核心能力（三层转换）
 
 | 层级 | 职责 |
 |------|------|
 | 底层：消息协议 | Responses / Chat Completions / Anthropic Messages 等主流消息协议互转 |
-| 中层：对话记录 | codex、claude-code、dsh、zcode 等会话记录的导入导出与跨 Agent 续接 |
+| 中层：对话记录 | 首批仅 Codex、Claude Code、Antigravity 的会话记录导入导出与续接 |
 | 顶层：模式规范 | 目标模式、计划模式、技能等工作模式的语义映射 |
 
 平台只做**聚合与协议转换**，不做 Agent 分工、提示词工程。
@@ -25,7 +25,30 @@
 
 ## 状态
 
-🚧 项目处于 M0 阶段（脚手架），路线图见 [DESIGN.md §5](DESIGN.md)。
+🚧 M0 脚手架开发中，路线图见 [DESIGN.md §5](DESIGN.md)。
+
+**初期仅开发 Codex、Claude Code、Antigravity 三家的独立插件。** 当前均为占位：不探测任何原生格式，不支持导入、导出或原生续接。协议转换从 M1 开始，会话解析从 M2 开始。
+
+## 本地开发
+
+在本 README 所在的 git 仓库目录运行，要求 Node.js ≥ 20.19，pnpm 10.34.9：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm coverse adapters --json
+pnpm coverse doctor
+```
+
+如果本机 pnpm 启动器不可用，可将命令中的 `pnpm` 换成 `npx --yes pnpm@10.34.9`，无需修改全局安装。
+
+`pnpm check` 依次构建所有包、严格类型检查、运行 Vitest 和空/二进制管线冒烟测试。`pnpm test` 与 `pnpm smoke` 使用构建后的包，新克隆或修改包代码后先执行 `pnpm build`。CLI 运行构建后的原生 ESM。
+
+核心只定义 CSR、FileSet、LossLedger、插件契约、注册表与转换管线；具体插件在 CLI 组合入口注册。`protocols`、`modes`、`drivers` 仅建立包边界，`ui` 留待 M4。
+
+## CI
+
+[CI 配置](.github/workflows/ci.yml) 覆盖 Windows/Linux 与 Node 20/22，固定依赖安装后运行 `pnpm check`。当前远端为 Gitee，GitHub Actions 配置不会在 Gitee 自动执行；Gitee 自建流水线应使用同一检查命令。
 
 ## License
 

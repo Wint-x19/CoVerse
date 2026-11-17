@@ -1,0 +1,76 @@
+/** M0 provisional contract. CSR v1 will be established in M1. */
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+/** Paths are portable relative paths; contents may be binary or compressed. */
+export interface Artifact {
+  path: string;
+  bytes: Uint8Array;
+}
+export type FileSet = readonly Artifact[];
+
+export interface LossItem {
+  code: string;
+  path: string;
+  reason: string;
+}
+export interface LossLedger {
+  dropped: LossItem[];
+  downgraded: LossItem[];
+  approximated: LossItem[];
+}
+
+export type ContentBlock =
+  | { type: "text" | "reasoning"; text: string }
+  | { type: "tool_call"; id: string; name: string; arguments: JsonValue }
+  | { type: "tool_result"; callId: string; content: JsonValue }
+  | { type: "attachment"; path: string; mediaType: string }
+  | { type: "unknown"; raw: JsonValue };
+
+export interface Turn {
+  id: string;
+  role: "system" | "developer" | "user" | "assistant" | "tool";
+  content: ContentBlock[];
+  raw?: JsonValue;
+}
+
+export interface CSR {
+  schemaVersion: "0.1";
+  meta: {
+    id: string;
+    agent: string;
+    agentFormatVersion: string;
+    createdAt?: string;
+    cwd?: string;
+    model?: string;
+    vcs?: { root: string; branch?: string; commit?: string };
+  };
+  turns: Turn[];
+  xExtensions: Record<string, JsonValue>;
+  raw?: JsonValue;
+  /** Retain exact bytes as well as parsed records when the source needs them. */
+  sourceArtifacts?: FileSet;
+}
+
+export interface AdapterCapabilities {
+  import: boolean;
+  export: boolean;
+  nativeResume: boolean;
+}
+export interface Detection {
+  confidence: number;
+  formatVersion?: string;
+}
+export interface ImportResult { session: CSR; ledger: LossLedger }
+export interface ExportResult { artifacts: FileSet; ledger: LossLedger }
+
+/** All agent format knowledge lives in implementations outside core. */
+export interface SessionAdapter {
+  readonly id: string;
+  readonly displayName: string;
+  readonly status: "scaffold" | "ready";
+  readonly supportedVersions: readonly string[];
+  readonly capabilities: Readonly<AdapterCapabilities>;
+  detect(input: FileSet): Detection | Promise<Detection>;
+  import(input: FileSet): ImportResult | Promise<ImportResult>;
+  export(session: CSR): ExportResult | Promise<ExportResult>;
+}

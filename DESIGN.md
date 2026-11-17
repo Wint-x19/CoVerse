@@ -1,6 +1,6 @@
 # CoVerse 可行性分析与工程设计
 
-> 状态：v0.1 草案（2026-11-15）。本文档是工程实施前的分析基线，随实践修订。
+> 状态：v0.2，M0 实施基线（2026-11-17）。首批仅开发 Codex、Claude Code、Antigravity 三家的适配器；历史侦察记录不代表开发范围或已验证能力。
 > 配套规范见 [AGENTS.md](AGENTS.md)。
 
 ---
@@ -19,6 +19,8 @@
 ---
 
 ## 2. 本机格式侦察证据（2026-11-15 实测）
+
+以下保留历史侦察线索。dsh、zcode 不在初期范围；Antigravity 的存储格式、执行入口和续接能力尚未实测，后续以插件内验证结果为准。M0 不读取个人会话，首批 fixtures 使用明确标注的合成数据。
 
 | Agent | 存储位置 | 形态 | 关键观察 |
 |-------|----------|------|----------|
@@ -86,7 +88,7 @@
 
 ## 4. 工程架构
 
-### 4.1 技术栈（建议，待拍板）
+### 4.1 技术栈（M0 采用）
 
 - **语言**：TypeScript（JSON/JSONL 原生生态、CLI 与 Web 同构、社区贡献门槛低）；性能敏感处后期可下沉 Rust，接口留缝。
 - **Monorepo**：pnpm workspace，统一版本与 CI。
@@ -103,8 +105,7 @@ CoVerse/                        ← git 仓库根（AGENTS.md 硬性规定）
 │   ├── adapters/               # 中层插件：每 agent 一个独立包
 │   │   ├── adapter-codex/
 │   │   ├── adapter-claude-code/
-│   │   ├── adapter-dsh/
-│   │   └── adapter-zcode/      # sqlite 逆向，难度最高，靠后
+│   │   └── adapter-antigravity/ # 格式待验证，不猜测实现
 │   ├── modes/                  # 顶层：目标/计划模式、技能规范映射
 │   ├── drivers/                # agent 执行驱动（CLI 封装、流式归一）
 │   ├── cli/                    # 命令行入口（先于 UI 交付）
@@ -159,13 +160,13 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 
 | 里程碑 | 内容 | 交付物 | 主要验证的问题 |
 |--------|------|--------|----------------|
-| **M0** 脚手架 | git init（在 `CoVerse/` 下）、pnpm monorepo、CI、**fixtures 采集脱敏工具** | 可跑的空管线 + 首批金样本 | 工程底座 |
+| **M0** 脚手架 | 复用既有 git 仓库、pnpm monorepo、CI、三家插件占位、**fixtures 采集脱敏工具** | 可跑的空管线 + 首批合成基线样本（不代表原生格式金样本） | 工程底座 |
 | **M1** 底层协议 | core IR v1 + protocols 三协议互转 | `coverse convert-protocol` CLI | 管线与测试纪律（文档齐全，低风险热身） |
-| **M2** 首对适配器 | adapter-codex + adapter-claude-code：import → CSR → 注入式引导包；金样本回归 | `coverse convert-session codex→claude` CLI | IR 表达力够不够、LossLedger 可行性 |
+| **M2** 首批适配器 | 仅 Codex、Claude Code、Antigravity：先打通 Codex ↔ Claude Code，再基于实测接入 Antigravity；import → CSR → 注入式引导包 | `coverse convert-session` CLI + 版本化金样本；未验证能力明确不可用 | IR 表达力与 LossLedger；Antigravity 格式可行性 |
 | **M3** 端到端闭环 | drivers + 注入式续接：A 会话 → 在 B agent 里继续对话 | 端到端演示（含 LossLedger 报告） | 核心价值主张成立与否 |
 | **M4** 平台 UI | Web：会话列表、拖拽转换、选 agent/model 直聊 | 可日常自用的 Web 平台 | 产品形态 |
 | **M5** 原生合成 | codex / claude-code 的原生会话文件合成 + resume；失败回退注入 | 无缝续接（F2/F3 级） | 最高风险项后置攻坚 |
-| **M6** 顶层+生态 | modes/skills 映射；dsh、zcode 适配器；插件贡献模板与漂移 CI | 社区可贡献体系 | 生态化 |
+| **M6** 顶层+生态 | modes/skills 映射；首批三家插件完善；插件贡献模板与漂移 CI | 社区可贡献体系；其它 Agent 另行确认 | 生态化 |
 
 排序原则：**先建管线信心（有文档的底层）→ 再碰逆向（无文档的中层）→ 最险的原生合成放 M5**；UI 在核心能力闭环后再上，避免先做壳。
 
@@ -179,15 +180,14 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 | 原生合成文件被 agent 拒绝 | 中/中 | 仅作可选能力，注入式兜底（D 方案） |
 | 厂商封闭化/反移植 | 低/高 | 社区插件快速跟进；平台价值在聚合层，不依赖单一 agent |
 | 长会话超窗 | 中/中 | 分层注入 + 裁剪显式化（F 方案） |
-| zcode sqlite 逆向成本超预期 | 中/低 | 排 M6，必要时降级为仅导出（读）不合成（写） |
+| Antigravity 格式或执行入口未验证 | 未知/高 | 先验证样本和能力，再实现对应插件；无法支持的能力明确报错，不承诺原生续接 |
 | 法律/条款争议 | 低/高 | 只碰用户本地数据、社区贡献、金样本脱敏（H 方案） |
 
 ---
 
-## 7. 待拍板决策
+## 7. M0 实施决策
 
-1. **技术栈**：TypeScript monorepo（建议）／Rust 核心 + TS UI ／ Python；
-2. **首批适配器对**：codex + claude-code（建议，文档资料最多）／其它组合；
-3. **产品形态**：CLI 先行后补 Web（建议）／直接 Web。
-
-以上决策确认后进入 M0 实施。
+1. **技术栈**：采用既有建议，TypeScript + pnpm workspace + Vitest；当前 CSR `0.1` 为脚手架契约，M1 再建立 v1。
+2. **首批适配器**：用户明确限定 Codex、Claude Code、Antigravity。插件占位不等于已支持格式，M0 的 `supportedVersions` 均为空。
+3. **产品形态**：CLI 先行，Web 留待 M4。
+4. **CI**：提供 GitHub Actions 的 Windows/Linux、Node 20/22 检查矩阵；当前远端为 Gitee，推送不会自动运行 GitHub Actions。Gitee 流水线可执行相同的 `pnpm install --frozen-lockfile` 和 `pnpm check`。
