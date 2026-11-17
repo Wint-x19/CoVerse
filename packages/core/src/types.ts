@@ -33,6 +33,8 @@ export interface Turn {
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content: ContentBlock[];
   raw?: JsonValue;
+  /** Stable provenance; parent/branch references must not be flattened away. */
+  origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
 }
 
 export interface CSR {
@@ -57,13 +59,23 @@ export interface AdapterCapabilities {
   import: boolean;
   export: boolean;
   nativeResume: boolean;
+  importFormats?: readonly string[];
+  exportFormats?: readonly ("injection-bundle")[];
+}
+export interface SessionDiagnostic {
+  code: string;
+  path: string;
+  message: string;
+  severity: "warning" | "error";
 }
 export interface Detection {
   confidence: number;
   formatVersion?: string;
+  diagnostics?: SessionDiagnostic[];
 }
-export interface ImportResult { session: CSR; ledger: LossLedger }
-export interface ExportResult { artifacts: FileSet; ledger: LossLedger }
+export interface ImportResult { session: CSR; ledger: LossLedger; diagnostics?: SessionDiagnostic[] }
+export interface ExportContext { ledger?: LossLedger; diagnostics?: readonly SessionDiagnostic[] }
+export interface ExportResult { artifacts: FileSet; ledger: LossLedger; diagnostics?: SessionDiagnostic[] }
 
 /** All agent format knowledge lives in implementations outside core. */
 export interface SessionAdapter {
@@ -74,5 +86,5 @@ export interface SessionAdapter {
   readonly capabilities: Readonly<AdapterCapabilities>;
   detect(input: FileSet): Detection | Promise<Detection>;
   import(input: FileSet): ImportResult | Promise<ImportResult>;
-  export(session: CSR): ExportResult | Promise<ExportResult>;
+  export(session: CSR, context?: ExportContext): ExportResult | Promise<ExportResult>;
 }

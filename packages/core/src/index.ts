@@ -1,6 +1,7 @@
 import type { FileSet, LossLedger, SessionAdapter } from "./types.js";
 export type * from "./types.js";
 export type * from "./protocol.js";
+export * from "./session.js";
 
 export function emptyLedger(): LossLedger {
   return { dropped: [], downgraded: [], approximated: [] };
@@ -47,12 +48,12 @@ export function validateFileSet(files: FileSet): void {
   const paths = new Set<string>();
   for (const file of files) {
     const parts = file.path.split("/");
-    if (parts.some((part) => part === "" || part === "." || part === "..") ||
+    if (parts.some((part) => part === "" || part === "." || part === ".." || /[. ]$/.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)) ||
         /[\\:\u0000-\u001f]/.test(file.path)) {
       throw new Error("Artifact paths must be portable relative paths");
     }
-    if (paths.has(file.path)) throw new Error("Duplicate artifact path");
-    paths.add(file.path);
+    if (paths.has(file.path.toLowerCase())) throw new Error("Duplicate artifact path");
+    paths.add(file.path.toLowerCase());
   }
 }
 
@@ -67,11 +68,12 @@ export async function convertSession(input: {
   if (!target.capabilities.export) throw new AdapterUnavailableError(target.id, "export");
   validateFileSet(artifacts);
   const imported = await source.import(artifacts);
-  const exported = await target.export(imported.session);
+  const exported = await target.export(imported.session, { ledger: imported.ledger, diagnostics: imported.diagnostics ?? [] });
   validateFileSet(exported.artifacts);
   return {
     session: imported.session,
     artifacts: exported.artifacts,
     ledger: mergeLedgers(imported.ledger, exported.ledger),
+    diagnostics: [...(imported.diagnostics ?? []), ...(exported.diagnostics ?? [])],
   };
 }

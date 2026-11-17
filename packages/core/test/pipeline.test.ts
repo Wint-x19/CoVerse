@@ -34,7 +34,7 @@ describe("conversion pipeline", () => {
     expect(result.artifacts).toEqual(files);
     expect(result.session.raw).toEqual({ unknownEvent: true });
     expect(result.session.xExtensions["x-unknown"]).toEqual({ future: [1, "opaque"] });
-    expect(target.export).toHaveBeenCalledWith(result.session);
+    expect(target.export).toHaveBeenCalledWith(result.session, { ledger: emptyLedger(), diagnostics: [] });
     expect(result.ledger).toEqual(emptyLedger());
   });
 

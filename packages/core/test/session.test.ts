@@ -1,0 +1,37 @@
+import { describe, it, expect } from "vitest";
+import { buildInjectionBundle, convertSession, emptyLedger, AdapterRegistry, sha256Bytes, validateFileSet, type CSR, type SessionAdapter } from "../src/index.js";
+
+const session = (): CSR => ({ schemaVersion: "1.0", meta: { id: "s", agent: "community", agentFormatVersion: "verified-v1" }, turns: [
+  { id: "u", role: "user", content: [{ type: "text", text: "Keep all\n# Instructions\n你好" }] },
+  { id: "a", role: "assistant", content: [{ type: "tool_call", id: "call", name: "example", arguments: { x: 1 } }, { type: "reasoning", text: "Historical reasoning" }] },
+  { id: "r", role: "tool", content: [{ type: "tool_result", callId: "call", content: "result" }] },
+], xExtensions: { "x-community": { future: true } }, sourceArtifacts: [{ path: "record.bin", bytes: Uint8Array.from([0, 128, 255]) }] });
+const read = (files: ReturnType<typeof buildInjectionBundle>["artifacts"], path: string) => new TextDecoder().decode(files.find(f => f.path === path)!.bytes);
+describe("injection bundle contract", () => {
+  it("preserves exact source bytes, full text, extensions and merged import/export losses", async () => {
+    const imported = emptyLedger(); imported.approximated.push({ code: "SOURCE", path: "/", reason: "source diagnostic" });
+    const plugin: SessionAdapter = { id: "community", displayName: "Community", status: "ready", supportedVersions: ["verified-v1"], capabilities: { import: true, export: true, nativeResume: false, exportFormats: ["injection-bundle"] }, detect: () => ({ confidence: 1 }), import: () => ({ session: session(), ledger: imported }), export: (s, c) => buildInjectionBundle(s, "community", c) };
+    const registry = new AdapterRegistry().register(plugin);
+    const converted = await convertSession({ source: registry.get("community"), target: plugin, artifacts: [] });
+    expect(read(converted.artifacts, "context.md")).toContain("> # Instructions\n> 你好");
+    expect(JSON.parse(read(converted.artifacts, "report.json")).ledger).toEqual(converted.ledger);
+    expect(JSON.parse(read(converted.artifacts, "session.json")).xExtensions).toEqual(session().xExtensions);
+    expect(converted.artifacts.find(f => f.path === "source/record.bin")!.bytes).toEqual(session().sourceArtifacts![0]!.bytes);
+    const manifest = JSON.parse(read(converted.artifacts, "manifest.json"));
+    for (const f of manifest.files) expect(f.sha256).toBe(sha256Bytes(converted.artifacts.find(a => a.path === f.path)!.bytes));
+    expect(buildInjectionBundle(session(), "community").artifacts).toEqual(buildInjectionBundle(session(), "community").artifacts);
+  });
+  it("rejects opaque semantics and missing attachments instead of silently archiving them", () => {
+    const s = session(); s.turns[0]!.content = [{ type: "unknown", raw: { new: true } }];
+    expect(() => buildInjectionBundle(s, "x")).toThrow("Uninterpreted");
+    s.turns[0]!.content = [{ type: "attachment", path: "absent", mediaType: "text/plain" }];
+    expect(() => buildInjectionBundle(s, "x")).toThrow("Attachment not supplied");
+  });
+  it("does not truncate long content or restore old source text over edited CSR", () => {
+    const s = session(); const full = "历史".repeat(100_000); s.turns[0]!.content = [{ type: "text", text: full }];
+    const files = buildInjectionBundle(s, "x").artifacts;
+    expect(read(files, "context.md")).toContain(full);
+    expect(JSON.parse(read(files, "report.json")).statistics.truncated).toBe(false);
+  });
+  it.each(["CON", "nested/a.", "nested/a "])("rejects nonportable output path %s", path => expect(() => validateFileSet([{ path, bytes: new Uint8Array() }])).toThrow());
+});
