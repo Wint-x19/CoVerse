@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@coverse/core": "workspace:*"
+    "@coverse/core": "workspace:*",
+    "fzstd": "0.1.1"
   }
 }

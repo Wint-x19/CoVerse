@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "agent": "codex",
+  "formatVersion": "rollout-2026-11-17",
+  "provenance": "reconstructed",
+  "reviewRequired": false,
+  "nativeFormatVerified": true,
+  "description": "Independently authored content; structure compared against local writer records. Zstd raw-block frame for deterministic byte-equivalence regression.",
+  "evidence": [
+    "Read-only structural observation of local Codex writer 0.169.0-alpha.11.1 on 2026-11-17; no user text copied.",
+    "https://github.com/openai/codex/tree/main/codex-rs/rollout"
+  ],
+  "files": [
+    {
+      "path": "sample.jsonl",
+      "format": "jsonl",
+      "sha256": "0a2c5e6a1672ce29f1b48b9063d14c3853eeefc0d50eedb0515033dc574132ea"
+    },
+    {
+      "path": "sample.jsonl.zst",
+      "format": "jsonl.zst",
+      "sha256": "283db066c895d33730fcbc919753c832ed584d5b509736acdb0aeffa89a663e8"
+    }
+  ]
+}

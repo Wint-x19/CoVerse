@@ -26,7 +26,7 @@ async function editManifest(edit: (manifest: {
 
 describe("fixture baseline validation", () => {
   it("verifies agent scaffolds and all three protocol baselines", async () => {
-    expect(await checkFixtures(root())).toEqual({ manifests: 6, files: 12 });
+    expect(await checkFixtures(root())).toEqual({ manifests: 7, files: 14 });
   });
   it("detects content drift", async () => {
     await writeFile(fixturePath("sample.jsonl"), '{"changed":true}\n');
@@ -47,6 +47,12 @@ describe("fixture baseline validation", () => {
   it("rejects native compatibility claims on scaffold fixtures", async () => {
     await editManifest((manifest) => { manifest.nativeFormatVerified = true; });
     await expect(checkFixtures(root())).rejects.toThrow("must not claim");
+  });
+  it("requires evidence for reconstructed native fixtures", async () => {
+    const filename = path.join(root(), "codex", "rollout-2026-11-17", "manifest.json");
+    const manifest = JSON.parse(await readFile(filename, "utf8")); manifest.evidence = [];
+    await writeFile(filename, JSON.stringify(manifest));
+    await expect(checkFixtures(root())).rejects.toThrow("verification evidence");
   });
   it("checks syntax even when a checksum matches", async () => {
     const invalid = "{invalid}\n";

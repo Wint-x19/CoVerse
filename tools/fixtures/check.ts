@@ -27,19 +27,22 @@ export async function checkFixtures(root: string): Promise<{ manifests: number; 
       if (!record(manifest) || manifest.schemaVersion !== 1 || manifest.agent !== agent ||
           manifest.formatVersion !== version.name || manifest.reviewRequired !== false ||
           typeof manifest.nativeFormatVerified !== "boolean" ||
-          !["synthetic", "sanitized-local"].includes(String(manifest.provenance)) ||
+          !["synthetic", "sanitized-local", "reconstructed"].includes(String(manifest.provenance)) ||
           !Array.isArray(manifest.files) || manifest.files.length === 0) {
         throw new Error("Invalid or unreviewed fixture manifest");
       }
       if (manifest.provenance === "synthetic" && manifest.nativeFormatVerified !== false) {
         throw new Error("Scaffold synthetic fixtures must not claim native format verification");
       }
+      if (manifest.provenance === "reconstructed" && (manifest.nativeFormatVerified !== true || !Array.isArray(manifest.evidence) || !manifest.evidence.length || manifest.evidence.some(e => typeof e !== "string" || !e.trim()))) {
+        throw new Error("Reconstructed native fixtures require verification evidence");
+      }
       const expected = new Set(["manifest.json"]);
       for (const file of manifest.files as unknown[]) {
         if (!record(file) || typeof file.path !== "string" ||
-            !/^[a-zA-Z0-9][a-zA-Z0-9_-]*\.(json|jsonl)$/.test(file.path) ||
-            (file.format !== "json" && file.format !== "jsonl") ||
-            !file.path.endsWith(`.${file.format}`) || typeof file.sha256 !== "string" ||
+            !/^[a-zA-Z0-9][a-zA-Z0-9_-]*\.(json|jsonl|jsonl\.zst|db)$/.test(file.path) ||
+            !["json", "jsonl", "jsonl.zst", "db"].includes(String(file.format)) ||
+            !file.path.endsWith(`.${String(file.format)}`) || typeof file.sha256 !== "string" ||
             !/^[a-f0-9]{64}$/.test(file.sha256) || expected.has(file.path)) {
           throw new Error("Invalid or duplicate fixture file entry");
         }
@@ -48,6 +51,12 @@ export async function checkFixtures(root: string): Promise<{ manifests: number; 
         if (!(await lstat(filename)).isFile()) throw new Error("Fixture must be a regular file");
         const bytes = await readFile(filename);
         if (sha256(bytes) !== file.sha256) throw new Error("Fixture checksum mismatch");
+        if (file.format === "db" || file.format === "jsonl.zst") {
+          const magic = file.format === "db" ? Buffer.from("SQLite format 3\0") : Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+          if (!bytes.subarray(0, magic.length).equals(magic)) throw new Error("Invalid binary fixture header");
+          summary.files++;
+          continue;
+        }
         const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
         if (file.format === "json") JSON.parse(content);
         else {

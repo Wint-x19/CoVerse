@@ -13,6 +13,12 @@ describe("initial adapter scope", () => {
       turns: [], xExtensions: {},
     };
     for (const adapter of createRegistry().list()) {
+      if (adapter.status === "ready") {
+        expect(adapter.supportedVersions.length).toBeGreaterThan(0);
+        expect(adapter.capabilities.nativeResume).toBe(false);
+        expect(adapter.capabilities.exportFormats).toContain("injection-bundle");
+        continue;
+      }
       expect(adapter.status).toBe("scaffold");
       expect(adapter.supportedVersions).toEqual([]);
       expect(adapter.capabilities).toEqual({ import: false, export: false, nativeResume: false });
