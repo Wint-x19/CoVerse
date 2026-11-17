@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "agent": "antigravity",
+  "formatVersion": "sqlite-2_32_1-step0",
+  "provenance": "reconstructed",
+  "reviewRequired": false,
+  "nativeFormatVerified": true,
+  "description": "Independent SQLite/protobuf reconstruction with invented text and identifiers; verified schema, field tags and six step types from local 2.32.1 release.",
+  "evidence": [
+    "Read-only inspection on 2026-11-17: five stable local conversation databases, one schema, 1862 step_format=0 records, types 14/15/17/23/101/132.",
+    "Field names and numbers checked against FileDescriptorProto embedded in the local Antigravity 2.32.1 language_server.exe: gemini_coder.Step, exa.cortex_pb and exa.codeium_common_pb. No executable code or user payload copied.",
+    "Golden wire bytes generated independently using Python stdlib, not the production protobuf encoder."
+  ],
+  "files": [
+    {
+      "path": "sample.db",
+      "format": "db",
+      "sha256": "5eb13fe3b43abcf5c8acdb608adcd687a47865b6f4fd87ad7a3da7b417805aa0"
+    }
+  ]
+}

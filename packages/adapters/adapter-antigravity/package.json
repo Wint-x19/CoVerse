@@ -17,6 +17,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@coverse/core": "workspace:*"
+    "@coverse/core": "workspace:*",
+    "protobufjs": "^8.8.1",
+    "sql.js": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.11"
   }
 }
