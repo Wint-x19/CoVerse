@@ -2,7 +2,7 @@
 
 会话样本目录为 `codex`、`claude-code`、`antigravity`；独立的 `protocols/` 存放 M1 消息协议样本，不增加 Agent 适配范围。
 
-`*/synthetic-v1/` 是手写合成的**脚手架测试基线**，不来自个人会话，也不宣称符合任何原生 Agent 格式。用于验证文件装载、摘要校验和通用脱敏工具；真实版本的适配器回归从 M2 增加。Antigravity 的原生存储结构目前未知。
+`*/synthetic-v1/` 是手写合成的**脚手架测试基线**，不来自个人会话，也不宣称符合任何原生 Agent 格式。用于验证文件装载、摘要校验和通用脱敏工具。M2 的三家原生结构重建样本位于独立基线目录，见下文。
 
 ## 采集明确指定的本地文件
 
@@ -27,7 +27,17 @@ pnpm fixtures:collect --agent codex --format-version unverified --name sample-01
 
 `pnpm fixtures:check` 验证已提交样本的目录归属、审核标记、JSON/JSONL 可解析性、SHA-256 和文件清单。摘要检测意外漂移，不证明原生格式兼容或无敏感信息。
 
-## M1 协议样本
+## M2 原生结构重建样本
+
+`codex/rollout-2026-11-17`、`claude-code/transcript-sdk-0_3_326`、`antigravity/sqlite-2_32_1-step0` 使用独立编写的文本和标识符，`provenance: reconstructed`。清单记录结构验证依据，不能把它们与旧 `synthetic-v1` 占位样本混淆。
+
+Codex 的明文及 zstd raw-block frame 验证解压语义等价；Claude 样本由官方 SDK reader 实际读取验证；Antigravity 数据库由 `tools/fixtures/create-antigravity.py` 使用 Python 标准库 SQLite 和独立 protobuf 编码重建，字段事实对照本机 2.32.1 发布程序。生成器拒绝覆盖已有基线。
+
+校验器新增 JSONL.zst 和 SQLite 的文件头/摘要/清单检查；完整解析与语义由各插件测试和九条转换链路的集成测试验证。`nativeFormatVerified` 在这些目录仅表示清单中列出的结构依据，不表示原生导出/续接或整个 Agent 版本全面兼容。
+
+原通用采集器仍只接受 JSON/JSONL；不能把数据库或 protobuf 交给 shape-only 脱敏后宣称有效。真实二进制记录不自动入库；M2 只提交完全重建的二进制样本。
+
+## M1 协议样本说明
 
 `protocols/<protocol>/m1-2026-11-17/` 每个目录包含 request.json、response.json、stream.sse 和 manifest.json。全部内容均为 synthetic，不来自个人会话或 API 抓包。SSE 从审阅的合成 Chat 事件生成，另有独立手写的三协议事件测试约束生命周期。
 
