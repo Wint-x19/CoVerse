@@ -99,3 +99,49 @@ it("preserves timestamps across OpenAI formats and invalidates edited argument t
   if (b.type === "tool_call") b.arguments = { key: 2 };
   expect(JSON.stringify(encodeProtocol("request", decoded, "responses").data)).toContain('key\\\":2');
 });
+it("supports omitted Chat assistant content when tool_calls are present", () => {
+  const source = requests["chat-completions"];
+  const { content: _content, ...assistant } = source.messages[1]!;
+  const input = { ...source, messages: [source.messages[0], assistant, source.messages[2]] };
+  expect(convertRequest({ from: "chat-completions", to: "responses", input }).data).toHaveProperty("input");
+});
+it("rejects unresolved request calls and edited non-object arguments", () => {
+  expect(() => convertRequest({ from: "responses", to: "responses", input: { ...requests.responses, input: requests.responses.input.slice(0, 2) } })).toThrowError(expect.objectContaining({ code: "INVALID_TOOL_LINK" }));
+  const decoded = decodeProtocol("request", { from: "responses", to: "responses", input: requests.responses });
+  const b = decoded.value.messages[1]!.content[0]!;
+  if (b.type === "tool_call") b.arguments = [];
+  expect(() => encodeProtocol("request", decoded, "responses")).toThrowError(expect.objectContaining({ code: "INVALID_INPUT" }));
+});
+it("rejects malformed Anthropic assistant content and unsigned thinking", () => {
+  expect(() => convertRequest({ from: "anthropic-messages", to: "anthropic-messages", input: { model: "m", max_tokens: 10, messages: [{ role: "assistant", content: null }] } })).toThrowError(expect.objectContaining({ code: "INVALID_INPUT" }));
+  for (const content of [[{ type: "thinking", thinking: "missing signature" }], [{ type: "tool_result", tool_use_id: "c", content: "result" }]]) {
+    expect(() => convertResponse({ from: "anthropic-messages", to: "chat-completions", input: { ...responses["anthropic-messages"], content } })).toThrowError(expect.objectContaining({ code: "INVALID_INPUT" }));
+  }
+});
+it("cannot erase an existing loss ledger by exporting in strict mode", () => {
+  const decoded = decodeProtocol("request", { from: "responses", to: "responses", input: { ...requests.responses, future: 1 }, options: { policy: "allow-loss", omit: ["/future"] } });
+  expect(() => encodeProtocol("request", decoded, "responses")).toThrowError(expect.objectContaining({ code: "LOSS_NOT_ALLOWED" }));
+});
+it("can explicitly render opaque reasoning after decoding for archival", () => {
+  const input = { ...responses["anthropic-messages"], content: [{ type: "thinking", thinking: "visible", signature: "synthetic" }] };
+  const decoded = decodeProtocol("response", { from: "anthropic-messages", to: "anthropic-messages", input });
+  const converted = encodeProtocol("response", decoded, "chat-completions", { policy: "allow-loss", reasoningAsText: true });
+  expect(converted.ledger.downgraded).toHaveLength(1);
+  expect(JSON.stringify(converted.data)).toContain("visible");
+});
+it("normalizes cache counts without inventing or silently dropping counters", () => {
+  const input = { ...responses["anthropic-messages"], usage: { input_tokens: 3, output_tokens: 2, cache_read_input_tokens: 4 } };
+  const converted = convertResponse({ from: "anthropic-messages", to: "chat-completions", input });
+  expect(converted.data).toHaveProperty("usage.prompt_tokens", 7);
+  expect(converted.data).toHaveProperty("usage.prompt_tokens_details.cached_tokens", 4);
+  expect(convertResponse({ from: "chat-completions", to: "anthropic-messages", input: converted.data }).data).toHaveProperty("usage.input_tokens", 3);
+  expect(() => convertResponse({ from: "anthropic-messages", to: "responses", input: { ...input, usage: { ...input.usage, cache_creation_input_tokens: 1 } } })).toThrowError(expect.objectContaining({ code: "LOSS_NOT_ALLOWED" }));
+});
+it.each(ids)("maps incomplete/tool response lifecycle to %s", to => {
+  const incomplete = convertResponse({ from: "responses", to, input: { ...responses.responses, status: "incomplete", incomplete_details: { reason: "max_output_tokens" } } });
+  expect(decodeProtocol("response", { from: to, to, input: incomplete.data }).value.candidates[0]?.finish).toBe("length");
+  const tool = convertResponse({ from: "responses", to, input: { ...responses.responses, output: [{ type: "function_call", call_id: "c", name: "lookup", arguments: '{"x":1}' }] } });
+  const result = decodeProtocol("response", { from: to, to, input: tool.data }).value;
+  expect(result.candidates[0]?.finish).toBe("tool_calls");
+  expect(result.candidates[0]?.content[0]).toMatchObject({ type: "tool_call", id: "c", name: "lookup", arguments: { x: 1 } });
+});

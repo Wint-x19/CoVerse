@@ -43,7 +43,7 @@ export function decodeContent(value: unknown, protocol: ProtocolId, c: Conversio
     if (protocol === "anthropic-messages" && b.type === "thinking") {
       fields(b, ["type", "thinking", "signature"], c, path);
       string(b.thinking, c, path + "/thinking");
-      if (b.signature !== undefined) string(b.signature, c, path + "/signature");
+      nonempty(b.signature, c, path + "/signature");
       if (c.source === c.target) return [{ type: "opaque", source: protocol, value: b }];
       c.preserve(path, b, "Signed thinking cannot be replayed by another provider");
       c.loss("downgraded", "REASONING_AS_TEXT", path, "Thinking is rendered as visible text; signature is not portable", c.options.reasoningAsText);
@@ -84,7 +84,7 @@ export function decodeMessages(body: Obj, protocol: ProtocolId, c: ConversionCon
       if (m.role === "tool") {
         add("tool", [{ type: "tool_result", callId: nonempty(m.tool_call_id, c, p + "/tool_call_id"), content: string(m.content, c, p + "/content") }]); return;
       }
-      const content = m.content === null && m.role === "assistant" ? [] : decodeContent(m.content, protocol, c, p + "/content");
+      const content = protocol === "chat-completions" && m.content == null && m.role === "assistant" && (m.content === null || m.tool_calls !== undefined) ? [] : decodeContent(m.content, protocol, c, p + "/content");
       if (m.tool_calls !== undefined) {
         if (m.role !== "assistant") c.fail("INVALID_INPUT", p, "Only assistant messages may call tools");
         for (const [j, v] of array(m.tool_calls, c, p + "/tool_calls").entries()) {
@@ -142,8 +142,16 @@ export function argumentsText(b: Extract<ContentBlock, { type: "tool_call" }>): 
 }
 export function encodeMessages(messages: readonly Turn[], protocol: ProtocolId, c: ConversionContext): Obj {
   const output: JsonValue[] = []; const system: JsonValue[] = []; let sawConversation = false;
-  for (const [i, m] of messages.entries()) {
+  for (const [i, original] of messages.entries()) {
     const p = `/messages/${i}`;
+    // A caller can decode for archival first, edit IR, and choose another target later.
+    const m = { ...original, content: original.content.flatMap((b, j) => {
+      if (b.type !== "opaque" || b.source === protocol) return [b];
+      const q = `${p}/content/${j}`; const raw = object(b.value, c, q);
+      if (b.source === "responses" && raw.type === "reasoning") return decodeReasoning(raw, c, q);
+      if (b.source === "anthropic-messages" && raw.type === "thinking") return decodeContent([raw], "anthropic-messages", c, q);
+      return c.fail("UNSUPPORTED_CAPABILITY", q, "Opaque state is not portable to the selected target");
+    }) };
     if (protocol === "anthropic-messages" && ["system", "developer"].includes(m.role)) {
       if (m.role === "developer" || sawConversation || system.length) c.loss("downgraded", "ROLE_MERGE", p, "Instruction roles/order merged into Anthropic system", c.options.allowRoleMerge);
       system.push(...m.content.map((b, j) => encodeBlock(b, protocol, c, `${p}/content/${j}`, "system"))); continue;

@@ -54,6 +54,16 @@ it("parses comments, multi-line data and CRLF across every byte boundary", async
   for await (const f of readSse(chunks(source, 1), new ConversionContext("a", "b"))) frames.push(f);
   expect(frames).toEqual([{ event: "demo", data: '{"text":\n"中🙂"}' }]);
 });
+it("is invariant to seeded arbitrary network chunking", async () => {
+  for (const seed of [1, 17, 91]) {
+    async function* randomChunks() {
+      const data = encoder.encode(chatText.replace(/\n/g, "\r\n")); let state = seed;
+      for (let offset = 0; offset < data.length;) { state = (state * 1664525 + 1013904223) >>> 0; const size = state % 37 + 1; yield data.slice(offset, offset + size); offset += size; }
+    }
+    const result = await collect(convertStream({ from: "chat-completions", to: "responses", input: randomChunks() }).data);
+    expect((await semantics(result, "responses")).filter(e => e.type === "delta").map(e => e.text).join("")).toBe("你好🙂");
+  }
+});
 const parallel = chatFrame({ role: "assistant" }) + chatFrame({ tool_calls: [{ index: 0, id: "c1", type: "function", function: { name: "first", arguments: '{"x":' } }, { index: 1, id: "c2", type: "function", function: { name: "second", arguments: '{"y":' } }] }) + chatFrame({ tool_calls: [{ index: 1, function: { arguments: '2}' } }, { index: 0, function: { arguments: '1}' } }] }) + chatFrame({}, "tool_calls") + chatFrame({}, null, { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 }) + frame("[DONE]");
 it.each(ids)("keeps parallel tool identities and arguments through %s", async to => {
   const result = convertStream({ from: "chat-completions", to, input: chunks(parallel, 3) });

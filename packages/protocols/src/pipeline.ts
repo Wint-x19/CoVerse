@@ -21,6 +21,7 @@ export function encodeProtocol(kind: "response", decoded: Decoded<ProtocolRespon
 export function encodeProtocol(kind: "request" | "response", decoded: Decoded<ProtocolRequest> | Decoded<ProtocolResponse>, to: string, options: ConversionOptions = {}, registry = createProtocolRegistry()): ConversionResult<JsonValue> {
   const c = new ConversionContext(decoded.source, to, options);
   c.report.ledger = structuredClone(decoded.report.ledger); c.report.preserved = structuredClone(decoded.report.preserved);
+  if (options.policy !== "allow-loss" && Object.values(c.report.ledger).some(items => items.length)) c.fail("LOSS_NOT_ALLOWED", "/", "Decoded input already contains losses; strict export cannot erase that history");
   const codec = registry.get(to);
   const encoded = kind === "request" ? codec.encodeRequest(decoded.value as ProtocolRequest, c) : codec.encodeResponse(decoded.value as ProtocolResponse, c);
   const unchanged = decoded.source === to && decoded.snapshot === JSON.stringify(decoded.value) && options.targetModel === undefined && options.maxOutputTokens === undefined && options.candidateIndex === undefined && Object.values(c.report.ledger).every(v => v.length === 0);

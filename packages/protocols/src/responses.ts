@@ -87,6 +87,7 @@ export function decodeResponse(input: unknown, id: ProtocolId, c: ConversionCont
     r.candidates = [{ index: 0, content, finish }];
   }
   for (const candidate of r.candidates) {
+    if (candidate.content.some(b => b.type === "tool_result")) c.fail("INVALID_INPUT", "/content", "Assistant responses cannot contain user tool results");
     const calls = candidate.content.filter(b => b.type === "tool_call");
     if (new Set(calls.map(b => b.id)).size !== calls.length) c.fail("INVALID_TOOL_LINK", "/output", "Duplicate output tool calls");
   }

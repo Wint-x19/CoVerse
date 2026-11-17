@@ -47,6 +47,7 @@ export function validateHistory(messages: readonly Turn[], c: ConversionContext)
     const p = `/messages/${i}/content/${j}`;
     if (b.type === "tool_call") {
       if (m.role !== "assistant" || calls.has(b.id) || !b.id || !b.name) c.fail("INVALID_TOOL_LINK", p, "Duplicate, empty, or misplaced tool call");
+      object(b.arguments, c, p + "/arguments");
       calls.add(b.id);
     }
     if (b.type === "tool_result") {
@@ -54,4 +55,5 @@ export function validateHistory(messages: readonly Turn[], c: ConversionContext)
       results.add(b.callId);
     }
   }));
+  for (const id of calls) if (!results.has(id)) c.fail("INVALID_TOOL_LINK", "/messages", `Request history contains an unresolved tool call: ${id}`);
 }
