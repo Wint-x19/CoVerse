@@ -80,6 +80,12 @@ it("does not overwrite a directory created between conversion and publication", 
   expect(await runSessionCli(args(), registry, transport().io)).toBe(1);
   expect(await fs.readFile(path.join(output, "keep"), "utf8")).toBe("racing writer");
 });
+it("reports cleanup errors as I/O failures rather than rejecting the CLI promise", async () => {
+  const t = transport();
+  expect(await runSessionCli(args(), createRegistry(), t.io, { writeFile: async () => { throw new Error("write failed"); }, rm: async () => { throw new Error("cleanup failed"); } })).toBe(1);
+  expect(t.errors.join()).toContain("/cleanup");
+  expect(await fs.readdir(sandbox)).not.toContain("bundle");
+});
 it("distinguishes bad arguments, missing files, unsupported input and cancellation", async () => {
   expect(await runSessionCli([], createRegistry(), transport().io)).toBe(2);
   expect(await runSessionCli(args("codex", "claude-code", path.join(sandbox, "absent")), createRegistry(), transport().io)).toBe(1);

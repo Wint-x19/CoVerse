@@ -33,5 +33,6 @@ describe("injection bundle contract", () => {
     expect(read(files, "context.md")).toContain(full);
     expect(JSON.parse(read(files, "report.json")).statistics.truncated).toBe(false);
   });
-  it.each(["CON", "nested/a.", "nested/a "])("rejects nonportable output path %s", path => expect(() => validateFileSet([{ path, bytes: new Uint8Array() }])).toThrow());
+  it.each(["CON", "nested/a.", "nested/a ", "question?", "a<b", "star*"])("rejects nonportable output path %s", path => expect(() => validateFileSet([{ path, bytes: new Uint8Array() }])).toThrow());
+  it("rejects case-folded directory/file conflicts", () => expect(() => validateFileSet([{ path: "Directory", bytes: new Uint8Array() }, { path: "directory/child", bytes: new Uint8Array() }])).toThrow("path conflict"));
 });

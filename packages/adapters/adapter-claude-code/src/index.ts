@@ -94,11 +94,11 @@ const adapter: SessionAdapter = {
         if (typeof message.model === "string") session.meta.model = message.model;
         if (r.isCompactSummary === true) origin.kind = "compaction";
         turn = { id, role: r.type, content: blocks(message.content, at), raw: r, origin };
-      } else if (["system", "attachment", "progress"].includes(String(r.type))) {
-        if (r.subtype === "compact_boundary") origin.kind = "compaction";
+      } else if (["system", "attachment", "progress", "summary"].includes(String(r.type))) {
+        if (r.subtype === "compact_boundary" || r.type === "summary") origin.kind = "compaction";
         turn = { id, role: "system", content: [{ type: "text", text: `Historical ${String(r.type)} record:\n${JSON.stringify(r, null, 2)}` }], raw: r, origin };
         ledger.downgraded.push({ code: "NATIVE_CONTEXT_AS_HISTORY", path: at, reason: "Native context, progress and compaction data are labeled history, not target runtime state" });
-      } else if (!["file-history-snapshot", "queue-operation", "summary", "last-prompt", "custom-title", "tag", "agent-name", "agent-color", "agent-setting", "pr-link"].includes(String(r.type))) {
+      } else if (!["file-history-snapshot", "queue-operation", "last-prompt", "custom-title", "tag", "agent-name", "agent-color", "agent-setting", "pr-link"].includes(String(r.type))) {
         turn = { id, role: "system", content: [{ type: "opaque", source: "claude-code:record", value: r }], raw: r, origin };
       }
       if (turn) { session.turns.push(turn); byId.set(id, turn); }

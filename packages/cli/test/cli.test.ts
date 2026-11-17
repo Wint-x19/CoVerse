@@ -7,7 +7,7 @@ describe("initial adapter scope", () => {
     expect(createRegistry().list().map(({ id }) => id)).toEqual(["codex", "claude-code", "antigravity"]);
   });
 
-  it("never claims native format support for scaffolds", async () => {
+  it("declares verified import and injection capabilities separately from native resume", async () => {
     const session: CSR = {
       schemaVersion: "1.0", meta: { id: "test", agent: "test", agentFormatVersion: "test" },
       turns: [], xExtensions: {},
@@ -17,6 +17,7 @@ describe("initial adapter scope", () => {
         expect(adapter.supportedVersions.length).toBeGreaterThan(0);
         expect(adapter.capabilities.nativeResume).toBe(false);
         expect(adapter.capabilities.exportFormats).toContain("injection-bundle");
+        expect(adapter.capabilities.importFormats?.length).toBeGreaterThan(0);
         continue;
       }
       expect(adapter.status).toBe("scaffold");
@@ -41,7 +42,7 @@ describe("CLI", () => {
     expect(await runCli(args, (line) => output.push(line))).toBe(0);
     expect(output.length).toBe(1);
   });
-  it.each([["convert-session"], ["adapters", "--typo"], ["doctor", "extra"]])("rejects unsupported command %j", async (...args) => {
+  it.each([["adapters", "--typo"], ["doctor", "extra"]])("rejects unsupported command %j", async (...args) => {
     expect(await runCli(args, () => {})).toBe(2);
   });
 });

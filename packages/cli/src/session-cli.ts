@@ -81,6 +81,7 @@ async function loadInputs(inputs: readonly string[], output: string, fileIO: Fil
 }
 async function detect(registry: AdapterRegistry, files: FileSet): Promise<SessionAdapter> {
   const candidates = await Promise.all(registry.list().filter(a => a.capabilities.import).map(async adapter => ({ adapter, result: await adapter.detect(files) })));
+  if (candidates.some(c => !Number.isFinite(c.result.confidence) || c.result.confidence < 0 || c.result.confidence > 1)) throw new SessionError("INVALID_BUNDLE", "/detection", "Plugin returned an invalid detection confidence");
   candidates.sort((a, b) => b.result.confidence - a.result.confidence);
   const first = candidates[0];
   if (!first || first.result.confidence < 0.9) throw new SessionError("UNSUPPORTED_FORMAT", "/input", "No verified source format detected; specify --from to obtain format-specific diagnostics");
@@ -140,10 +141,18 @@ export async function runSessionCli(args: readonly string[], registry: AdapterRe
     if (error instanceof SessionError) return ["CLI_ARGUMENT", "INVALID_INPUT", "AMBIGUOUS_INPUT"].includes(error.code) ? 2 : 3;
     return 1;
   } finally {
-    if (!committed && destination && owned) {
-      const current = await exists(fileIO, destination);
-      if (current?.isDirectory() && !current.isSymbolicLink() && current.dev === owned.dev && current.ino === owned.ino) await fileIO.rm(destination, { recursive: true, force: true });
+    const failures: string[] = [];
+    try {
+      if (!committed && destination && owned) {
+        const current = await exists(fileIO, destination);
+        if (current?.isDirectory() && !current.isSymbolicLink() && current.dev === owned.dev && current.ino === owned.ino) await fileIO.rm(destination, { recursive: true, force: true });
+      }
+    } catch { failures.push("Could not remove the incomplete output directory"); }
+    try { if (staging) await fileIO.rm(staging, { recursive: true, force: true }); }
+    catch { failures.push("Could not remove the staging directory"); }
+    if (failures.length) {
+      io.stderr(JSON.stringify({ code: "IO_ERROR", path: "/cleanup", severity: "error", message: failures.join("; ") }));
+      return 1;
     }
-    if (staging) await fileIO.rm(staging, { recursive: true, force: true });
   }
 }

@@ -35,3 +35,8 @@ it("retains opaque content but blocks export and distinguishes duplicate conflic
   expect(() => adapter.export(r.session)).toThrow("Uninterpreted");
   expect(() => adapter.import(input([...rows, { ...rows[3], unknown: true }]))).toThrow("Conflicting duplicate");
 });
+it("includes legacy summary records in the transcript with a compaction label", async () => {
+  const r = await adapter.import(input([...await fixture(), { type: "summary", summary: "Keep this historical summary", leafUuid: "native-leaf" }]));
+  expect(r.session.turns.at(-1)!.origin!.kind).toBe("compaction");
+  expect(JSON.stringify(r.session.turns.at(-1)!.content)).toContain("Keep this historical summary");
+});

@@ -40,6 +40,15 @@ const adapter: SessionAdapter = {
     if (typeof meta.timestamp === "string") session.meta.createdAt = meta.timestamp;
     if (isRecord(meta.git)) session.xExtensions["x-codex-git"] = meta.git;
     let sequence = 0;
+    // Match mirrors by occurrence, not just text equality; repeated user requests remain distinct.
+    const mirrors = new Map<string, number>();
+    for (const { value } of records) {
+      const p = value.payload;
+      if (value.type !== "response_item" || !isRecord(p) || p.type !== "message" || !Array.isArray(p.content)) continue;
+      if (!p.content.every(b => isRecord(b) && typeof b.text === "string")) continue;
+      const key = `${String(p.role)}\0${p.content.map(b => (b as Record<string, JsonValue>).text).join("")}`;
+      mirrors.set(key, (mirrors.get(key) ?? 0) + 1);
+    }
     const add = (role: Turn["role"], content: ContentBlock[], raw: JsonValue, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
       session.turns.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact: file.path, record: line, ...(kind ? { kind } : {}) } });
     };
@@ -91,7 +100,19 @@ const adapter: SessionAdapter = {
           if (typeof p.message !== "string" && !Array.isArray(p.replacement_history)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Empty compaction record");
           break;
         case "event_msg":
-          if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${JSON.stringify(p)}` }], p, line, "reverted");
+          if (p.type === "user_message" || p.type === "agent_message") {
+            const role = p.type === "user_message" ? "user" : "assistant";
+            if (typeof p.message !== "string") throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Malformed message event");
+            const key = `${role}\0${p.message}`, remaining = mirrors.get(key) ?? 0;
+            if (remaining) mirrors.set(key, remaining - 1);
+            else add(role, [{ type: "text", text: p.message }], p, line);
+            if ([p.images, p.local_images, p.attachments].some(v => Array.isArray(v) && v.length)) add(role, [{ type: "opaque", source: "codex:event-attachments", value: p }], p, line);
+          } else if (p.type === "agent_reasoning" || p.type === "agent_reasoning_raw_content") {
+            // These records are not assumed to be duplicates of a reasoning summary.
+            const text = p.text;
+            if (typeof text !== "string") throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Malformed reasoning event");
+            add("assistant", [{ type: "reasoning", text }], p, line);
+          } else if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${JSON.stringify(p)}` }], p, line, "reverted");
           else if (!operationalEvents.has(String(p.type))) add("system", [{ type: "opaque", source: "codex:event", value: p }], p, line);
           break;
         case "world_state": case "retained_context":

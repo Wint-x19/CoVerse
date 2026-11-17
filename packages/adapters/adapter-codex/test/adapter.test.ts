@@ -33,6 +33,12 @@ it("archives unknown semantics but refuses a falsely complete export", async () 
   }
 });
 it("rejects invalid compressed records", () => expect(() => adapter.import([{ path: "rollout.jsonl.zst", bytes: new Uint8Array([1, 2]) }])).toThrow("Zstandard"));
+it("keeps event-only messages and additional identical requests", async () => {
+  const event = { type: "event_msg", payload: { type: "user_message", message: "Read the sample." } };
+  const r = await adapter.import(encode([...sample, event, { type: "event_msg", payload: { type: "agent_message", message: "An event-only answer" } }]));
+  expect(r.session.turns.filter(t => t.role === "user")).toHaveLength(2);
+  expect(r.session.turns.at(-1)!.content).toEqual([{ type: "text", text: "An event-only answer" }]);
+});
 it("imports independently reconstructed compressed and plaintext fixtures equivalently", async () => {
   const load = async (name: string) => adapter.import([{ path: name, bytes: await readFile(new URL(`../../../../fixtures/codex/rollout-2026-11-17/${name}`, import.meta.url)) }]);
   const a = await load("sample.jsonl"), b = await load("sample.jsonl.zst");

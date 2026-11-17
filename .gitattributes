@@ -2,3 +2,4 @@
 *.png binary
 *.zst binary
 *.zstd binary
+*.db binary

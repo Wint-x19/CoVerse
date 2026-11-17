@@ -49,11 +49,15 @@ export function validateFileSet(files: FileSet): void {
   for (const file of files) {
     const parts = file.path.split("/");
     if (parts.some((part) => part === "" || part === "." || part === ".." || /[. ]$/.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)) ||
-        /[\\:\u0000-\u001f]/.test(file.path)) {
+        /[\\:*?"<>|\u0000-\u001f]/.test(file.path)) {
       throw new Error("Artifact paths must be portable relative paths");
     }
     if (paths.has(file.path.toLowerCase())) throw new Error("Duplicate artifact path");
     paths.add(file.path.toLowerCase());
+  }
+  for (const value of paths) {
+    const parts = value.split("/");
+    for (let i = 1; i < parts.length; i++) if (paths.has(parts.slice(0, i).join("/"))) throw new Error("Artifact file/directory path conflict");
   }
 }
 
