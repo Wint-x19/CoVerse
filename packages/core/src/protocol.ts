@@ -25,6 +25,7 @@ export interface ProtocolResponse {
   schemaVersion: "1.0";
   id: string;
   model: string;
+  createdAt?: number;
   candidates: { index: number; content: ContentBlock[]; finish: string }[];
   usage: ProtocolUsage;
 }

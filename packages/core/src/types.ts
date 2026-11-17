@@ -22,7 +22,7 @@ export interface LossLedger {
 export type ContentBlock =
   | { type: "text" | "reasoning"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: JsonValue; argumentsText?: string }
-  | { type: "tool_result"; callId: string; content: JsonValue }
+  | { type: "tool_result"; callId: string; content: JsonValue; isError?: boolean }
   | { type: "attachment"; path: string; mediaType: string }
   | { type: "image"; url: string; detail?: string }
   | { type: "opaque"; source: string; value: JsonValue }
