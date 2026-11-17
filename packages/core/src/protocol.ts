@@ -34,6 +34,7 @@ export type ProtocolEvent =
   | { type: "start"; id: string; model: string }
   | { type: "block_start"; index: number; kind: "text" | "reasoning" | "tool_call"; id?: string; name?: string }
   | { type: "delta"; index: number; text: string }
+  | { type: "reasoning_state"; index: number; source: string; value: string }
   | { type: "block_end"; index: number }
   | { type: "usage"; usage: ProtocolUsage }
   | { type: "finish"; reason: string }
