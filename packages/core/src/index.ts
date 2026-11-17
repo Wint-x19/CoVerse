@@ -1,5 +1,6 @@
 import type { FileSet, LossLedger, SessionAdapter } from "./types.js";
 export type * from "./types.js";
+export type * from "./protocol.js";
 
 export function emptyLedger(): LossLedger {
   return { dropped: [], downgraded: [], approximated: [] };

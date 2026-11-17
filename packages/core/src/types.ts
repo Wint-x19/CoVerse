@@ -1,4 +1,4 @@
-/** M0 provisional contract. CSR v1 will be established in M1. */
+/** CoVerse IR v1. Protocol wire formats belong to codecs, not core. */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 /** Paths are portable relative paths; contents may be binary or compressed. */
@@ -21,9 +21,11 @@ export interface LossLedger {
 
 export type ContentBlock =
   | { type: "text" | "reasoning"; text: string }
-  | { type: "tool_call"; id: string; name: string; arguments: JsonValue }
+  | { type: "tool_call"; id: string; name: string; arguments: JsonValue; argumentsText?: string }
   | { type: "tool_result"; callId: string; content: JsonValue }
   | { type: "attachment"; path: string; mediaType: string }
+  | { type: "image"; url: string; detail?: string }
+  | { type: "opaque"; source: string; value: JsonValue }
   | { type: "unknown"; raw: JsonValue };
 
 export interface Turn {
@@ -34,7 +36,7 @@ export interface Turn {
 }
 
 export interface CSR {
-  schemaVersion: "0.1";
+  schemaVersion: "1.0";
   meta: {
     id: string;
     agent: string;

@@ -9,7 +9,7 @@ describe("initial adapter scope", () => {
 
   it("never claims native format support for scaffolds", async () => {
     const session: CSR = {
-      schemaVersion: "0.1", meta: { id: "test", agent: "test", agentFormatVersion: "test" },
+      schemaVersion: "1.0", meta: { id: "test", agent: "test", agentFormatVersion: "test" },
       turns: [], xExtensions: {},
     };
     for (const adapter of createRegistry().list()) {

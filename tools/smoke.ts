@@ -11,7 +11,7 @@ const transport: SessionAdapter = {
   detect: () => ({ confidence: 1, formatVersion: "synthetic-v1" }),
   import: (artifacts) => ({
     session: {
-      schemaVersion: "0.1",
+      schemaVersion: "1.0",
       meta: { id: "smoke", agent: "synthetic", agentFormatVersion: "synthetic-v1" },
       turns: [], xExtensions: {}, sourceArtifacts: artifacts,
     },

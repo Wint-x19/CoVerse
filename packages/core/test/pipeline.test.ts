@@ -11,7 +11,7 @@ function adapter(overrides: Partial<SessionAdapter> = {}): SessionAdapter {
     detect: () => ({ confidence: 1 }),
     import: (artifacts) => ({
       session: {
-        schemaVersion: "0.1", meta: { id: "test", agent: "synthetic", agentFormatVersion: "test-v1" },
+        schemaVersion: "1.0", meta: { id: "test", agent: "synthetic", agentFormatVersion: "test-v1" },
         turns: [], xExtensions: { "x-unknown": { future: [1, "opaque"] } },
         raw: { unknownEvent: true }, sourceArtifacts: artifacts,
       }, ledger: emptyLedger(),
