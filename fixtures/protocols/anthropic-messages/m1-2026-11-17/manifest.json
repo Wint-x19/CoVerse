@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "protocol": "anthropic-messages",
+  "baseline": "m1-2026-11-17",
+  "provenance": "synthetic",
+  "reviewRequired": false,
+  "sources": [
+    "https://platform.claude.com/docs/en/api/messages"
+  ],
+  "notes": "Authored synthetic protocol samples. SSE generated from the reviewed synthetic Chat stream and checked against independent hand-authored stream tests. No live API or native Agent session compatibility claim.",
+  "files": [
+    {
+      "path": "request.json",
+      "kind": "request",
+      "format": "json",
+      "sha256": "13028d6899564f23b99f1272f010038c6ef5537f1ad1d6b811c66707b221c024"
+    },
+    {
+      "path": "response.json",
+      "kind": "response",
+      "format": "json",
+      "sha256": "4bf636cdb1034bd287a5645e52eb9ac78ab057cb00ba5e5908ac83f6913f67af"
+    },
+    {
+      "path": "stream.sse",
+      "kind": "stream",
+      "format": "sse",
+      "sha256": "bc6d8ac1c52c98b40a77230f3ea82111364f6a189099e27d241c800376a77c08"
+    }
+  ]
+}

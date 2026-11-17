@@ -8,7 +8,7 @@ export interface ConversionOptions {
   allowRoleMerge?: boolean;
   reasoningAsText?: boolean;
   candidateIndex?: number;
-  /** Exact source JSON pointers; no wildcard or implicit blanket dropping. */
+  /** Exact diagnostic pointers (source or IR); no wildcard or blanket dropping. */
   omit?: readonly string[];
   signal?: AbortSignal;
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { convertSession, emptyLedger, type FileSet, type SessionAdapter } from "@coverse/core";
+import { convertRequest, convertResponse } from "@coverse/protocols";
 
 // Test-only transport, deliberately not a registered/native session adapter.
 const transport: SessionAdapter = {
@@ -25,4 +26,9 @@ for (const artifacts of [[], [{ path: "sample.bin", bytes: new Uint8Array([0, 25
   assert.deepEqual(result.artifacts, artifacts);
   assert.deepEqual(result.ledger, emptyLedger());
 }
-console.log("M0 smoke passed: empty and binary FileSet -> CSR -> FileSet; no native format claims.");
+const converted = convertRequest({ from: "responses", to: "anthropic-messages", input: { model: "synthetic", input: "hello", max_output_tokens: 32 } });
+assert.equal((converted.data as { max_tokens: number }).max_tokens, 32);
+assert.deepEqual(converted.ledger, emptyLedger());
+const response = convertResponse({ from: "anthropic-messages", to: "chat-completions", input: { id: "synthetic", model: "synthetic", type: "message", role: "assistant", content: [{ type: "text", text: "hello" }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 } } });
+assert.ok(JSON.stringify(response.data).includes("hello"));
+console.log("M1 smoke passed: protocol request/response conversion and empty/binary session transport; no native session format claims.");

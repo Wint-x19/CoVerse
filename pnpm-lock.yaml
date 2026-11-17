@@ -11,6 +11,9 @@ importers:
       '@coverse/core':
         specifier: workspace:*
         version: link:packages/core
+      '@coverse/protocols':
+        specifier: workspace:*
+        version: link:packages/protocols
       '@types/node':
         specifier: 22.19.0
         version: 22.19.0
@@ -56,6 +59,9 @@ importers:
       '@coverse/core':
         specifier: workspace:*
         version: link:../core
+      '@coverse/protocols':
+        specifier: workspace:*
+        version: link:../protocols
 
   packages/core: {}
 

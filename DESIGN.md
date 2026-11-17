@@ -1,6 +1,6 @@
 # CoVerse 可行性分析与工程设计
 
-> 状态：v0.2，M0 实施基线（2026-11-17）。首批仅开发 Codex、Claude Code、Antigravity 三家的适配器；历史侦察记录不代表开发范围或已验证能力。
+> 状态：v0.3，M1 已实现消息协议转换的已测试子集（2026-11-17）。首批仅开发 Codex、Claude Code、Antigravity 三家的会话适配器；历史侦察记录不代表开发范围或已验证能力。
 > 配套规范见 [AGENTS.md](AGENTS.md)。
 
 ---
@@ -191,3 +191,11 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 2. **首批适配器**：用户明确限定 Codex、Claude Code、Antigravity。插件占位不等于已支持格式，M0 的 `supportedVersions` 均为空。
 3. **产品形态**：CLI 先行，Web 留待 M4。
 4. **CI**：提供 GitHub Actions 的 Windows/Linux、Node 20/22 检查矩阵；当前远端为 Gitee，推送不会自动运行 GitHub Actions。Gitee 流水线可执行相同的 `pnpm install --frozen-lockfile` 和 `pnpm check`。
+
+## 8. M1 实施决策
+
+1. **2×N 消息转换**：每种协议实现请求、响应、流事件与 IR 的双向映射。三协议是本里程碑范围，不是市场协议总数。新增协议注册独立 codec；provider 兼容方言不混入 core。
+2. **IR v1**：CSR schemaVersion 升为 `1.0`；底层使用独立的 ProtocolRequest / ProtocolResponse / ProtocolEvent，不为 API 调用伪造会话元数据。与 CSR 共享内容块和损耗账本。M0 `0.1` 仅为测试契约，没有原生文件迁移承诺。
+3. **显式损耗**：严格模式默认拒绝语义损耗。allow-loss 仍须逐项允许角色合并、推理转写、候选选择或指定路径省略。来源原文及不透明字段存入报告；修改后的 IR 不恢复过期原文。缺少必填参数、工具关联错误和非法参数不自动修复。
+4. **流式生命周期**：按字节增量解析 SSE，维护内容块和并行调用状态。终止标志、参数完成度或最终汇总不一致时失败。文件暂存成功后发布，stdout 流部分输出不可回滚。
+5. **交付边界**：转换库、异步 CLI、合成样本及 Windows/Linux CI 检查入口；不增加网络代理、认证或模型调用。会话适配器仍不可用。实现子集、兼容限制及参考来源见 [protocols/README.md](packages/protocols/README.md)。

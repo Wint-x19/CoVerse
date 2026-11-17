@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@coverse/core": "workspace:*",
+    "@coverse/protocols": "workspace:*",
     "@coverse/adapter-codex": "workspace:*",
     "@coverse/adapter-claude-code": "workspace:*",
     "@coverse/adapter-antigravity": "workspace:*"

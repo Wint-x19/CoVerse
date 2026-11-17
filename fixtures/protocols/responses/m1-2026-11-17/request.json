@@ -1,0 +1,10 @@
+{
+  "model": "synthetic-model",
+  "max_output_tokens": 64,
+  "input": [
+    {
+      "role": "user",
+      "content": "Synthetic hello"
+    }
+  ]
+}

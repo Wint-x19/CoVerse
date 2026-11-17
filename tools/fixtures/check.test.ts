@@ -25,8 +25,8 @@ async function editManifest(edit: (manifest: {
 }
 
 describe("fixture baseline validation", () => {
-  it("verifies all three synthetic baselines", async () => {
-    expect(await checkFixtures(root())).toEqual({ manifests: 3, files: 3 });
+  it("verifies agent scaffolds and all three protocol baselines", async () => {
+    expect(await checkFixtures(root())).toEqual({ manifests: 6, files: 12 });
   });
   it("detects content drift", async () => {
     await writeFile(fixturePath("sample.jsonl"), '{"changed":true}\n');
@@ -53,5 +53,23 @@ describe("fixture baseline validation", () => {
     await writeFile(fixturePath("sample.jsonl"), invalid);
     await editManifest((manifest) => { manifest.files[0]!.sha256 = sha256(invalid); });
     await expect(checkFixtures(root())).rejects.toThrow();
+  });
+  it("detects protocol sample drift and incomplete stream lifecycles", async () => {
+    const directory = path.join(root(), "protocols", "chat-completions", "m1-2026-11-17");
+    const filename = path.join(directory, "stream.sse");
+    const content = (await readFile(filename, "utf8")).replace("data: [DONE]\n\n", "");
+    await writeFile(filename, content);
+    await expect(checkFixtures(root())).rejects.toThrow("checksum");
+    const manifestPath = path.join(directory, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.files.find((f: { path: string }) => f.path === "stream.sse").sha256 = sha256(content);
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await expect(checkFixtures(root())).rejects.toThrow("terminal event");
+  });
+  it("rejects unreviewed protocol manifests", async () => {
+    const filename = path.join(root(), "protocols", "responses", "m1-2026-11-17", "manifest.json");
+    const manifest = JSON.parse(await readFile(filename, "utf8")); manifest.reviewRequired = true;
+    await writeFile(filename, JSON.stringify(manifest));
+    await expect(checkFixtures(root())).rejects.toThrow("unreviewed");
   });
 });

@@ -1,0 +1,18 @@
+{
+  "id": "synthetic-r",
+  "type": "message",
+  "model": "synthetic-model",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Synthetic reply"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 3,
+    "output_tokens": 2
+  }
+}

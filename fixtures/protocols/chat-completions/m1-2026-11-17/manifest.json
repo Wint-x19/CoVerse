@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "protocol": "chat-completions",
+  "baseline": "m1-2026-11-17",
+  "provenance": "synthetic",
+  "reviewRequired": false,
+  "sources": [
+    "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create"
+  ],
+  "notes": "Authored synthetic protocol samples. SSE generated from the reviewed synthetic Chat stream and checked against independent hand-authored stream tests. No live API or native Agent session compatibility claim.",
+  "files": [
+    {
+      "path": "request.json",
+      "kind": "request",
+      "format": "json",
+      "sha256": "6dc09974ec7f25e188b0cc9530af38e8cd6a54a870b1694642d4b3995fe7e024"
+    },
+    {
+      "path": "response.json",
+      "kind": "response",
+      "format": "json",
+      "sha256": "ffb145c88d35671d105af36c0171661404c59201dc9f38230c2405c2ef804939"
+    },
+    {
+      "path": "stream.sse",
+      "kind": "stream",
+      "format": "sse",
+      "sha256": "6250b7dabbb39d8939c0d1b70d5b99d565d48d68461c6615ea7de372b0c71036"
+    }
+  ]
+}

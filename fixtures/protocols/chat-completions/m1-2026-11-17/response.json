@@ -1,0 +1,19 @@
+{
+  "id": "synthetic-r",
+  "model": "synthetic-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Synthetic reply"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 3,
+    "completion_tokens": 2,
+    "total_tokens": 5
+  }
+}

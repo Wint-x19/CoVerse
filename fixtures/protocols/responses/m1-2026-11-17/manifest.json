@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "protocol": "responses",
+  "baseline": "m1-2026-11-17",
+  "provenance": "synthetic",
+  "reviewRequired": false,
+  "sources": [
+    "https://developers.openai.com/api/reference/resources/responses/methods/create"
+  ],
+  "notes": "Authored synthetic protocol samples. SSE generated from the reviewed synthetic Chat stream and checked against independent hand-authored stream tests. No live API or native Agent session compatibility claim.",
+  "files": [
+    {
+      "path": "request.json",
+      "kind": "request",
+      "format": "json",
+      "sha256": "b55c8ec88b2dd70c739914f002bdeabc7b85ff0a5804b8e213b83325a9e81f1e"
+    },
+    {
+      "path": "response.json",
+      "kind": "response",
+      "format": "json",
+      "sha256": "14186620f0ab7aa1ee30b5e3f53b9ff5162048b7a9c8db58c3e42341ec2e1dc8"
+    },
+    {
+      "path": "stream.sse",
+      "kind": "stream",
+      "format": "sse",
+      "sha256": "038c495c1ff5772ceaa0f608ea0d304f44502347e561e5612a727313265f11cb"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { initialAgents, sha256 } from "./collect.js";
+import { checkProtocolFixtures } from "./check-protocols.js";
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -11,6 +12,7 @@ export async function checkFixtures(root: string): Promise<{ manifests: number; 
   const agents = await readdir(root, { withFileTypes: true });
   for (const entry of agents) {
     if (entry.name === "README.md" && entry.isFile()) continue;
+    if (entry.name === "protocols" && entry.isDirectory()) continue;
     if (!entry.isDirectory() || !initialAgents.some((agent) => agent === entry.name)) throw new Error("Unexpected entry in fixture root");
   }
   for (const agent of initialAgents) {
@@ -61,6 +63,10 @@ export async function checkFixtures(root: string): Promise<{ manifests: number; 
       }
       summary.manifests++;
     }
+  }
+  if (agents.some(entry => entry.name === "protocols")) {
+    const protocols = await checkProtocolFixtures(path.join(root, "protocols"));
+    summary.manifests += protocols.manifests; summary.files += protocols.files;
   }
   return summary;
 }

@@ -1,6 +1,6 @@
 # Fixtures：样本来源与提交规则
 
-首批目录仅有 `codex`、`claude-code`、`antigravity`。
+会话样本目录为 `codex`、`claude-code`、`antigravity`；独立的 `protocols/` 存放 M1 消息协议样本，不增加 Agent 适配范围。
 
 `*/synthetic-v1/` 是手写合成的**脚手架测试基线**，不来自个人会话，也不宣称符合任何原生 Agent 格式。用于验证文件装载、摘要校验和通用脱敏工具；真实版本的适配器回归从 M2 增加。Antigravity 的原生存储结构目前未知。
 
@@ -26,3 +26,9 @@ pnpm fixtures:collect --agent codex --format-version unverified --name sample-01
 人工检查脱敏内容、结构、数量及元数据后，才可将审核后的文件复制到 `fixtures/<agent>/<已验证格式版本>/`，更新 manifest 的审核与原生验证标记及摘要。不要强制添加 `.local/` 或真实用户会话。结构和长度也可能含信息，因此自动脱敏不能代替人工审核。
 
 `pnpm fixtures:check` 验证已提交样本的目录归属、审核标记、JSON/JSONL 可解析性、SHA-256 和文件清单。摘要检测意外漂移，不证明原生格式兼容或无敏感信息。
+
+## M1 协议样本
+
+`protocols/<protocol>/m1-2026-11-17/` 每个目录包含 request.json、response.json、stream.sse 和 manifest.json。全部内容均为 synthetic，不来自个人会话或 API 抓包。SSE 从审阅的合成 Chat 事件生成，另有独立手写的三协议事件测试约束生命周期。
+
+Manifest 记录 protocol、能力基线、公开规范链接、审核标记、每份文件的 kind / format / SHA-256。校验器验证请求、响应、SSE 完整生命周期、摘要和完整清单；原有会话样本校验保持独立。基线表示 CoVerse 的测试子集，不声称完整 API 或某 Agent 原生版本已验证。

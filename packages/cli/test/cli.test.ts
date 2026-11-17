@@ -24,18 +24,18 @@ describe("initial adapter scope", () => {
 });
 
 describe("CLI", () => {
-  it("returns a machine-readable capability inventory", () => {
+  it("returns a machine-readable capability inventory", async () => {
     const output: string[] = [];
-    expect(runCli(["adapters", "--json"], (line) => output.push(line))).toBe(0);
+    expect(await runCli(["adapters", "--json"], (line) => output.push(line))).toBe(0);
     expect(JSON.parse(output[0]!)).toHaveLength(3);
     expect(JSON.parse(output[0]!)[2].id).toBe("antigravity");
   });
-  it.each([[], ["--help"], ["adapters"], ["doctor"]])("supports %j", (...args) => {
+  it.each([[], ["--help"], ["adapters"], ["doctor"]])("supports %j", async (...args) => {
     const output: string[] = [];
-    expect(runCli(args, (line) => output.push(line))).toBe(0);
+    expect(await runCli(args, (line) => output.push(line))).toBe(0);
     expect(output.length).toBe(1);
   });
-  it.each([["convert-session"], ["adapters", "--typo"], ["doctor", "extra"]])("rejects unsupported command %j", (...args) => {
-    expect(runCli(args, () => {})).toBe(1);
+  it.each([["convert-session"], ["adapters", "--typo"], ["doctor", "extra"]])("rejects unsupported command %j", async (...args) => {
+    expect(await runCli(args, () => {})).toBe(2);
   });
 });
