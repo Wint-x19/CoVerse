@@ -14,10 +14,10 @@ function transport(text: string) {
 }
 const command = ["convert-protocol", "--from", "responses", "--to", "chat-completions", "--kind", "request"];
 const request = JSON.stringify({ model: "synthetic", input: "hello" });
-it("lists codec capabilities and preserves the session scaffold boundary", async () => {
+it("lists codec capabilities and preserves the native resume boundary", async () => {
   const output: string[] = []; expect(await runCli(["protocols", "--json"], v => output.push(v))).toBe(0);
   expect(JSON.parse(output[0]!)).toHaveLength(3);
-  expect(await runCli(["doctor"], v => output.push(v))).toBe(0); expect(output[1]).toContain("Native import/export/resume: not implemented");
+  expect(await runCli(["doctor"], v => output.push(v))).toBe(0); expect(output[1]).toContain("Native session synthesis/resume: not implemented");
 });
 it("converts stdin to clean JSON stdout", async () => {
   const t = transport(request); expect(await runCli(command, () => {}, t.io)).toBe(0);

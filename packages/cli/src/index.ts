@@ -4,6 +4,7 @@ import claudeCode from "@coverse/adapter-claude-code";
 import antigravity from "@coverse/adapter-antigravity";
 import { createProtocolRegistry } from "@coverse/protocols";
 import { defaultIO, runProtocolCli, type CliIO } from "./protocol-cli.js";
+import { runSessionCli } from "./session-cli.js";
 export type { CliIO } from "./protocol-cli.js";
 
 /** The composition root selects plugins; core has no vendor dependencies. */
@@ -13,11 +14,12 @@ export function createRegistry(): AdapterRegistry {
 
 export async function runCli(args: readonly string[], output: (text: string) => void, io: CliIO = defaultIO): Promise<number> {
   if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]!))) {
-    output("CoVerse M1\nUsage: coverse adapters [--json]\n       coverse protocols [--json]\n       coverse doctor\n       coverse convert-protocol --from <protocol> --to <protocol> --kind request|response|stream [--input <file|->] [--output <file|->] [--report <file>]\nOptions: --policy strict|allow-loss --target-model <name> --max-output-tokens <n>\nExplicit loss policies: --allow-role-merge --reasoning-as-text --candidate-index <n> --omit <JSON-pointer> (repeatable)\nallow-loss requires --report. Defaults: stdin, stdout, strict.\nNative session conversion is not implemented.");
+    output("CoVerse M2\nUsage: coverse adapters [--json]\n       coverse protocols [--json]\n       coverse doctor\n       coverse convert-session --from <agent|auto> --to <agent> --input <file-or-directory> --output <new-directory>\nSession input is repeatable. Output is a complete injection bundle with CSR, original artifacts and loss report; no summarization or truncation.\n       coverse convert-protocol --from <protocol> --to <protocol> --kind request|response|stream [--input <file|->] [--output <file|->] [--report <file>]\nProtocol options: --policy strict|allow-loss --target-model <name> --max-output-tokens <n>\nExplicit protocol loss policies: --allow-role-merge --reasoning-as-text --candidate-index <n> --omit <JSON-pointer> (repeatable)\nProtocol allow-loss requires --report. Defaults: stdin, stdout, strict.\nNative session synthesis/resume is not implemented.");
     return 0;
   }
   const registry = createRegistry();
   if (args[0] === "convert-protocol") return runProtocolCli(args.slice(1), io);
+  if (args[0] === "convert-session") return runSessionCli(args.slice(1), registry, io);
   if (args[0] === "protocols" && (args.length === 1 || args.length === 2 && args[1] === "--json")) {
     const protocols = createProtocolRegistry().list().map(({ id, baseline, capabilities }) => ({ id, baseline, capabilities }));
     output(args[1] === "--json" ? JSON.stringify(protocols, null, 2) : protocols.map(p => `${p.id}\t${p.baseline}\t${p.capabilities.join(",")}`).join("\n")); return 0;
@@ -30,7 +32,7 @@ export async function runCli(args: readonly string[], output: (text: string) => 
     return 0;
   }
   if (args.length === 1 && args[0] === "doctor") {
-    output(`CoVerse M1: 3 protocol codecs available (requests, responses, SSE; verified subsets).\n${registry.list().length} session adapter scaffolds registered. Native import/export/resume: not implemented.\nRun pnpm check to validate the workspace.`);
+    output(`CoVerse M2: 3 protocol codecs available (requests, responses, SSE; verified subsets).\n${registry.list().filter(a => a.capabilities.import).length} session import adapters; ${registry.list().filter(a => a.capabilities.export).length} injection-bundle exporters. Verified format subsets only; inspect adapters --json and plugin READMEs.\nNative session synthesis/resume: not implemented.\nRun pnpm check to validate the workspace.`);
     return 0;
   }
   output("Unknown command or option. Run coverse --help.");
