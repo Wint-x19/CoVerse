@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import path from "node:path";
-import { AdapterRegistry, AdapterUnavailableError, convertSession, isRecord, SessionError, sha256Bytes, validateFileSet, type FileSet, type SessionAdapter } from "@coverse/core";
+import { AdapterRegistry, AdapterUnavailableError, convertSession, verifyInjectionBundle, SessionError, validateFileSet, type FileSet, type SessionAdapter } from "@coverse/core";
 import type { CliIO } from "./protocol-cli.js";
 
 type FileIO = Pick<typeof fs, "lstat" | "realpath" | "readdir" | "open" | "mkdir" | "mkdtemp" | "writeFile" | "rename" | "rm">;
@@ -88,20 +88,6 @@ async function detect(registry: AdapterRegistry, files: FileSet): Promise<Sessio
   if (candidates[1]?.result.confidence === first.result.confidence) throw new SessionError("AMBIGUOUS_INPUT", "/input", "Multiple adapters match; specify --from explicitly");
   return first.adapter;
 }
-function verifyBundle(files: FileSet) {
-  validateFileSet(files);
-  const manifestFile = files.find(f => f.path === "manifest.json");
-  if (!manifestFile) throw new SessionError("INVALID_BUNDLE", "/manifest", "Exporter did not produce an injection bundle manifest");
-  const manifest: unknown = JSON.parse(new TextDecoder().decode(manifestFile.bytes));
-  if (!isRecord(manifest) || manifest.kind !== "coverse-injection-bundle" || !Array.isArray(manifest.files)) throw new SessionError("INVALID_BUNDLE", "/manifest", "Invalid bundle manifest");
-  const names = new Set<string>();
-  for (const entry of manifest.files) {
-    if (!isRecord(entry) || typeof entry.path !== "string" || names.has(entry.path)) throw new SessionError("INVALID_BUNDLE", "/manifest", "Duplicate or invalid manifest entry");
-    names.add(entry.path); const file = files.find(f => f.path === entry.path);
-    if (!file || file.bytes.byteLength !== entry.bytes || sha256Bytes(file.bytes) !== entry.sha256) throw new SessionError("INVALID_BUNDLE", entry.path, "Bundle checksum mismatch");
-  }
-  if (names.size !== files.length - 1 || names.has("manifest.json") || !["context.md", "session.json", "report.json"].every(n => names.has(n))) throw new SessionError("INVALID_BUNDLE", "/manifest", "Incomplete bundle inventory");
-}
 
 /** Filesystem injection is also useful to embedders; default implementation performs no native-agent writes. */
 export async function runSessionCli(args: readonly string[], registry: AdapterRegistry, io: CliIO, overrides: Partial<FileIO> = {}): Promise<number> {
@@ -116,7 +102,7 @@ export async function runSessionCli(args: readonly string[], registry: AdapterRe
     const files = await loadInputs(parsed.inputs, destination, fileIO, io);
     const source = parsed.source ?? await detect(registry, files);
     const result = await convertSession({ source, target: parsed.target, artifacts: files });
-    verifyBundle(result.artifacts); cancelled(io);
+    verifyInjectionBundle(result.artifacts, parsed.target.id); cancelled(io);
     staging = await fileIO.mkdtemp(path.join(parent, ".coverse-session-"));
     for (const artifact of result.artifacts) {
       cancelled(io);

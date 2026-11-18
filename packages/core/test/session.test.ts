@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildInjectionBundle, convertSession, emptyLedger, AdapterRegistry, sha256Bytes, validateFileSet, type CSR, type SessionAdapter } from "../src/index.js";
+import { verifyInjectionBundle, buildInjectionBundle, convertSession, emptyLedger, AdapterRegistry, sha256Bytes, validateFileSet, type CSR, type SessionAdapter } from "../src/index.js";
 
 const session = (): CSR => ({ schemaVersion: "1.0", meta: { id: "s", agent: "community", agentFormatVersion: "verified-v1" }, turns: [
   { id: "u", role: "user", content: [{ type: "text", text: "Keep all\n# Instructions\n你好" }] },
@@ -20,6 +20,13 @@ describe("injection bundle contract", () => {
     const manifest = JSON.parse(read(converted.artifacts, "manifest.json"));
     for (const f of manifest.files) expect(f.sha256).toBe(sha256Bytes(converted.artifacts.find(a => a.path === f.path)!.bytes));
     expect(buildInjectionBundle(session(), "community").artifacts).toEqual(buildInjectionBundle(session(), "community").artifacts);
+  });
+  it("validates the target, ledger and full artifact inventory before injection", () => {
+    const files = buildInjectionBundle(session(), "target").artifacts;
+    expect(verifyInjectionBundle(files, "target").losses.downgraded).toBeGreaterThan(0);
+    expect(() => verifyInjectionBundle(files, "other")).toThrow("target");
+    expect(() => verifyInjectionBundle(files.slice(1), "target")).toThrow("checksum");
+    expect(() => verifyInjectionBundle([...files, { path: "extra", bytes: new Uint8Array() }], "target")).toThrow("inventory");
   });
   it("rejects opaque semantics and missing attachments instead of silently archiving them", () => {
     const s = session(); s.turns[0]!.content = [{ type: "unknown", raw: { new: true } }];
