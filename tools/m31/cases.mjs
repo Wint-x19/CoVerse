@@ -12,8 +12,13 @@ export const hash = value => createHash("sha256").update(value).digest("hex");
 export const fixture = (agent, seed) => path.join(root, "fixtures", agent, "m31-v1", "seed-" + seed + (agent === "antigravity" ? ".db" : ".jsonl"));
 export const reference = history => history.map(([role, text]) => role + " said: " + JSON.stringify(text)).join("\n");
 export function score(answer, expected) {
-  let parsed;
-  try { parsed = JSON.parse(answer.trim().replace(/^\x60{3}(?:json)?\s*/i, "").replace(/\s*\x60{3}$/, "")); } catch { /* Retain unparseable answers for rubric review. */ }
+  let parsed, prose = false;
+  try { parsed = JSON.parse(answer.trim()); } catch {
+    const blocks=[...answer.matchAll(/\x60{3}(?:json)?\s*([\s\S]*?)\x60{3}/gi)];
+    if(blocks.length===1){
+      try { parsed=JSON.parse(blocks[0][1]); prose=answer.trim()!==blocks[0][0].trim(); } catch { /* Retain for manual review. */ }
+    }
+  }
   const normal = x => String(x).trim().toLowerCase();
   const matches = {};
   for (const [key, value] of Object.entries(expected)) {
@@ -21,7 +26,9 @@ export function score(answer, expected) {
     matches[key] = actual != null && (normal(actual) === normal(value) ||
       value === "unknown" && ["unspecified","not disclosed","not specified","not provided"].includes(normal(actual)));
   }
-  return { parsed: !!parsed, matches, extraKeys: Object.keys(parsed && typeof parsed === "object" ? parsed : {}).filter(k => !(k in expected)) };
+  const keys=Object.keys(parsed && typeof parsed === "object" ? parsed : {});
+  return { parsed: !!parsed, prose, matches, wrong:keys.filter(k=>k in expected && !matches[k]),
+    missing:Object.keys(expected).filter(k=>!keys.includes(k)),extraKeys:keys.filter(k=>!(k in expected)) };
 }
 export function codexFile(history) {
   const header = { type: "session_meta", payload: {id:"m31-specimen", cli_version:"0.169.0-alpha.11.1", cwd:"/sample/workspace"} };

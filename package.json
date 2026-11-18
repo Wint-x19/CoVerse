@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "tsx tools/smoke.ts",
-    "check": "pnpm build && pnpm typecheck && pnpm test && pnpm fixtures:check && pnpm smoke",
+    "check": "pnpm build && pnpm typecheck && pnpm test && pnpm fixtures:check && pnpm smoke && node tools/m31/offline.mjs",
+    "eval:m31:offline": "vitest run tools/m31 packages/protocols/test packages/adapters packages/cli/test/run-cli.test.ts packages/drivers/test && node tools/m31/offline.mjs",
+    "eval:m31:live": "node tools/m31/live.mjs",
     "fixtures:collect": "tsx tools/fixtures/cli.ts",
     "fixtures:check": "tsx tools/fixtures/check-cli.ts",
     "coverse": "node packages/cli/dist/bin.js"
