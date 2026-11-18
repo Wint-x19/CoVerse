@@ -34,6 +34,11 @@ it("retains the actual Antigravity terminal error when partial response text exi
   const decode=createDriverRegistry().get("antigravity").plugin.decoder();
   expect(()=>decode({event:"result",result:{status:"ERROR",response:"partial answer",error:"prompt too long"}})).toThrow(/prompt too long/);
 });
+it("rejects an empty Antigravity success after an unresolved failed tool", () => {
+  const decode=createDriverRegistry().get("antigravity").plugin.decoder();
+  decode({event:"step_update",step_update:{conversation_id:"s",step_type:"tool",step_index:2,tool_name:"call_mcp_tool",state:"ERROR"}});
+  expect(()=>decode({event:"result",result:{conversation_id:"s",status:"SUCCESS",response:""}})).toThrow(/failed tool/i);
+});
 it("rejects changed source bytes even when only the outer manifest was regenerated", () => {
   const out=buildInjectionBundle({schemaVersion:"1.0",meta:{agent:"test",id:"s",agentFormatVersion:"v1"},turns:[],xExtensions:{},
     sourceArtifacts:[{path:"a.txt",bytes:Buffer.from("original")}]}, "codex");
