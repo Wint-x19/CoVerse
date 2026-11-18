@@ -19,8 +19,8 @@ describe("driver subprocess lifecycle", () => {
   it("delivers a long stdin and decodes Chinese across byte boundaries", async () => {
     const code = `process.stdin.setEncoding('utf8'); let s=''; process.stdin.on('data',c=>s+=c);
       process.stdin.on('end',()=>{ ${start}
-      const b=Buffer.from(JSON.stringify({type:'text',text:s})+'\\n');process.stdout.write(b.subarray(0,26));
-      setTimeout(()=>{process.stdout.write(b.subarray(26)); ${end}},10); });`;
+      const b=Buffer.from(JSON.stringify({type:'text',text:s})+'\\n');const split=b.indexOf(Buffer.from('测'))+1;process.stdout.write(b.subarray(0,split));
+      setTimeout(()=>{process.stdout.write(b.subarray(split)); ${end}},10); });`;
     const events = await collect(execute(code));
     expect(events).toEqual([{ type: "session", id }, { type: "text", text: "测试".repeat(60000) }, { type: "done" }]);
   });
