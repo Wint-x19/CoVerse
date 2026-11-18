@@ -5,6 +5,13 @@ import { verifyInjectionBundle, buildInjectionBundle, jsonArtifact, sha256Bytes 
 
 const plugins = createRegistry();
 const file = (rows: unknown[]) => [{path:"session.jsonl",bytes:Buffer.from(rows.map(r=>JSON.stringify(r)).join("\n"))}];
+it("exports a 2.1.121 generated conversation title as historical metadata", async () => {
+  const p=plugins.get("claude-code");
+  const imported=await p.import(file([{type:"user",uuid:"u",sessionId:"s",parentUuid:null,version:"2.1.121",message:{role:"user",content:"hello"}},
+    {type:"ai-title",aiTitle:"Dispatch receipt",sessionId:"s"}]));
+  const out=await p.export(imported.session,{ledger:imported.ledger});
+  expect(verifyInjectionBundle(out.artifacts,"claude-code").context).toContain("Dispatch receipt");
+});
 it("retains tool-only Codex MCP events and records their historical status", async () => {
   const p=plugins.get("codex");
   const input=file([{type:"session_meta",payload:{id:"test",cli_version:"0.169.0-alpha.11.1"}},

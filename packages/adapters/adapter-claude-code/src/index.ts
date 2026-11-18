@@ -94,7 +94,9 @@ const adapter: SessionAdapter = {
         if (typeof message.model === "string") session.meta.model = message.model;
         if (r.isCompactSummary === true) origin.kind = "compaction";
         turn = { id, role: r.type, content: blocks(message.content, at), raw: r, origin };
-      } else if (["system", "attachment", "progress", "summary"].includes(String(r.type))) {
+      } else if (["system", "attachment", "progress", "summary"].includes(String(r.type)) ||
+          (r.type === "ai-title" && r.sessionId === session.meta.id && typeof r.aiTitle === "string" &&
+            Object.keys(r).every(key => ["type", "sessionId", "aiTitle"].includes(key)))) {
         if (r.subtype === "compact_boundary" || r.type === "summary") origin.kind = "compaction";
         turn = { id, role: "system", content: [{ type: "text", text: `Historical ${String(r.type)} record:\n${JSON.stringify(r, null, 2)}` }], raw: r, origin };
         ledger.downgraded.push({ code: "NATIVE_CONTEXT_AS_HISTORY", path: at, reason: "Native context, progress and compaction data are labeled history, not target runtime state" });
