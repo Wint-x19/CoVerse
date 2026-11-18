@@ -85,7 +85,7 @@ pnpm coverse run --agent claude-code --session <首轮返回的目标会话UUID>
 
 回答走 stdout，会话 ID、损耗计数和报告位置走 stderr。加 `--json` 获取逐行事件；发生失败时检查退出码和 stderr，其中包含已取得的会话 ID。脚本调用建议使用 `node packages/cli/dist/bin.js`。
 
-**真机验收进度（2026-11-18）：2/3。** Antigravity → Codex、Claude Code → Antigravity 已通过首轮历史问答与第二轮按 ID 追问。Codex → Claude Code 的当前服务返回 HTTP 403（额度不足），仍待验收。三家来源 × 三家目标的离线回归通过。版本、事件与完整演示命令见 [执行驱动说明](packages/drivers/README.md)。
+**M3 真机验收于 2026-11-18 完成（3/3）。** Codex → Claude Code、Claude Code → Antigravity、Antigravity → Codex 均通过首轮历史问答与第二轮按 ID 追问。三家来源 × 三家目标的离线回归通过。版本、事件与完整演示命令见 [执行驱动说明](packages/drivers/README.md)。
 
 ## 协议转换 CLI
 

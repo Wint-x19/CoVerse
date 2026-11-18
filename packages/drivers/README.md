@@ -5,7 +5,7 @@
 | 目标 | 首轮与追问入口 | 2026-11-18 真机结果 |
 |------|---------------|--------------------|
 | Codex | `codex exec --json`，按 ID 执行 `exec resume` | `0.169.0-alpha.11.1` 通过两轮；来源 Antigravity，5 项降级 |
-| Claude Code | `claude --print --verbose --output-format stream-json --include-partial-messages`，按 ID 执行 `--resume` | `2.1.121` 启动并返回会话 ID，当前服务因额度不足返回 403；来源 Codex，4 项降级，待复验 |
+| Claude Code | `claude --print --verbose --output-format stream-json --include-partial-messages`，按 ID 执行 `--resume` | `2.1.121` 使用 `claude-sonnet-4-6` 通过两轮，来源 Codex，4 项降级 |
 | Antigravity | `agy --input-format stream-json --output-format stream-json`，按 ID 执行 `--conversation` | 独立 CLI `1.5.11` 通过两轮；来源 Claude Code，4 项降级 |
 
 ### 复现真机验收
@@ -19,7 +19,7 @@ node tools/m3-demo.mjs antigravity
 node tools/m3-demo.mjs claude-code
 ```
 
-首轮要求从历史工具结果引用 `Hello from the sample.` 并追加随机标记。第二轮只问上轮的标记，验收同时检查会话 ID、答案和成功终态。命令输出证据目录；其中包含版本清单、引导包与 LossLedger、两轮 JSONL、失败诊断或成功的 `result.json`。已通过的两条路线各有 0 项丢弃与 0 项近似。
+首轮要求从历史工具结果引用 `Hello from the sample.` 并追加随机标记。第二轮只问上轮的标记，验收同时检查会话 ID、答案和成功终态。命令输出的证据目录包含版本清单、引导包与 LossLedger、两轮 JSONL、失败诊断或成功的 `result.json`。三条路线均有 0 项丢弃与 0 项近似。
 
 ### 运行契约
 

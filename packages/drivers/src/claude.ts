@@ -2,7 +2,7 @@ import { isRecord } from "@coverse/core";
 import { finalText, object, string, targetFailure, usage, type DriverEvent, type DriverPlugin } from "./driver.js";
 
 export const claude: DriverPlugin = {
-  id: "claude-code", command: "claude", verifiedVersions: [],
+  id: "claude-code", command: "claude", verifiedVersions: ["2.1.121 (Claude Code)"],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["--print", "--verbose", "--output-format", "stream-json", "--include-partial-messages", "--disable-slash-commands"];
     if (model) args.push("--model", model);

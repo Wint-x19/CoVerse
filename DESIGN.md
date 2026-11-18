@@ -1,6 +1,6 @@
 # CoVerse 可行性分析与工程设计
 
-> 状态：v0.5，M3 已实现三家执行驱动和注入式追问，真机验收通过 2/3（2026-11-18）。M2 格式依据见 §9，M3 验收记录见 §10。
+> 状态：v0.5，M3 已完成三家执行驱动和注入式追问，三条真机路线全部通过（2026-11-18）。M2 格式依据见 §9，M3 验收记录见 §10。
 > 配套规范见 [AGENTS.md](AGENTS.md)。
 
 ---
@@ -215,4 +215,4 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 1. **目标会话归属**。首次注入以用户消息启动目标 CLI，由目标 Agent 创建并持久化会话。追问只发送当前问题及明确的目标 UUID。M5 的原生会话文件合成仍单独规划。
 2. **执行层接口**。`@coverse/drivers` 提供驱动契约、注册表、版本探测和异步事件流。厂商命令、stdin 形状与事件解码位于各自驱动中；CLI 负责引导包、工作目录、输出和诊断。
 3. **保真度**。转换与执行共享引导包校验。完整转写经 stdin 传递，引用附件按已校验的包路径解析。CLI 公开报告路径和三类损耗计数，并在子进程成功退出、会话 ID 和终态均得到确认后报告成功。
-4. **验收**。九种来源/目标组合通过可控子进程回归。Antigravity → Codex 和 Claude Code → Antigravity 通过真实首轮与追问。Codex → Claude Code 启动后因服务额度不足失败。三条真机路线全部通过后再关闭 M3。[演示命令与版本记录](packages/drivers/README.md)
+4. **验收**。九种来源/目标组合通过可控子进程回归。三条真机路线均从历史工具结果中引用了原文，再按首轮返回的会话 ID 答出随机标记。Codex → Claude Code 使用 Claude Code 2.1.121 和 `claude-sonnet-4-6` 完成验证。[演示命令与版本记录](packages/drivers/README.md)
