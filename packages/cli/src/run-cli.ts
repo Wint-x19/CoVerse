@@ -1,5 +1,6 @@
 import * as fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { SessionError, verifyInjectionBundle } from "@coverse/core";
 import type { DriverRegistry } from "@coverse/drivers";
 import type { CliIO } from "./protocol-cli.js";
@@ -27,6 +28,18 @@ async function directory(name: string, message: string) {
   try { if ((await fs.stat(name)).isDirectory()) return await fs.realpath(name); } catch { /* use actionable diagnostic */ }
   return argument(message);
 }
+function sourceWorkspace(raw: string | undefined): string {
+  let value = raw;
+  if (value?.startsWith("file:")) {
+    try {
+      const url = new URL(value);
+      if (process.platform !== "win32" && /^\/[a-z]:\//i.test(url.pathname)) throw Error();
+      value = fileURLToPath(url);
+    } catch { argument("Source workspace URI belongs to another platform or is invalid. Specify --cwd"); }
+  }
+  if (!value || !nativeAbsolute(value)) argument("Source workspace is missing or belongs to another platform. Specify --cwd");
+  return value;
+}
 function nativeAbsolute(value: string): boolean {
   return process.platform === "win32" ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+)/.test(value) : path.isAbsolute(value);
 }
@@ -43,10 +56,7 @@ export async function runAgentCli(args: readonly string[], drivers: DriverRegist
       if (!(await fs.lstat(root)).isDirectory()) argument("--bundle must name a bundle directory");
       const files = await loadInputs([root], undefined, fs, io);
       const bundle = verifyInjectionBundle(files, driver.id);
-      if (!workspace) {
-        if (!bundle.cwd || !nativeAbsolute(bundle.cwd)) argument("Source workspace is missing or belongs to another platform. Specify --cwd");
-        workspace = bundle.cwd;
-      }
+      workspace ??= sourceWorkspace(bundle.cwd);
       let location = "";
       if (bundle.attachments.length) {
         attachmentDirectory = path.join(root, "source");

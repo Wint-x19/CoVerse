@@ -1,5 +1,7 @@
+import { pathToFileURL } from "node:url";
+import { buildInjectionBundle } from "@coverse/core";
 import path from "node:path";
-import { readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { createDriverRegistry } from "@coverse/drivers";
 import { runCli } from "../src/index.js";
@@ -60,6 +62,28 @@ it("rejects corrupt bundles, incompatible cwd, and target mismatch before spawni
   await writeFile(path.join(bundle, "context.md"), "damaged");
   expect((await cli([...args, "--cwd", cwd])).err.join("")).toContain("checksum");
   await expect(received()).rejects.toThrow();
+});
+it("restores a native file URI workspace and resolves an attachment outside that workspace", async () => {
+  const bundle = path.join(cwd, "archive"), workspace = path.join(cwd, "original space");
+  await mkdir(workspace);
+  const result = buildInjectionBundle({
+    schemaVersion: "1.0", meta: { id: "s", agent: "source", agentFormatVersion: "v1", cwd: pathToFileURL(workspace).href },
+    turns: [{ id: "u", role: "user", content: [{ type: "attachment", mediaType: "text/plain", path: "note.txt" }] }],
+    xExtensions: {}, sourceArtifacts: [{ path: "note.txt", bytes: new TextEncoder().encode("attachment text") }],
+  }, "codex");
+  for (const file of result.artifacts) {
+    const name = path.join(bundle, file.path);
+    await mkdir(path.dirname(name), { recursive: true });
+    await writeFile(name, file.bytes);
+  }
+  const args = ["run", "--agent", "codex", "--bundle", bundle, "--prompt", "read the attachment"];
+  expect((await cli(args)).status).toBe(0);
+  const capture = JSON.parse(await readFile(path.join(workspace, "received.json"), "utf8"));
+  expect(capture.cwd).toBe(workspace);
+  expect(capture.args).toContain(path.join(bundle, "source"));
+  expect(capture.input).toContain(JSON.stringify(bundle));
+  await unlink(path.join(bundle, "source/note.txt"));
+  expect((await cli(args)).status).toBe(3);
 });
 it("supports direct chat and local discovery", async () => {
   expect(JSON.parse((await cli(["drivers", "--json"])).out).map((d: { version: string }) => d.version)).toEqual(Array(3).fill("fixture-1"));

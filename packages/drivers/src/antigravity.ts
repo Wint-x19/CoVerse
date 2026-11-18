@@ -1,7 +1,7 @@
 import { driverError, object, string, targetFailure, usage, type DriverEvent, type DriverPlugin } from "./driver.js";
 
 export const antigravity: DriverPlugin = {
-  id: "antigravity", command: "agy", verifiedVersions: [],
+  id: "antigravity", command: "agy", verifiedVersions: ["1.5.11"],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["--input-format", "stream-json", "--output-format", "stream-json", "--disable-slash-commands"];
     if (model) args.push("--model", model);
