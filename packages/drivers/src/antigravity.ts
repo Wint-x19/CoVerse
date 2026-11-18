@@ -26,7 +26,10 @@ export const antigravity: DriverPlugin = {
       }
       if (record.event === "result") {
         const result = object(record.result);
-        if (result.status !== "SUCCESS") throw targetFailure(String(result.response ?? JSON.stringify(result.error ?? result.status)));
+        if (result.status !== "SUCCESS") {
+          const detail = typeof result.error === "string" ? result.error : JSON.stringify(result.error);
+          throw targetFailure("Antigravity terminal status " + String(result.status) + (detail ? ": " + detail : ""));
+        }
         const events: DriverEvent[] = [{ type: "session", id: string(result.conversation_id) }];
         events.push(...finalText(stepText, result.response));
         return [...events, ...usage(result.usage), { type: "done" }];

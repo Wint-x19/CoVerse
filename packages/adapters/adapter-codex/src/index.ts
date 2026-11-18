@@ -112,6 +112,9 @@ const adapter: SessionAdapter = {
             const text = p.text;
             if (typeof text !== "string") throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Malformed reasoning event");
             add("assistant", [{ type: "reasoning", text }], p, line);
+          } else if (typeof p.type === "string" && /^(?:mcp_tool_call|exec_command|patch_apply)_(?:begin|end|output_delta)$/.test(p.type)) {
+            add("system", [{ type: "text", text: `Historical tool event:\n${JSON.stringify(p)}` }], p, line);
+            ledger.downgraded.push({ code: "TOOL_EVENT_AS_HISTORY", path: `${file.path}:${line}`, reason: "Native tool telemetry is quoted as recorded, without inferring a new executable call" });
           } else if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${JSON.stringify(p)}` }], p, line, "reverted");
           else if (!operationalEvents.has(String(p.type))) add("system", [{ type: "opaque", source: "codex:event", value: p }], p, line);
           break;

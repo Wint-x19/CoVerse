@@ -46,6 +46,19 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
       session.meta.agent !== manifest.source || session.meta.agentFormatVersion !== manifest.sourceFormat) {
     invalid("session.json", "Unsupported or inconsistent source session");
   }
+  if (!Array.isArray(session.sourceArtifacts)) invalid("session.json", "Missing source artifact inventory");
+  const archived = new Set<string>();
+  for (const item of session.sourceArtifacts) {
+    if (!isRecord(item) || typeof item.path !== "string" || !item.path.startsWith("source/") || archived.has(item.path)) {
+      invalid("session.json", "Invalid source artifact reference");
+    }
+    const bytes = contents.get(item.path);
+    if (!bytes || item.bytes !== bytes.byteLength || item.sha256 !== sha256Bytes(bytes)) {
+      invalid(item.path, "Source artifact differs from the archived session reference");
+    }
+    archived.add(item.path);
+  }
+  for (const name of names) if (name.startsWith("source/") && !archived.has(name)) invalid(name, "Unreferenced source artifact");
   const attachments = new Set<string>();
   for (const turn of session.turns) {
     if (!isRecord(turn) || !Array.isArray(turn.content)) invalid("session.json", "Invalid turn content");

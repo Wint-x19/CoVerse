@@ -104,9 +104,18 @@ const adapter: SessionAdapter = {
       if (turn) { session.turns.push(turn); byId.set(id, turn); }
     }
     // A tool result may refer to a shared ancestor of a fork, but not to a sibling branch.
-    for (const turn of session.turns) for (const block of turn.content) {
-      if (block.type === "tool_result") {
-        if (!ancestors(turn.id).some(id => byId.get(id)?.content.some(b => b.type === "tool_call" && b.id === block.callId))) throw new SessionError("BROKEN_TOOL_REFERENCE", turn.id, "Tool result has no call in its parent chain");
+    for (const turn of session.turns) {
+      const localCalls = new Set<string>();
+      for (const block of turn.content) {
+        if (block.type === "tool_call") {
+          if (localCalls.has(block.id) || ancestors(turn.id).some(id => byId.get(id)?.content.some(b => b.type === "tool_call" && b.id === block.id))) {
+            throw new SessionError("INVALID_INPUT", turn.id, "Duplicate tool call ID on the same ancestry");
+          }
+          localCalls.add(block.id);
+        }
+        if (block.type === "tool_result" && !ancestors(turn.id).some(id => byId.get(id)?.content.some(b => b.type === "tool_call" && b.id === block.callId))) {
+          throw new SessionError("BROKEN_TOOL_REFERENCE", turn.id, "Tool result has no call in its parent chain");
+        }
       }
     }
     session.xExtensions["x-claude-record-graph"] = [...nodes].map(([id, e]) => ({ id, parent: e.value.parentUuid ?? null, artifact: e.artifact }));
