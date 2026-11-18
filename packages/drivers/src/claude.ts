@@ -1,5 +1,5 @@
 import { isRecord } from "@coverse/core";
-import { object, string, targetFailure, usage, type DriverEvent, type DriverPlugin } from "./driver.js";
+import { finalText, object, string, targetFailure, usage, type DriverEvent, type DriverPlugin } from "./driver.js";
 
 export const claude: DriverPlugin = {
   id: "claude-code", command: "claude", verifiedVersions: [],
@@ -11,16 +11,18 @@ export const claude: DriverPlugin = {
     return { args, input: prompt };
   },
   decoder() {
-    let textStreamed = false, anyText = false;
+    let textStreamed = false, messageText = "";
     return record => {
       if (record.parent_tool_use_id) return [];
       if (record.type === "system" && record.subtype === "init") return [{ type: "session", id: string(record.session_id) }];
       if (record.type === "stream_event") {
         const event = object(record.event);
-        if (event.type === "message_start") textStreamed = false;
+        if (event.type === "message_start") { textStreamed = false; messageText = ""; }
         if (event.type === "content_block_delta" && isRecord(event.delta) && event.delta.type === "text_delta") {
-          textStreamed = anyText = true;
-          return [{ type: "text", text: string(event.delta.text) }];
+          const text = string(event.delta.text);
+          textStreamed = true;
+          messageText += text;
+          return [{ type: "text", text }];
         }
         return [];
       }
@@ -30,8 +32,9 @@ export const claude: DriverPlugin = {
         if (Array.isArray(message.content)) for (const block of message.content) {
           if (!isRecord(block)) continue;
           if (record.type === "assistant" && block.type === "text" && !textStreamed) {
-            anyText = true;
-            events.push({ type: "text", text: string(block.text) });
+            const text = string(block.text);
+            messageText += text;
+            events.push({ type: "text", text });
           }
           if (block.type === "tool_use") events.push({ type: "tool", name: string(block.name), state: "started" });
           if (block.type === "tool_result") events.push({ type: "tool", name: string(block.tool_use_id), state: block.is_error ? "failed" : "completed" });
@@ -44,7 +47,7 @@ export const claude: DriverPlugin = {
           throw targetFailure(String(record.result ?? JSON.stringify(record.errors ?? record.subtype)));
         }
         const events: DriverEvent[] = [{ type: "session", id: string(record.session_id) }];
-        if (!anyText && typeof record.result === "string") events.push({ type: "text", text: record.result });
+        events.push(...finalText(messageText, record.result));
         return [...events, ...usage(record.usage), { type: "done" }];
       }
       return [];

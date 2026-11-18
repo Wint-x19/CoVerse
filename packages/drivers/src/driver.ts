@@ -1,4 +1,5 @@
 import { spawn, execFile } from "node:child_process";
+import path from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { isRecord, SessionError, type JsonValue, type ProtocolUsage } from "@coverse/core";
@@ -26,6 +27,8 @@ export interface DriverPlugin {
   invocation(options: RunOptions): { args: string[]; input: string };
   decoder(): (record: WireRecord) => DriverEvent[];
 }
+const sessionUuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
 export interface Executable { command: string; prefix?: readonly string[] }
 
 export function driverError(message: string, code = "DRIVER_FAILED"): SessionError {
@@ -55,6 +58,15 @@ export function usage(value: JsonValue | undefined): DriverEvent[] {
   }
   return [{ type: "usage", usage: counts, nativeUsage }];
 }
+/** Terminal summaries can contain a trailing fragment or repeat the last response in a tool loop. */
+export function finalText(emitted: string, snapshot: JsonValue | undefined): DriverEvent[] {
+  if (snapshot == null || snapshot === "") return [];
+  const text = string(snapshot);
+  if (emitted.endsWith(text)) return [];
+  if (!text.startsWith(emitted)) throw driverError("Final answer differs from streamed text");
+  return [{ type: "text", text: text.slice(emitted.length) }];
+}
+
 export function targetFailure(message: string): SessionError {
   if (/context.{0,20}(length|window|limit)|prompt.{0,20}too long|too many (input )?tokens/i.test(message)) {
     return driverError(message, "CONTEXT_LIMIT");
@@ -84,24 +96,39 @@ export class AgentDriver {
   async *run(options: RunOptions): AsyncGenerator<DriverEvent> {
     const cancelled = () => driverError("Agent run cancelled", "CANCELLED");
     if (options.signal?.aborted) throw cancelled();
-    if (options.session && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(options.session)) {
+    if (options.session && !sessionUuid.test(options.session)) {
       throw driverError("Expected an explicit target session UUID", "CLI_ARGUMENT");
     }
     if (!this.executable) throw driverError(this.plugin.command + " executable was not found", "DRIVER_UNAVAILABLE");
     const { args, input } = this.plugin.invocation(options);
     const child = spawn(this.executable.command, [...this.executable.prefix ?? [], ...args], {
-      cwd: options.cwd, stdio: "pipe", windowsHide: true, shell: false,
+      cwd: options.cwd, stdio: "pipe", windowsHide: true, shell: false, detached: process.platform !== "win32",
     });
     // Resolve on close so buffered stdout is consumed and late nonzero exits invalidate success.
     let launchError: Error | undefined;
     child.on("error", error => { launchError = error; });
     const closed = new Promise<number | null>(resolve => child.once("close", resolve));
     let killTimer: NodeJS.Timeout | undefined;
+    let stopping = false;
     const stop = () => {
-      if (child.exitCode === null && child.signalCode === null && child.pid) {
-        child.kill();
-        killTimer ??= setTimeout(() => child.kill("SIGKILL"), 1000).unref();
+      const pid = child.pid;
+      if (!pid || child.exitCode !== null || child.signalCode !== null || stopping) return;
+      stopping = true;
+      if (process.platform === "win32") {
+        // Killing only the launcher leaves agents and inherited pipe handles running.
+        const taskkill = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe");
+        execFile(taskkill, ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, error => {
+          if (error && child.exitCode === null && child.signalCode === null) child.kill();
+        });
+        return;
       }
+      const signalGroup = (signal: NodeJS.Signals) => {
+        try { process.kill(-pid, signal); } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") child.kill(signal);
+        }
+      };
+      signalGroup("SIGTERM");
+      killTimer = setTimeout(() => signalGroup("SIGKILL"), 1000).unref();
     };
     options.signal?.addEventListener("abort", stop, { once: true });
     let diagnostics = "";
@@ -123,7 +150,7 @@ export class AgentDriver {
         for (const event of decode(record)) {
           if (complete) throw driverError("Agent emitted events after completion");
           if (event.type === "session") {
-            if (!event.id || (session && event.id !== session) || (options.session && event.id !== options.session)) {
+            if (!sessionUuid.test(event.id) || (session && event.id !== session) || (options.session && event.id !== options.session)) {
               throw driverError("Target returned an unexpected session ID: " + event.id, "SESSION_MISMATCH");
             }
             if (session) continue;

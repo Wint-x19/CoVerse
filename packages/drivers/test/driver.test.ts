@@ -29,6 +29,13 @@ describe("driver subprocess lifecycle", () => {
       await expect(collect(execute("process.stdin.resume();" + start + tail))).rejects.toThrow();
     }
   });
+  it("cancels a launcher and its child with inherited output pipes", async () => {
+    const abort = new AbortController();
+    const events = execute("require('node:child_process').spawn(process.execPath, ['-e','setTimeout(()=>{},15000)'], {stdio:'inherit'});" + start + "process.stdin.resume();", abort.signal);
+    expect((await events.next()).value).toEqual({ type: "session", id });
+    abort.abort();
+    await expect(events.next()).rejects.toThrow("cancelled");
+  });
   it("rejects a mismatched resume and terminates on abort", async () => {
     await expect(collect(execute(start + end, undefined, id.replace(/^1/, "2")))).rejects.toThrow("unexpected session");
     const abort = new AbortController();

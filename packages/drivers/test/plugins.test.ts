@@ -29,3 +29,11 @@ it("maps Codex and Antigravity tool and terminal records", () => {
   });
   expect(() => agy({ event: "result", result: { status: "WAITING" } })).toThrow();
 });
+
+it("emits a missing final suffix exactly once and rejects contradictory summaries", () => {
+  const decode = registry.get("antigravity").plugin.decoder();
+  decode({ event: "step_update", step_update: { conversation_id: "id", step_type: "agent_response", text_delta: "abc" } });
+  const result = (response: string) => decode({ event: "result", result: { conversation_id: "id", response, status: "SUCCESS" } });
+  expect(result("abcde")).toContainEqual({ type: "text", text: "de" });
+  expect(() => result("different")).toThrow("differs");
+});
