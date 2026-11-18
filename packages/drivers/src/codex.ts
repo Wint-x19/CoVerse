@@ -1,7 +1,7 @@
 import { driverError, object, string, targetFailure, usage, type DriverPlugin } from "./driver.js";
 
 export const codex: DriverPlugin = {
-  id: "codex", command: "codex", verifiedVersions: [],
+  id: "codex", command: "codex", verifiedVersions: ["codex-cli 0.169.0-alpha.11.1"],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["exec", "--json"];
     if (model) args.push("--model", model);
@@ -14,6 +14,7 @@ export const codex: DriverPlugin = {
     switch (record.type) {
       case "thread.started": return [{ type: "session", id: string(record.thread_id) }];
       case "item.started":
+      case "item.updated":
       case "item.completed": {
         const item = object(record.item);
         if (item.type === "agent_message" && record.type === "item.completed") return [{ type: "text", text: string(item.text) }];

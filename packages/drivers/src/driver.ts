@@ -1,7 +1,7 @@
 import { spawn, execFile } from "node:child_process";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
-import { isRecord, SessionError, type JsonValue } from "@coverse/core";
+import { isRecord, SessionError, type JsonValue, type ProtocolUsage } from "@coverse/core";
 
 export interface RunOptions {
   cwd: string;
@@ -15,7 +15,7 @@ export type DriverEvent =
   | { type: "session"; id: string }
   | { type: "text"; text: string }
   | { type: "tool"; name: string; state: string }
-  | { type: "usage"; usage: Record<string, JsonValue> }
+  | { type: "usage"; usage: ProtocolUsage; nativeUsage: WireRecord }
   | { type: "done" };
 
 export type WireRecord = Record<string, JsonValue>;
@@ -40,12 +40,27 @@ export function string(value: JsonValue | undefined): string {
   return value;
 }
 export function usage(value: JsonValue | undefined): DriverEvent[] {
-  return value == null ? [] : [{ type: "usage", usage: object(value) }];
+  if (value == null) return [];
+  const nativeUsage = object(value);
+  const counts: ProtocolUsage = {};
+  const fields = {
+    input: nativeUsage.input_tokens, output: nativeUsage.output_tokens,
+    cachedInput: nativeUsage.cached_input_tokens ?? nativeUsage.cache_read_input_tokens ?? nativeUsage.cache_read_tokens,
+    cacheWrite: nativeUsage.cache_creation_input_tokens ?? nativeUsage.cache_write_input_tokens,
+    reasoning: nativeUsage.reasoning_output_tokens ?? nativeUsage.thinking_tokens,
+  };
+  for (const key of Object.keys(fields) as (keyof ProtocolUsage)[]) {
+    const count = fields[key];
+    if (typeof count === "number") counts[key] = count;
+  }
+  return [{ type: "usage", usage: counts, nativeUsage }];
 }
 export function targetFailure(message: string): SessionError {
   if (/context.{0,20}(length|window|limit)|prompt.{0,20}too long|too many (input )?tokens/i.test(message)) {
     return driverError(message, "CONTEXT_LIMIT");
   }
+  if (/insufficient.{0,16}quota|credit balance|billing limit/i.test(message)) return driverError(message, "QUOTA_EXHAUSTED");
+  if (/authentication required|not logged in|not authenticated|please (log|sign) in/i.test(message)) return driverError(message, "AUTH_REQUIRED");
   return driverError(message);
 }
 

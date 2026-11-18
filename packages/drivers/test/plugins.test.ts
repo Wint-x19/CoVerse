@@ -24,5 +24,8 @@ it("maps Codex and Antigravity tool and terminal records", () => {
   expect(codex({ type: "item.started", item: { type: "command_execution", status: "in_progress" } })[0]?.type).toBe("tool");
   expect(codex({ type: "turn.completed", usage: { input_tokens: 5 } }).map(e => e.type)).toEqual(["usage", "done"]);
   expect(agy({ event: "step_update", step_update: { conversation_id: "id", step_type: "tool", tool_name: "read", state: "DONE" } }).at(-1)?.type).toBe("tool");
+  expect(codex({ type: "turn.completed", usage: { input_tokens: 5, cached_input_tokens: 2 } })[0]).toEqual({
+    type: "usage", usage: { input: 5, cachedInput: 2 }, nativeUsage: { input_tokens: 5, cached_input_tokens: 2 },
+  });
   expect(() => agy({ event: "result", result: { status: "WAITING" } })).toThrow();
 });
