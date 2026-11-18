@@ -3,7 +3,9 @@ import hashlib
 import json
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import UUID
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/fixtures"))
@@ -20,14 +22,19 @@ for agent in ("codex", "claude-code", "antigravity"):
         history = case["history"]
         name = folder / ("seed-" + seed + (".db" if agent == "antigravity" else ".jsonl"))
         if agent == "antigravity":
-            with sqlite3.connect(ROOT / "fixtures/antigravity/sqlite-2_32_1-step0/sample.db") as base, sqlite3.connect(name) as db:
-                base.backup(db)
-                db.execute("DELETE FROM steps")
-                db.execute("UPDATE trajectory_meta SET trajectory_id=?,cascade_id=?", (sid,sid))
-                for index,(role,text) in enumerate(history):
-                    kind, tag, part = (14,19,2) if role=="user" else (15,20,1)
-                    payload = integer(1,kind)+integer(4,3)+field(tag,field(part,text))
-                    db.execute("INSERT INTO steps(idx,step_type,status,step_payload) VALUES(?,?,3,?)",(index,kind,payload))
+            # A fresh database keeps SQLite's file change counter independent of earlier runs.
+            with TemporaryDirectory(dir=folder) as tmp:
+                fresh = Path(tmp) / name.name
+                with closing(sqlite3.connect(ROOT / "fixtures/antigravity/sqlite-2_32_1-step0/sample.db")) as base, closing(sqlite3.connect(fresh)) as db:
+                    base.backup(db)
+                    db.execute("DELETE FROM steps")
+                    db.execute("UPDATE trajectory_meta SET trajectory_id=?,cascade_id=?", (sid,sid))
+                    for index,(role,text) in enumerate(history):
+                        kind, tag, part = (14,19,2) if role=="user" else (15,20,1)
+                        payload = integer(1,kind)+integer(4,3)+field(tag,field(part,text))
+                        db.execute("INSERT INTO steps(idx,step_type,status,step_payload) VALUES(?,?,3,?)",(index,kind,payload))
+                    db.commit()
+                fresh.replace(name)
         else:
             rows = []
             parent = None
