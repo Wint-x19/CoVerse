@@ -27,7 +27,7 @@
 
 M1 底层协议转换已实现：三协议请求、响应及 SSE 的已测试子集互转。能力和限制见 [protocols 说明](packages/protocols/README.md)，路线图见 [DESIGN.md §5](DESIGN.md)。
 
-M2 已实现 **Codex、Claude Code、Antigravity 三个独立插件的已验证格式子集**，采用 `来源 → CSR → 目标引导包` 的 2 × N 架构。九种来源/目标组合均有集成测试。引导包保留全文、CSR、原始工件和损耗账本，不自动摘要或裁剪；原生会话合成与自动续聊尚未实现。
+M2 已实现 **Codex、Claude Code、Antigravity 三个独立插件的已验证格式子集**，采用 `来源 → CSR → 目标引导包` 的 2 × N 架构。九种来源/目标组合均有集成测试。引导包保留全文、CSR、原始工件和损耗账本，不自动摘要或裁剪；目标 Agent 的启动与追问见下方 M3 用法。
 
 | 插件 | 首批格式依据 | 限制说明 |
 |------|-------------|----------|
@@ -53,7 +53,7 @@ pnpm coverse protocols --json
 
 `pnpm check` 依次构建所有包、严格类型检查、运行 Vitest、校验 fixtures 清单及摘要、执行协议和会话管线冒烟测试。`pnpm test` 与 `pnpm smoke` 使用构建后的包，新克隆或修改包代码后先执行 `pnpm build`。CLI 运行构建后的原生 ESM。
 
-核心定义 CSR v1、消息/请求/响应/事件 IR、FileSet、LossLedger 和插件契约。`protocols` 实现格式 codec 与转换，`modes`、`drivers` 仍为占位，`ui` 留待 M4。
+核心定义 CSR v1、消息 IR、FileSet、LossLedger 和会话适配器契约。执行驱动位于 `@coverse/drivers`，模式映射与 Web UI 见后续里程碑。
 
 ## 会话转换 CLI
 
@@ -65,11 +65,27 @@ node packages/cli/dist/bin.js convert-session --from auto --to claude-code --inp
 
 `--from` 接受 `auto` 或明确的插件 ID；探测不足或有歧义时失败。`--input` 可重复，可以指定包含单一会话文件集的目录；目录内相对路径会保留。不要同时指定同一会话的明文和压缩副本。数据库旁的 WAL/journal 会一并检查，非空时须先提供一致快照。会话命令不使用 stdin/stdout 传输原始记录。
 
-引导包包含 `context.md`（完整历史转写）、`session.json`（CSR 与来源引用）、`report.json`（损耗、诊断、字符/字节统计）、`source/`（输入原始字节）和 `manifest.json`（工件 SHA-256）。将完整引导包带入目标 Agent 的新对话，并读取 `context.md` 与所引用附件。此步骤由用户完成，CoVerse 不启动 Agent、不执行历史工具、不保证目标端不会再次压缩。
+引导包包含 `context.md`（完整历史转写）、`session.json`（CSR 与来源引用）、`report.json`（损耗、诊断、字符/字节统计）、`source/`（输入原始字节）和 `manifest.json`（工件 SHA-256）。将完整引导包带入目标 Agent 的新对话，并读取 `context.md` 与所引用附件。也可通过下方的 `run --bundle` 自动注入。历史工具活动保留为引用；目标 Agent 使用自身的上下文窗口与压缩机制。
 
 历史角色、工具及推理的明确转写默认允许，并逐项报告；无法解释的语义、缺失附件等不自动放行。全部工件校验后暂存，独占创建目标目录，最后发布 manifest；失败会清理本次创建的目录，已有输出绝不覆盖。stdout 返回 JSON 结果摘要，stderr 返回结构化诊断。退出码：`0` 成功、`1` I/O/内部错误、`2` 参数或输入结构错误、`3` 能力/保真度不足、输入变化或取消。
 
 引导包包含原始会话，不是脱敏样本，不能提交到仓库。临时输出请放在 `.tmp/` 或 `.local/`。
+
+## M3 注入与按 ID 追问
+
+先构建项目并在目标 Agent 的官方 CLI 中登录。以下示例使用上节生成的引导包。样本的原始路径是虚构的，因此示例显式指定工作目录。
+
+```sh
+pnpm coverse drivers --json
+pnpm coverse run --agent claude-code --bundle .tmp/codex-to-claude --cwd . --prompt "历史中读取 example.txt 得到了什么原文？"
+pnpm coverse run --agent claude-code --session <首轮返回的目标会话UUID> --cwd . --prompt "把刚才引用的原文翻译成中文。"
+```
+
+直接聊天使用 `run --agent <id> --prompt <text>`，可加 `--model <name>`。首次迁移会校验引导包并注入完整转写和当前提问。默认使用来源工作目录，目录已迁移时用 `--cwd` 映射。后续追问在相同工作目录使用目标会话 ID。目标 Agent 按其本地配置执行新请求。
+
+回答走 stdout，会话 ID、损耗计数和报告位置走 stderr。加 `--json` 获取逐行事件；发生失败时检查退出码和 stderr，其中包含已取得的会话 ID。脚本调用建议使用 `node packages/cli/dist/bin.js`。
+
+**真机验收进度（2026-11-18）：2/3。** Antigravity → Codex、Claude Code → Antigravity 已通过首轮历史问答与第二轮按 ID 追问。Codex → Claude Code 的当前服务返回 HTTP 403（额度不足），仍待验收。三家来源 × 三家目标的离线回归通过。版本、事件与完整演示命令见 [执行驱动说明](packages/drivers/README.md)。
 
 ## 协议转换 CLI
 

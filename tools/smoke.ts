@@ -50,4 +50,4 @@ for (const [id, fixture] of Object.entries(sessionFixtures)) {
     assert.equal(report.statistics.truncated, false);
   }
 }
-console.log("M2 smoke passed: M1 protocols, binary transport and all nine verified session-to-injection routes; native resume remains unsupported.");
+console.log("M2 smoke passed: M1 protocols, binary transport and all nine verified session-to-injection routes; cross-agent native session synthesis is reserved for M5.");
