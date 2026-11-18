@@ -50,12 +50,13 @@ export function targetFailure(message: string): SessionError {
 }
 
 export class AgentDriver {
-  constructor(readonly plugin: DriverPlugin, readonly executable: Executable = { command: plugin.command }) {}
+  constructor(readonly plugin: DriverPlugin, readonly executable: Executable | null = { command: plugin.command }) {}
   get id() { return this.plugin.id; }
 
   async probe() {
     let version: string | null = null;
     try {
+      if (!this.executable) throw driverError("Agent executable was not found");
       const result = await promisify(execFile)(this.executable.command, [...this.executable.prefix ?? [], "--version"], {
         timeout: 10000, windowsHide: true, maxBuffer: 64 * 1024,
       });
@@ -71,6 +72,7 @@ export class AgentDriver {
     if (options.session && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(options.session)) {
       throw driverError("Expected an explicit target session UUID", "CLI_ARGUMENT");
     }
+    if (!this.executable) throw driverError(this.plugin.command + " executable was not found", "DRIVER_UNAVAILABLE");
     const { args, input } = this.plugin.invocation(options);
     const child = spawn(this.executable.command, [...this.executable.prefix ?? [], ...args], {
       cwd: options.cwd, stdio: "pipe", windowsHide: true, shell: false,
