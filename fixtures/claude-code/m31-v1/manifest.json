@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "agent": "claude-code",
+  "formatVersion": "m31-v1",
+  "provenance": "reconstructed",
+  "reviewRequired": false,
+  "nativeFormatVerified": true,
+  "description": "Two invented shipping histories with independent semantic oracles.",
+  "evidence": [
+    "Reuses the native writer subset documented by the corresponding M2 adapter. Semantic data authored specifically for M3.1."
+  ],
+  "files": [
+    {
+      "path": "seed-17.jsonl",
+      "format": "jsonl",
+      "sha256": "3b7029055b912a2cb78782da15d095d9554abb8d4c52209e876e3feb6d53e9a5"
+    },
+    {
+      "path": "seed-53.jsonl",
+      "format": "jsonl",
+      "sha256": "c9a6e7bef1089f03f4998d3f521bd15f06e20641798d18704e677d6bfef9cdac"
+    }
+  ]
+}

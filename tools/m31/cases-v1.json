@@ -1,0 +1,56 @@
+{
+  "seeds": {
+    "17": {
+      "history": [
+        [
+          "user",
+          "Iris proposed shipping amber to port 12. Keep region north. Release fee has not been disclosed."
+        ],
+        [
+          "assistant",
+          "Proposal recorded. The fallback plan was rail."
+        ],
+        [
+          "user",
+          "Nora corrected the dispatch: ship jade to port 39. Rail is cancelled. Keep the original region."
+        ]
+      ],
+      "gold": {
+        "cargo": "jade",
+        "port": 39,
+        "owner": "Nora",
+        "region": "north",
+        "withdrawn": "rail",
+        "fee": "unknown",
+        "label": "north-39-jade"
+      }
+    },
+    "53": {
+      "history": [
+        [
+          "user",
+          "Vera proposed shipping cobalt to port 65. Keep region east. Release fee has not been disclosed."
+        ],
+        [
+          "assistant",
+          "Proposal recorded. The fallback plan was ferry."
+        ],
+        [
+          "user",
+          "Omar corrected the dispatch: ship coral to port 27. Ferry is cancelled. Keep the original region."
+        ]
+      ],
+      "gold": {
+        "cargo": "coral",
+        "port": 27,
+        "owner": "Omar",
+        "region": "east",
+        "withdrawn": "ferry",
+        "fee": "unknown",
+        "label": "east-27-coral"
+      }
+    }
+  },
+  "question": "Use the supplied history only. Answer as a single JSON object with cargo (current cargo), port (current number), owner (person who corrected it), region (unchanged), withdrawn (cancelled fallback), fee (unknown if unspecified), label (region-port-cargo in lowercase). Do not use tools.",
+  "follow": "From our previous answer, give only the complete shipping label, without any tools."
+}

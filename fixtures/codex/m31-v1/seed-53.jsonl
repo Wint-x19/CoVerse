@@ -1,0 +1,4 @@
+{"type": "session_meta", "payload": {"id": "00000000-0000-0000-0000-000000000035", "cli_version": "0.169.0-alpha.11.1", "cwd": "/sample/workspace"}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Vera proposed shipping cobalt to port 65. Keep region east. Release fee has not been disclosed."}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Proposal recorded. The fallback plan was ferry."}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Omar corrected the dispatch: ship coral to port 27. Ferry is cancelled. Keep the original region."}]}}

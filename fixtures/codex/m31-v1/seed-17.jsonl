@@ -1,0 +1,4 @@
+{"type": "session_meta", "payload": {"id": "00000000-0000-0000-0000-000000000011", "cli_version": "0.169.0-alpha.11.1", "cwd": "/sample/workspace"}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Iris proposed shipping amber to port 12. Keep region north. Release fee has not been disclosed."}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Proposal recorded. The fallback plan was rail."}]}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Nora corrected the dispatch: ship jade to port 39. Rail is cancelled. Keep the original region."}]}}
