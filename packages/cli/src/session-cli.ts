@@ -29,7 +29,7 @@ function unchanged(a: Awaited<ReturnType<typeof fs.lstat>>, b: Awaited<ReturnTyp
 }
 function cancelled(io: CliIO) { if (io.signal?.aborted) throw new SessionError("CANCELLED", "/conversion", "Conversion cancelled"); }
 
-async function loadInputs(inputs: readonly string[], output: string, fileIO: FileIO, io: CliIO): Promise<FileSet> {
+export async function loadInputs(inputs: readonly string[], output: string | undefined, fileIO: FileIO, io: CliIO): Promise<FileSet> {
   async function inventory() {
     const found: { absolute: string; relative: string }[] = [];
     const seen = new Set<string>();
@@ -37,8 +37,8 @@ async function loadInputs(inputs: readonly string[], output: string, fileIO: Fil
       const info = await fileIO.lstat(absolute);
       if (info.isSymbolicLink()) throw new SessionError("INVALID_INPUT", relative, "Symlink inputs are not stable snapshots");
       if (info.isDirectory()) {
-        const relation = path.relative(absolute, output);
-        if (!relation || !relation.startsWith("..") && !path.isAbsolute(relation)) fail("Output must not be inside an input directory");
+        const relation = output === undefined ? undefined : path.relative(absolute, output);
+        if (relation !== undefined && (!relation || !relation.startsWith("..") && !path.isAbsolute(relation))) fail("Output must not be inside an input directory");
         for (const entry of (await fileIO.readdir(absolute)).sort()) await add(path.join(absolute, entry), relative ? `${relative}/${entry}` : entry);
       } else if (info.isFile()) {
         const real = await fileIO.realpath(absolute), key = process.platform === "win32" ? real.toLowerCase() : real;

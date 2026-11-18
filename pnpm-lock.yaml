@@ -72,6 +72,9 @@ importers:
       '@coverse/core':
         specifier: workspace:*
         version: link:../core
+      '@coverse/drivers':
+        specifier: workspace:*
+        version: link:../drivers
       '@coverse/protocols':
         specifier: workspace:*
         version: link:../protocols

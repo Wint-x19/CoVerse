@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@coverse/drivers": "workspace:*",
     "@coverse/core": "workspace:*",
     "@coverse/protocols": "workspace:*",
     "@coverse/adapter-codex": "workspace:*",
