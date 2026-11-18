@@ -16,6 +16,11 @@ async function collect(events: AsyncIterable<DriverEvent>) {
   return all;
 }
 describe("driver subprocess lifecycle", () => {
+  it("reports an empty turn without observable actions and accepts a completed tool-only turn", async () => {
+    await expect(collect(execute("process.stdin.resume();" + start + end))).rejects.toMatchObject({ code: "EMPTY_RESPONSE" });
+    const action = "console.log(JSON.stringify({type:'tool',name:'read',state:'completed'}));";
+    expect((await collect(execute("process.stdin.resume();" + start + action + end))).at(-1)).toEqual({type:"done"});
+  });
   it("delivers a long stdin and decodes Chinese across byte boundaries", async () => {
     const code = `process.stdin.setEncoding('utf8'); let s=''; process.stdin.on('data',c=>s+=c);
       process.stdin.on('end',()=>{ ${start}

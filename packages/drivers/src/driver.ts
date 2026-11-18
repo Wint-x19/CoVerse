@@ -140,6 +140,7 @@ export class AgentDriver {
     const decode = this.plugin.decoder();
     let session: string | undefined;
     let complete = false;
+    let hasOutput = false;
     try {
       for await (const line of lines) {
         if (options.signal?.aborted) throw cancelled();
@@ -156,6 +157,7 @@ export class AgentDriver {
             if (session) continue;
             session = event.id;
           }
+          if (event.type === "tool" || (event.type === "text" && event.text.trim())) hasOutput = true;
           if (event.type === "done") complete = true;
           else yield event;
         }
@@ -166,6 +168,7 @@ export class AgentDriver {
       if (exitCode !== 0) throw targetFailure(diagnostics.trim() || "Agent exited with status " + exitCode);
       if (inputError) throw driverError("Could not deliver the full prompt: " + inputError.message);
       if (!session || !complete) throw driverError("Agent exited without session ID or successful terminal event");
+      if (!hasOutput) throw driverError("Agent completed without a visible answer or tool activity", "EMPTY_RESPONSE");
       yield { type: "done" };
     } finally {
       options.signal?.removeEventListener("abort", stop);
