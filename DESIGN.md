@@ -1,6 +1,6 @@
 # CoVerse 可行性分析与工程设计
 
-> 状态：v0.5，M3 已完成三家执行驱动和注入式追问，三条真机路线全部通过（2026-11-18）。M2 格式依据见 §9，M3 验收记录见 §10。
+> 状态：v0.6，M3.1 已完成会话转换专项首测（2026-11-18）。M2 格式依据见 §9，M3 验收记录见 §10，专项报告见 §11。
 > 配套规范见 [AGENTS.md](AGENTS.md)。
 
 ---
@@ -164,6 +164,7 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 | **M1** 底层协议 | core IR v1 + protocols 三协议互转 | `coverse convert-protocol` CLI | 管线与测试纪律（文档齐全，低风险热身） |
 | **M2** 首批适配器 | 仅 Codex、Claude Code、Antigravity：先打通 Codex ↔ Claude Code，再基于实测接入 Antigravity；import → CSR → 注入式引导包 | `coverse convert-session` CLI + 版本化金样本；未验证能力明确不可用 | IR 表达力与 LossLedger；Antigravity 格式可行性 |
 | **M3** 端到端闭环 | drivers + 注入式续接：A 会话 → 在 B agent 里继续对话 | 端到端演示（含 LossLedger 报告） | 核心价值主张成立与否 |
+| **M3.1** 端到端转换质量 | 三家互转六方向配对、真实来源、长窗、换模型、Skill/MCP 与三端接力 | 离线门槛、可重复的真机评测和逐轮质量报告 | 信息最早在哪一层丢失，接收端能否继续任务 |
 | **M4** 平台 UI | Web：会话列表、拖拽转换、选 agent/model 直聊 | 可日常自用的 Web 平台 | 产品形态 |
 | **M5** 原生合成 | codex / claude-code 的原生会话文件合成 + resume；失败回退注入 | 无缝续接（F2/F3 级） | 最高风险项后置攻坚 |
 | **M6** 顶层+生态 | modes/skills 映射；首批三家插件完善；插件贡献模板与漂移 CI | 社区可贡献体系；其它 Agent 另行确认 | 生态化 |
@@ -216,3 +217,7 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 2. **执行层接口**。`@coverse/drivers` 提供驱动契约、注册表、版本探测和异步事件流。厂商命令、stdin 形状与事件解码位于各自驱动中；CLI 负责引导包、工作目录、输出和诊断。
 3. **保真度**。转换与执行共享引导包校验。完整转写经 stdin 传递，引用附件按已校验的包路径解析。CLI 公开报告路径和三类损耗计数，并在子进程成功退出、会话 ID 和终态均得到确认后报告成功。
 4. **验收**。九种来源/目标组合通过可控子进程回归。三条真机路线均从历史工具结果中引用了原文，再按首轮返回的会话 ID 答出随机标记。Codex → Claude Code 使用 Claude Code 2.1.121 和 `claude-sonnet-4-6` 完成验证。[演示命令与版本记录](packages/drivers/README.md)
+
+## 11. M3.1 质量基线
+
+离线核对源工件、CSR、引导包、驱动 stdin 和目标事件。真机分别测量历史事实、目标运行状态以及下一轮任务完成情况，并使用等价历史对照。按来源文件、方向、模型、长度和具体失败阶段保留分母。七项契约缺陷修复后通过回归；尚未解释的原生块继续明确拒绝。完整数据见 [首轮报告](tools/m31/REPORT-2026-11-18.md) 和 [实验协议](tools/m31/README.md)。

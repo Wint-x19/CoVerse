@@ -23,6 +23,8 @@ node tools/m3-demo.mjs claude-code
 
 ### 运行契约
 
+M3.1 专项新增空响应诊断。回合结束时既没有可见文本也没有工具活动会返回 `EMPTY_RESPONSE`。Antigravity 工具失败后既无后续恢复也无答复时会报告运行失败，诊断保留已取得的会话 ID。[失败样本与复验](../../tools/m31/REPORT-2026-11-18.md)
+
 - `createDriverRegistry().get(id).run({ prompt, cwd, model?, session?, attachmentDirectory?, signal? })` 返回异步事件流。`session` 接受目标 CLI 已创建的会话 UUID。新插件提供命令构造、逐行解码和实测版本，在驱动注册表注册。
 - `--json` 首次迁移先发出 `bundle`（报告路径和损耗计数），再输出 `session`、`text`、`tool`、`usage` 等事件。Codex 按完成的消息输出文本，Claude Code 和 agy 支持文本增量。用量包含统一的计数字段及厂商原始计数，含义与统计区间沿用目标 CLI。
 - `done` 表示目标成功终态和退出码已确认。错误发往 stderr；已经输出的文字与会话 ID 可以保留。退出码沿用 CLI 约定，0 成功，1 I/O，2 参数或输入，3 驱动不可用、目标拒绝、取消、引导包校验失败或运行中断。

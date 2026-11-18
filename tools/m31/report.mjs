@@ -97,6 +97,17 @@ for(const target of agents){
 const relay=await optional(path.join(base,"relay","result.json"));
 if(relay)summary.relay={firstConversion:relay.first.status,secondConversion:relay.second?.status,bFirst:outcome(rows.get(relay.bFirst)),
   bFollow:outcome(rows.get(relay.bFollow)),cFirst:outcome(rows.get(relay.cFirst)),firstScore:relay.score?.matches,previous:relay.previous??null};
+summary.priorConversions=[];
+for(const dir of ["relay",...summary.source.map(r=>"source/source-"+r.agent+"-"+r.seed)]){
+  const folder=path.join(base,dir);
+  for(const file of (await fs.readdir(folder).catch(()=>[])).filter(n=>n.startsWith("observation-"))){
+    const prior=await read(path.join(folder,file));
+    const targets=prior.targets??{antigravity:prior.second};
+    for(const [target,r] of Object.entries(targets))if(r && r.status!==0){
+      summary.priorConversions.push({case:dir,target,status:r.status,code:r.diagnostic?.[0]?.code,path:r.diagnostic?.[0]?.path,sourceHash:r.sha256});
+    }
+  }
+}
 if(values.offline){
   const o=await read(values.offline);
   const expected=o.lossRows.flatMap(r=>r.expected.map(v=>r.label+" "+v));

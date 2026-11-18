@@ -1,0 +1,5502 @@
+{
+  "schemaVersion": 1,
+  "campaign": "first",
+  "environment": {
+    "date": "2026-11-18T10:09:30.105Z",
+    "platform": "win32",
+    "node": "v20.19.5",
+    "versions": [
+      {
+        "id": "codex",
+        "available": true,
+        "version": "codex-cli 0.169.0-alpha.11.1",
+        "verifiedVersions": [
+          "codex-cli 0.169.0-alpha.11.1"
+        ],
+        "verifiedCapabilities": [
+          "run",
+          "inject",
+          "resume"
+        ]
+      },
+      {
+        "id": "claude-code",
+        "available": true,
+        "version": "2.1.121 (Claude Code)",
+        "verifiedVersions": [
+          "2.1.121 (Claude Code)"
+        ],
+        "verifiedCapabilities": [
+          "run",
+          "inject",
+          "resume"
+        ]
+      },
+      {
+        "id": "antigravity",
+        "available": true,
+        "version": "1.5.11",
+        "verifiedVersions": [
+          "1.5.11"
+        ],
+        "verifiedCapabilities": [
+          "run",
+          "inject",
+          "resume"
+        ]
+      }
+    ],
+    "models": {
+      "codex": "gpt-6.2-sol",
+      "claude-code": "claude-sonnet-4-6",
+      "antigravity": "gemini-3.8-flash-medium"
+    }
+  },
+  "budgets": {
+    "capability": 11,
+    "length": 24,
+    "paired": 43,
+    "relay": 3,
+    "retest": 11,
+    "source": 9,
+    "switch": 9
+  },
+  "paired": [
+    {
+      "source": "claude-code",
+      "target": "codex",
+      "seed": "17",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "evaluation-timeout",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      }
+    },
+    {
+      "source": "antigravity",
+      "target": "codex",
+      "seed": "17",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "evaluation-timeout",
+        "follow": "not-run",
+        "score": {
+          "parsed": false,
+          "prose": false,
+          "matches": {
+            "cargo": false,
+            "port": false,
+            "owner": false,
+            "region": false,
+            "withdrawn": false,
+            "fee": false,
+            "label": false
+          },
+          "wrong": [],
+          "missing": [
+            "cargo",
+            "port",
+            "owner",
+            "region",
+            "withdrawn",
+            "fee",
+            "label"
+          ],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      }
+    },
+    {
+      "source": "claude-code",
+      "target": "codex",
+      "seed": "53",
+      "reference": {
+        "first": "complete",
+        "follow": "evaluation-timeout",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      },
+      "injection": {
+        "first": "evaluation-timeout",
+        "follow": "not-run",
+        "score": {
+          "parsed": false,
+          "prose": false,
+          "matches": {
+            "cargo": false,
+            "port": false,
+            "owner": false,
+            "region": false,
+            "withdrawn": false,
+            "fee": false,
+            "label": false
+          },
+          "wrong": [],
+          "missing": [
+            "cargo",
+            "port",
+            "owner",
+            "region",
+            "withdrawn",
+            "fee",
+            "label"
+          ],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      }
+    },
+    {
+      "source": "antigravity",
+      "target": "codex",
+      "seed": "53",
+      "reference": {
+        "first": "evaluation-timeout",
+        "follow": "not-run",
+        "score": {
+          "parsed": false,
+          "prose": false,
+          "matches": {
+            "cargo": false,
+            "port": false,
+            "owner": false,
+            "region": false,
+            "withdrawn": false,
+            "fee": false,
+            "label": false
+          },
+          "wrong": [],
+          "missing": [
+            "cargo",
+            "port",
+            "owner",
+            "region",
+            "withdrawn",
+            "fee",
+            "label"
+          ],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "codex",
+      "target": "claude-code",
+      "seed": "17",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "antigravity",
+      "target": "claude-code",
+      "seed": "17",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "codex",
+      "target": "claude-code",
+      "seed": "53",
+      "reference": {
+        "first": "complete",
+        "follow": "empty-terminal-success",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": false,
+        "complete": false
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "antigravity",
+      "target": "claude-code",
+      "seed": "53",
+      "reference": {
+        "first": "empty-terminal-success",
+        "follow": "complete",
+        "score": {
+          "parsed": false,
+          "prose": false,
+          "matches": {
+            "cargo": false,
+            "port": false,
+            "owner": false,
+            "region": false,
+            "withdrawn": false,
+            "fee": false,
+            "label": false
+          },
+          "wrong": [],
+          "missing": [
+            "cargo",
+            "port",
+            "owner",
+            "region",
+            "withdrawn",
+            "fee",
+            "label"
+          ],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": false
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "codex",
+      "target": "antigravity",
+      "seed": "17",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "claude-code",
+      "target": "antigravity",
+      "seed": "17",
+      "reference": {
+        "first": "DRIVER_FAILED",
+        "follow": "not-run",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      },
+      "injection": {
+        "first": "DRIVER_FAILED",
+        "follow": "not-run",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": false,
+        "followCorrect": false,
+        "complete": false
+      }
+    },
+    {
+      "source": "codex",
+      "target": "antigravity",
+      "seed": "53",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    },
+    {
+      "source": "claude-code",
+      "target": "antigravity",
+      "seed": "53",
+      "reference": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      },
+      "injection": {
+        "first": "complete",
+        "follow": "complete",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "sameId": true,
+        "followCorrect": true,
+        "complete": true
+      }
+    }
+  ],
+  "length": [
+    {
+      "target": "codex",
+      "k": 4,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      }
+    },
+    {
+      "target": "codex",
+      "k": 16,
+      "reference": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      }
+    },
+    {
+      "target": "codex",
+      "k": 64,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      },
+      "injection": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      }
+    },
+    {
+      "target": "codex",
+      "k": 128,
+      "reference": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      }
+    },
+    {
+      "target": "claude-code",
+      "k": 4,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      }
+    },
+    {
+      "target": "claude-code",
+      "k": 16,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": false
+        }
+      }
+    },
+    {
+      "target": "claude-code",
+      "k": 64,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": false
+        }
+      }
+    },
+    {
+      "target": "claude-code",
+      "k": 128,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": false
+        }
+      }
+    },
+    {
+      "target": "antigravity",
+      "k": 4,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      }
+    },
+    {
+      "target": "antigravity",
+      "k": 16,
+      "reference": {
+        "outcome": "complete",
+        "strict": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      },
+      "injection": {
+        "outcome": "complete",
+        "strict": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": false,
+          "join": true
+        },
+        "adjudicated": {
+          "start": true,
+          "middle": true,
+          "end": true,
+          "latest": true,
+          "join": true
+        }
+      }
+    },
+    {
+      "target": "antigravity",
+      "k": 64,
+      "reference": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      }
+    },
+    {
+      "target": "antigravity",
+      "k": 128,
+      "reference": {
+        "outcome": "evaluation-timeout",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      },
+      "injection": {
+        "outcome": "DRIVER_FAILED",
+        "strict": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        },
+        "adjudicated": {
+          "start": false,
+          "middle": false,
+          "end": false,
+          "latest": false,
+          "join": false
+        }
+      }
+    }
+  ],
+  "source": [
+    {
+      "agent": "codex",
+      "seed": "17",
+      "sourceStatus": 3,
+      "targets": {
+        "claude-code": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "06ae21014b0ff49f159fa3ddabeda7dcfc5a2f215bad8760b593aa0638493b16",
+          "format": "rollout-2026-11-17",
+          "modelRecorded": "gpt-6.2-sol",
+          "statistics": {
+            "turns": 13,
+            "characters": 165617,
+            "utf8Bytes": 170586,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        },
+        "antigravity": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "06ae21014b0ff49f159fa3ddabeda7dcfc5a2f215bad8760b593aa0638493b16",
+          "format": "rollout-2026-11-17",
+          "modelRecorded": "gpt-6.2-sol",
+          "statistics": {
+            "turns": 13,
+            "characters": 165617,
+            "utf8Bytes": 170586,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    },
+    {
+      "agent": "codex",
+      "seed": "53",
+      "sourceStatus": 3,
+      "targets": {
+        "claude-code": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "cfc41e45dbd23758aedc58befc0fc5d78bce0af5331629434ade52f7f62a15c1",
+          "format": "rollout-2026-11-17",
+          "modelRecorded": "gpt-6.2-sol",
+          "statistics": {
+            "turns": 10,
+            "characters": 160067,
+            "utf8Bytes": 165036,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        },
+        "antigravity": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "cfc41e45dbd23758aedc58befc0fc5d78bce0af5331629434ade52f7f62a15c1",
+          "format": "rollout-2026-11-17",
+          "modelRecorded": "gpt-6.2-sol",
+          "statistics": {
+            "turns": 10,
+            "characters": 160067,
+            "utf8Bytes": 165036,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    },
+    {
+      "agent": "claude-code",
+      "seed": "17",
+      "sourceStatus": 0,
+      "targets": {
+        "codex": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "d51bf6ace6cb58806e8ab3f2f65ac729370f15a720da893e267d1916648e3137",
+          "format": "transcript-sdk-0_3_326",
+          "modelRecorded": "claude-sonnet-4-6",
+          "statistics": {
+            "turns": 8,
+            "characters": 8396,
+            "utf8Bytes": 8400,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        },
+        "antigravity": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "d51bf6ace6cb58806e8ab3f2f65ac729370f15a720da893e267d1916648e3137",
+          "format": "transcript-sdk-0_3_326",
+          "modelRecorded": "claude-sonnet-4-6",
+          "statistics": {
+            "turns": 8,
+            "characters": 8402,
+            "utf8Bytes": 8406,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    },
+    {
+      "agent": "claude-code",
+      "seed": "53",
+      "sourceStatus": 0,
+      "targets": {
+        "codex": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "953d12470f8b6e3ac44bb90c96c56ce0f7c8dcdccbc0bcb6267e0ce59d598879",
+          "format": "transcript-sdk-0_3_326",
+          "modelRecorded": "claude-sonnet-4-6",
+          "statistics": {
+            "turns": 5,
+            "characters": 7687,
+            "utf8Bytes": 7691,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        },
+        "antigravity": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "953d12470f8b6e3ac44bb90c96c56ce0f7c8dcdccbc0bcb6267e0ce59d598879",
+          "format": "transcript-sdk-0_3_326",
+          "modelRecorded": "claude-sonnet-4-6",
+          "statistics": {
+            "turns": 5,
+            "characters": 7693,
+            "utf8Bytes": 7697,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    },
+    {
+      "agent": "antigravity",
+      "seed": "17",
+      "sourceStatus": 0,
+      "targets": {
+        "codex": {
+          "stage": "convert-session",
+          "status": 3,
+          "code": "UNINTERPRETED_CONTENT",
+          "path": "/turns/3/content/1",
+          "sourceHash": "afbaf0d6f850dc69ad6c7c64a08bad7b0d66bb7a8cb3029bc4453e19b1cdace8",
+          "storySentencesPresent": null
+        },
+        "claude-code": {
+          "stage": "convert-session",
+          "status": 3,
+          "code": "UNINTERPRETED_CONTENT",
+          "path": "/turns/3/content/1",
+          "sourceHash": "afbaf0d6f850dc69ad6c7c64a08bad7b0d66bb7a8cb3029bc4453e19b1cdace8",
+          "storySentencesPresent": null
+        }
+      }
+    },
+    {
+      "agent": "antigravity",
+      "seed": "53",
+      "sourceStatus": 0,
+      "targets": {
+        "codex": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "767751efe3dac4b9f97023fd6ca819219e94d792ba794f32ac9027a89d24e572",
+          "format": "sqlite-2_32_1-step0",
+          "statistics": {
+            "turns": 2,
+            "characters": 1889,
+            "utf8Bytes": 1889,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        },
+        "claude-code": {
+          "stage": "convert-session",
+          "status": 0,
+          "sourceHash": "767751efe3dac4b9f97023fd6ca819219e94d792ba794f32ac9027a89d24e572",
+          "format": "sqlite-2_32_1-step0",
+          "statistics": {
+            "turns": 2,
+            "characters": 1895,
+            "utf8Bytes": 1895,
+            "truncated": false
+          },
+          "storySentencesPresent": [
+            true,
+            true,
+            true
+          ]
+        }
+      }
+    }
+  ],
+  "capability": [
+    {
+      "target": "codex",
+      "variant": "installed",
+      "past": "evaluation-timeout",
+      "current": "not-run",
+      "history": {
+        "receipt": false,
+        "skill": false
+      },
+      "replays": 0,
+      "wrongServer": 0,
+      "calls": 0,
+      "successReceipts": false,
+      "skillReference": false,
+      "absenceReported": false,
+      "skillToolObserved": false
+    },
+    {
+      "target": "codex",
+      "variant": "absent",
+      "past": "complete",
+      "current": "evaluation-timeout",
+      "history": {
+        "receipt": true,
+        "skill": true
+      },
+      "replays": 0,
+      "wrongServer": 0,
+      "calls": 0,
+      "successReceipts": false,
+      "skillReference": false,
+      "absenceReported": false,
+      "skillToolObserved": false
+    },
+    {
+      "target": "claude-code",
+      "variant": "installed",
+      "past": "complete",
+      "current": "complete",
+      "history": {
+        "receipt": true,
+        "skill": true
+      },
+      "replays": 0,
+      "wrongServer": 0,
+      "calls": 0,
+      "successReceipts": false,
+      "skillReference": false,
+      "absenceReported": false,
+      "skillToolObserved": true
+    },
+    {
+      "target": "claude-code",
+      "variant": "absent",
+      "past": "complete",
+      "current": "complete",
+      "history": {
+        "receipt": true,
+        "skill": true
+      },
+      "replays": 0,
+      "wrongServer": 0,
+      "calls": 0,
+      "successReceipts": false,
+      "skillReference": false,
+      "absenceReported": true,
+      "skillToolObserved": false
+    },
+    {
+      "target": "antigravity",
+      "variant": "installed",
+      "past": "complete",
+      "current": "service-unavailable",
+      "history": {
+        "receipt": true,
+        "skill": true
+      },
+      "replays": 0,
+      "wrongServer": 0,
+      "calls": 0,
+      "successReceipts": false,
+      "skillReference": false,
+      "absenceReported": false,
+      "skillToolObserved": false
+    },
+    {
+      "target": "antigravity",
+      "variant": "absent",
+      "past": "complete",
+      "current": "complete",
+      "history": {
+        "receipt": true,
+        "skill": true
+      },
+      "replays": 0,
+      "wrongServer": 0,
+      "calls": 0,
+      "successReceipts": false,
+      "skillReference": false,
+      "absenceReported": true,
+      "skillToolObserved": false
+    }
+  ],
+  "switch": [
+    {
+      "target": "codex",
+      "sub": "same",
+      "first": "evaluation-timeout",
+      "follow": "not-run",
+      "retained": false
+    },
+    {
+      "target": "codex",
+      "sub": "changed",
+      "first": "complete",
+      "follow": "complete",
+      "retained": true
+    },
+    {
+      "target": "claude-code",
+      "sub": "same",
+      "first": "complete",
+      "follow": "complete",
+      "retained": true
+    },
+    {
+      "target": "claude-code",
+      "sub": "changed",
+      "first": "complete",
+      "follow": "complete",
+      "retained": true
+    },
+    {
+      "target": "antigravity",
+      "sub": "same",
+      "first": "DRIVER_FAILED",
+      "follow": "not-run",
+      "retained": false
+    },
+    {
+      "target": "antigravity",
+      "sub": "changed",
+      "first": "DRIVER_FAILED",
+      "follow": "not-run",
+      "retained": false
+    }
+  ],
+  "relay": {
+    "firstConversion": 0,
+    "secondConversion": 0,
+    "bFirst": "complete",
+    "bFollow": "complete",
+    "cFirst": "service-unavailable",
+    "firstScore": {
+      "region": true,
+      "cargo": true,
+      "port": true,
+      "owner": true,
+      "seal": true
+    },
+    "previous": null
+  },
+  "retests": [
+    {
+      "target": "codex",
+      "native": {
+        "source": "claude-code",
+        "origin": "captured native session",
+        "turn": "retest-native-claude-code-codex",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        }
+      },
+      "greenConfirmed": true,
+      "calls": 1
+    },
+    {
+      "target": "claude-code",
+      "native": {
+        "source": "antigravity",
+        "origin": "captured native session",
+        "turn": "retest-native-antigravity-claude-code",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "region": true,
+            "withdrawn": true,
+            "fee": true,
+            "label": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        }
+      },
+      "invalidModelRejected": true,
+      "greenConfirmed": true,
+      "calls": 1
+    },
+    {
+      "target": "antigravity",
+      "relay": {
+        "first": "retest-relay-c1",
+        "score": {
+          "parsed": true,
+          "prose": false,
+          "matches": {
+            "region": true,
+            "cargo": true,
+            "port": true,
+            "owner": true,
+            "seal": true
+          },
+          "wrong": [],
+          "missing": [],
+          "extraKeys": []
+        },
+        "follow": "retest-relay-c2",
+        "retained": true
+      },
+      "switched": {
+        "first": "retest-switch-agy1",
+        "follow": "retest-switch-agy2",
+        "retained": false
+      },
+      "greenConfirmed": false,
+      "calls": 0
+    }
+  ],
+  "turns": [
+    {
+      "label": "capability-antigravity-absent-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 340,
+      "usage": [
+        {
+          "input": 11467,
+          "output": 314,
+          "cachedInput": 0,
+          "reasoning": 286
+        }
+      ],
+      "ms": 12115,
+      "inputFingerprint": "c4ac95583d8a43b4feee44a42104902c5ebf372115c8788b2cd2dfcfdfb6cd05",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "6f620f25adaf6e26eb15f435da77b9164669747eacde02cb0929632efa39a1ae"
+    },
+    {
+      "label": "capability-antigravity-absent-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 89,
+      "usage": [
+        {
+          "input": 21545,
+          "output": 1324,
+          "cachedInput": 41434,
+          "reasoning": 1160
+        }
+      ],
+      "ms": 51992,
+      "inputFingerprint": "46675a8637ac0bc280e55cafa1801ec38ad593526eabe8291593128a89df060e",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "read_file",
+          "ACTIVE"
+        ],
+        [
+          "read_file",
+          "DONE"
+        ]
+      ],
+      "answerHash": "05a8087c5e42d4f63b7fb36de8ad93ec31a17722092b5eb6c12319f41b2ab759"
+    },
+    {
+      "label": "capability-antigravity-installed-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 340,
+      "usage": [
+        {
+          "input": 11979,
+          "output": 176,
+          "cachedInput": 0,
+          "reasoning": 148
+        }
+      ],
+      "ms": 16398,
+      "inputFingerprint": "4da2fa060ce81f24df0348756b9e8496ca4b846498ce2c19c6d17a3c87fa3d7f",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "6f620f25adaf6e26eb15f435da77b9164669747eacde02cb0929632efa39a1ae"
+    },
+    {
+      "label": "capability-antigravity-installed-2",
+      "outcome": "service-unavailable",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 89,
+      "usage": [],
+      "ms": 23792,
+      "inputFingerprint": "dcefd5c06be9709b8dcffb1c97178d5eb0dcd7b54c8228e6ea4baf6ff19ad5ad",
+      "stdinHash": null,
+      "terminal": "tool",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "read_file",
+          "ACTIVE"
+        ],
+        [
+          "read_file",
+          "DONE"
+        ],
+        [
+          "read_file",
+          "ACTIVE"
+        ],
+        [
+          "read_file",
+          "DONE"
+        ],
+        [
+          "call_mcp_tool",
+          "ACTIVE"
+        ],
+        [
+          "call_mcp_tool",
+          "ERROR"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "capability-claude-code-absent-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 340,
+      "usage": [
+        {
+          "input": 3516,
+          "output": 219,
+          "cachedInput": 0,
+          "cacheWrite": 55543
+        }
+      ],
+      "ms": 8935,
+      "inputFingerprint": "3d18edf889bd005c913a8a4123427127ee1574011533aa2d465e3c7048eb0e1f",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "2f6b8eae6474ca012889bc2a3e6e282fbe6f07bcde49684871bc0e43e23f849e"
+    },
+    {
+      "label": "capability-claude-code-absent-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 89,
+      "usage": [
+        {
+          "input": 2410,
+          "output": 423,
+          "cachedInput": 254814,
+          "cacheWrite": 20310
+        }
+      ],
+      "ms": 8089,
+      "inputFingerprint": "4f8b500b054ab51156f8fe74bae95732bef239f7d55939bfca44f2eea25434a0",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "72929bf9b830434cc6222fc355ff9685b47e2480d8da7da1aca639cf06fc0514"
+    },
+    {
+      "label": "capability-claude-code-installed-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 340,
+      "usage": [
+        {
+          "input": 2024,
+          "output": 381,
+          "cachedInput": 0,
+          "cacheWrite": 48579
+        }
+      ],
+      "ms": 9106,
+      "inputFingerprint": "8e488bb13acf7e828d5f6dfc8675134b0efb087df76fbcd6146e215f3aae1c23",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "5a561757da40f92bc5c295a0647f4cd1cac0aca7ea268c793ec924cdde9b077c"
+    },
+    {
+      "label": "capability-claude-code-installed-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 89,
+      "usage": [
+        {
+          "input": 21356,
+          "output": 969,
+          "cachedInput": 702052,
+          "cacheWrite": 31248
+        }
+      ],
+      "ms": 29740,
+      "inputFingerprint": "62b3232116e47fd601f5b0098185a739e30b01c60e2897a2529cfa9d5b9822db",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "Skill",
+          "started"
+        ],
+        [
+          "toolu_01x6Bzuto7utpmZuf3A81EAE",
+          "completed"
+        ]
+      ],
+      "answerHash": "8c9f1c45f2831b3cdbe65fdd3988169c46676f9582df88bfa715bcf1b50ad7ec"
+    },
+    {
+      "label": "capability-codex-absent-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 338,
+      "usage": [
+        {
+          "input": 21379,
+          "output": 22,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 159260,
+      "inputFingerprint": "2e5b89eb38f4cb8b9737bbbc5800ab9c47cf4d4beadb18c0eec3ff2fd47c0a8f",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "d9c9aa62b8b4ca6a5292c3a5ef6b5f62c1088b9aa607f5a960167af3a9474150"
+    },
+    {
+      "label": "capability-codex-absent-2",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 89,
+      "usage": [],
+      "ms": 240405,
+      "inputFingerprint": "62beca83497554ed90d0ca06f7c79231f24477b922536e0464007a66b58266fd",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "capability-codex-installed-1",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 338,
+      "usage": [],
+      "ms": 240416,
+      "inputFingerprint": "8b4fcc462e04c61b75b99666dbdf4a778d7afafb9c9a55c7a8fde8dd137d1d71",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-antigravity-128-injection",
+      "outcome": "DRIVER_FAILED",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 130534,
+      "usage": [],
+      "ms": 86460,
+      "inputFingerprint": "2c7525aa828f797c044a6d6d363c8cc3b83579cfd398812a8210c3e1ee180bcc",
+      "stdinHash": null,
+      "terminal": "tool",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "read_file",
+          "ACTIVE"
+        ],
+        [
+          "read_file",
+          "ERROR"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-antigravity-128-reference",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 128839,
+      "usage": [],
+      "ms": 240339,
+      "inputFingerprint": "895dac03760ab18cb998aedefd89ffbc859708fd76589f0667533457b8ca7506",
+      "stdinHash": null,
+      "terminal": "tool",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-antigravity-16-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 15870,
+      "usage": [
+        {
+          "input": 29840,
+          "output": 846,
+          "cachedInput": 0,
+          "reasoning": 773
+        }
+      ],
+      "ms": 16484,
+      "inputFingerprint": "326cd01ce4d6cdf816962e31daef2cdcc6db21c1a18c4b14d0d462ad5eec3df7",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "4aee630700c7f68fcfd1f0215461612b1edc8eb777d2558a1771aa4a45116480"
+    },
+    {
+      "label": "length-antigravity-16-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 15478,
+      "usage": [
+        {
+          "input": 28873,
+          "output": 1540,
+          "cachedInput": 0,
+          "reasoning": 1467
+        }
+      ],
+      "ms": 23214,
+      "inputFingerprint": "a469f3c4585d53c7f61569fb8c885114e396ebd3291e51138be10bb9a2129c49",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "4aee630700c7f68fcfd1f0215461612b1edc8eb777d2558a1771aa4a45116480"
+    },
+    {
+      "label": "length-antigravity-4-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 3550,
+      "usage": [
+        {
+          "input": 15286,
+          "output": 8683,
+          "cachedInput": 0,
+          "reasoning": 8589
+        }
+      ],
+      "ms": 76908,
+      "inputFingerprint": "f0b7ac11f8ad4fc2f9961d818b3034c2e11e3df1ffae5525cc2a2c7e3c82a89a",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "f358054ae77619329236967b8fdd20fbd21b184c55b429f47fb3a723c05b24ae"
+    },
+    {
+      "label": "length-antigravity-4-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 3298,
+      "usage": [
+        {
+          "input": 14880,
+          "output": 2862,
+          "cachedInput": 0,
+          "reasoning": 2768
+        }
+      ],
+      "ms": 36405,
+      "inputFingerprint": "9f093fc700ee081c936fc51e82e71d1b650d2a7e203619b614dbbcfa78ed243b",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "f358054ae77619329236967b8fdd20fbd21b184c55b429f47fb3a723c05b24ae"
+    },
+    {
+      "label": "length-antigravity-64-injection",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 65018,
+      "usage": [],
+      "ms": 240423,
+      "inputFingerprint": "9c5740f462d6c103c486b7b3b65cfb8b7301511f2f36fee7cfd8cb650b8aa8d9",
+      "stdinHash": null,
+      "terminal": "tool",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-antigravity-64-reference",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 64068,
+      "usage": [],
+      "ms": 240313,
+      "inputFingerprint": "cb27d14406478c46d27c429bc5479c444f1b6236b1fa781eac9713705c1ae147",
+      "stdinHash": null,
+      "terminal": "tool",
+      "compactionEvents": null,
+      "observedTools": [
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ],
+        [
+          "run_command",
+          "ACTIVE"
+        ],
+        [
+          "run_command",
+          "DONE"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-claude-code-128-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 130534,
+      "usage": [
+        {
+          "input": 0,
+          "output": 0,
+          "cachedInput": 0,
+          "cacheWrite": 0
+        }
+      ],
+      "ms": 128240,
+      "inputFingerprint": "2553c613fdfa3987ed9267bbed9a91b238e48c5a081bb7c5da52897e65d3522b",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "5d3f64f4375e9adbf4a2e7a6b1f2e47e4867cab0b442be6beae5957d8e67d87e"
+    },
+    {
+      "label": "length-claude-code-128-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 128839,
+      "usage": [
+        {
+          "input": 1004,
+          "output": 245,
+          "cachedInput": 0,
+          "cacheWrite": 187792
+        }
+      ],
+      "ms": 37130,
+      "inputFingerprint": "6a726bebfd22072868fccb3e3d53ed1d091066113c524a3b7a3fcaea7de1225c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "3da220a160a8ac32e88a985654c82669d887230bfd1a2331165a807eb6bc2ade"
+    },
+    {
+      "label": "length-claude-code-16-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 15870,
+      "usage": [
+        {
+          "input": 4861,
+          "output": 156,
+          "cachedInput": 0,
+          "cacheWrite": 116670
+        }
+      ],
+      "ms": 15865,
+      "inputFingerprint": "8f2ab8a4170d73805b56c433dd81f340a152aa3e13907673061ba035de89a797",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a8bce1df36a89ae5ae7ce89e5bf74b0ddd137b02b75143f7336253f1c6bb5289"
+    },
+    {
+      "label": "length-claude-code-16-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 15478,
+      "usage": [
+        {
+          "input": 47399,
+          "output": 240,
+          "cachedInput": 0,
+          "cacheWrite": 26824
+        }
+      ],
+      "ms": 18658,
+      "inputFingerprint": "254f5a2dabd4775920de2f6225d97a9dd103b491731a27b5c00f8fc37cdde2f0",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "ec9786d4850c21d6520b270643441743703d6f0c581181ce7f21acdcd8118e80"
+    },
+    {
+      "label": "length-claude-code-4-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 3550,
+      "usage": [
+        {
+          "input": 2156,
+          "output": 213,
+          "cachedInput": 0,
+          "cacheWrite": 51731
+        }
+      ],
+      "ms": 8180,
+      "inputFingerprint": "5654c64201d2f314814239649173614e97eb40e862566004cf722e45fea080c7",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a9a74741d1555c3b3e861c0c057b26c292345b5449925941fa053539c96e2230"
+    },
+    {
+      "label": "length-claude-code-4-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 3298,
+      "usage": [
+        {
+          "input": 3512,
+          "output": 153,
+          "cachedInput": 44473,
+          "cacheWrite": 10533
+        }
+      ],
+      "ms": 19283,
+      "inputFingerprint": "f1d46f0eb8f01d572d41e862e624e501edde62298412075b95a4ad1612bd553e",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "daaba8e82eaef0dfb3b947ff9ab0b4d3d0768b89347e024de2ee3b334b41b151"
+    },
+    {
+      "label": "length-claude-code-64-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 65018,
+      "usage": [
+        {
+          "input": 456,
+          "output": 147,
+          "cachedInput": 144734,
+          "cacheWrite": 75831
+        }
+      ],
+      "ms": 14398,
+      "inputFingerprint": "c81c724b683a0a0b14796469735e24768342a270dbd0893b27ad8fdccda7ba7c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "948e92ead8566bf03bff7dbde8d84f3ffa33e3b69b30c6686efde0ee66abcaf8"
+    },
+    {
+      "label": "length-claude-code-64-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 64068,
+      "usage": [
+        {
+          "input": 13376,
+          "output": 301,
+          "cachedInput": 0,
+          "cacheWrite": 111702
+        }
+      ],
+      "ms": 25303,
+      "inputFingerprint": "cb97d33681ee1f44b7c301a857d2d66c03cb7be26e2927daf7a0b6c0d6358a79",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "948e92ead8566bf03bff7dbde8d84f3ffa33e3b69b30c6686efde0ee66abcaf8"
+    },
+    {
+      "label": "length-codex-128-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 130533,
+      "usage": [
+        {
+          "input": 151577,
+          "output": 111,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 40
+        }
+      ],
+      "ms": 119963,
+      "inputFingerprint": "be3324efcf9732cb574da593fdba38e2534e6da7425250a3168261fc7092b564",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "06bfa38c24f664ab673f98d3e33f23885cea65e8d24ea2c21f1ca619ef184ed0"
+    },
+    {
+      "label": "length-codex-128-reference",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 128839,
+      "usage": [],
+      "ms": 240401,
+      "inputFingerprint": "1f309531274e3e1e3ba1a16eb4725224564034a1507319afe68e4b32cb7f14c0",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-codex-16-injection",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 15869,
+      "usage": [],
+      "ms": 240373,
+      "inputFingerprint": "1e4711564baf1b7a2590a51adf91e570baa85775f3a9d1e638a417a3ae1cb9a9",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-codex-16-reference",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 15478,
+      "usage": [],
+      "ms": 240366,
+      "inputFingerprint": "d17cbd10eb5aed66161aa510617ebcf4267794da1814f54f3e8b3e7a7ec6728d",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-codex-4-injection",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 3549,
+      "usage": [
+        {
+          "input": 24593,
+          "output": 157,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 86
+        }
+      ],
+      "ms": 21834,
+      "inputFingerprint": "8428424ab9545fe8d5611b62d1d33deb1a223b8fec2bc3ee130ce209037d2331",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "3cecc0d446301049643aebe3342d559379915416a3061a06787d5badb128ef56"
+    },
+    {
+      "label": "length-codex-4-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 3298,
+      "usage": [
+        {
+          "input": 24359,
+          "output": 70,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 18957,
+      "inputFingerprint": "e877091d69509323722f6b87c0913411b65863ea219148c32740505920430d94",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "bd0bb3a5f961bbc31477f50ad430ebce37a43e340a908542c743b1980613fe23"
+    },
+    {
+      "label": "length-codex-64-injection",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 65017,
+      "usage": [],
+      "ms": 240443,
+      "inputFingerprint": "320142f36c619b81cdbbfbfddc6e27a9761569de99bd45a83f23d2a0da89861b",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "length-codex-64-reference",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 64068,
+      "usage": [
+        {
+          "input": 85821,
+          "output": 99,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 37
+        }
+      ],
+      "ms": 81469,
+      "inputFingerprint": "f0be138a021e1ca6ce2d7e52483c18570ae3958f20af3ebe5a3994a507eba26f",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "7b07ba4abe47ad8c6d79ab202d05d1b0c2a067a63477e391d1a90314850822a4"
+    },
+    {
+      "label": "paired-antigravity-claude-code-17-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 450,
+      "usage": [
+        {
+          "input": 2148,
+          "output": 132,
+          "cachedInput": 0,
+          "cacheWrite": 51536
+        }
+      ],
+      "ms": 9623,
+      "inputFingerprint": "7cb203476c7a17b2b4fb572a3830c580776e99412b71ef1051590c92564651c7",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e0cda7978bd477b480c3f157adfed63fe1735d84f786fb1c167402ac4992f61b"
+    },
+    {
+      "label": "paired-antigravity-claude-code-17-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 12886,
+          "output": 49,
+          "cachedInput": 281783,
+          "cacheWrite": 13234
+        }
+      ],
+      "ms": 5708,
+      "inputFingerprint": "79dcfc3a53de798b38a6e6a086075bc5e152539716b6cbd9cafddd9cefa67693",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "caec47d02d014b4fa65ea8c4ae3d5ff3b8117c728fc08224edec03d81f7026ba"
+    },
+    {
+      "label": "paired-antigravity-claude-code-17-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 149,
+      "usage": [
+        {
+          "input": 2080,
+          "output": 132,
+          "cachedInput": 0,
+          "cacheWrite": 49925
+        }
+      ],
+      "ms": 11454,
+      "inputFingerprint": "343b48fbbd20987f0fcb9bfb482f2ea53c29072db36fd310b576460c5ffb0e7c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e0cda7978bd477b480c3f157adfed63fe1735d84f786fb1c167402ac4992f61b"
+    },
+    {
+      "label": "paired-antigravity-claude-code-17-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 1499,
+          "output": 18,
+          "cachedInput": 39479,
+          "cacheWrite": 8995
+        }
+      ],
+      "ms": 10348,
+      "inputFingerprint": "a47233972eb4558aa23701ef7535a71fc4c69831120b731a754fa9600dd1ac58",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "caec47d02d014b4fa65ea8c4ae3d5ff3b8117c728fc08224edec03d81f7026ba"
+    },
+    {
+      "label": "paired-antigravity-claude-code-53-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 451,
+      "usage": [
+        {
+          "input": 2871,
+          "output": 289,
+          "cachedInput": 0,
+          "cacheWrite": 57042
+        }
+      ],
+      "ms": 7054,
+      "inputFingerprint": "38730cfb0c977c21f1ec51af008326fffa15e130d7eac408d9f48b750a860d36",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "9229a78a4259350107d6846d43b3253858041f2ee33b9b0c7d3899b77a09c2e3"
+    },
+    {
+      "label": "paired-antigravity-claude-code-53-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 27048,
+          "output": 53,
+          "cachedInput": 247909,
+          "cacheWrite": 0
+        }
+      ],
+      "ms": 5184,
+      "inputFingerprint": "f3fc983ef96b13c39e653b7f7dd5e6fbee88c18fc54c87f92230c694339c2dee",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "22489ba88ddbc75ab8ef4ccded4f3afa917b7bbf8f023d27aab5addd52832abc"
+    },
+    {
+      "label": "paired-antigravity-claude-code-53-reference-1",
+      "outcome": "empty-terminal-success",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 150,
+      "usage": [
+        {
+          "input": 0,
+          "output": 0,
+          "cachedInput": 0,
+          "cacheWrite": 0
+        }
+      ],
+      "ms": 80116,
+      "inputFingerprint": "f418c1ec0b1c1551c957698343e820c750c6fdef383c0be9ba5db989ff3cbc43",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-antigravity-claude-code-53-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 4105,
+          "output": 189,
+          "cachedInput": 224692,
+          "cacheWrite": 19667
+        }
+      ],
+      "ms": 5849,
+      "inputFingerprint": "72a69985a18a62b6aa8423276652412e3d594d0d610a399151c2d4e8a259a0a2",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "22489ba88ddbc75ab8ef4ccded4f3afa917b7bbf8f023d27aab5addd52832abc"
+    },
+    {
+      "label": "paired-antigravity-codex-17-injection-1",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 448,
+      "usage": [],
+      "ms": 240414,
+      "inputFingerprint": "c127b08a740dc38cffa31784dd6fdd5473dbeb36b32ae8766841af52cfe0d25a",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-antigravity-codex-17-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 149,
+      "usage": [
+        {
+          "input": 21158,
+          "output": 61,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 122140,
+      "inputFingerprint": "8ab9ddc0721411d2b57512f83d6fcfcdb76074e0bce99ece9fd99684956a8b85",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1f63cf041160bc029223bb263e41b3f76c9ee115e59eae423646d4adca9e259b"
+    },
+    {
+      "label": "paired-antigravity-codex-17-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 42399,
+          "output": 70,
+          "cachedInput": 36096,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 13317,
+      "inputFingerprint": "6b5f41df03c7e4ed947482f57d1043663c5a93a3c7d08d54541ddfdabeb864a0",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "caec47d02d014b4fa65ea8c4ae3d5ff3b8117c728fc08224edec03d81f7026ba"
+    },
+    {
+      "label": "paired-antigravity-codex-53-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 449,
+      "usage": [
+        {
+          "input": 21543,
+          "output": 63,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 48345,
+      "inputFingerprint": "4fed17a93991229d8dff76e09ed89bafe34904facb020d70b8b025201b201a66",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "aa28629cbaf8691f9b965cc9c50fa73504b0c76b35a073e35090df99148cda05"
+    },
+    {
+      "label": "paired-antigravity-codex-53-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 43171,
+          "output": 72,
+          "cachedInput": 36352,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 12922,
+      "inputFingerprint": "909f2fa68af105d511535c4ae98d8970ec30daa02ea80fb870bf24f0854c6b91",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "22489ba88ddbc75ab8ef4ccded4f3afa917b7bbf8f023d27aab5addd52832abc"
+    },
+    {
+      "label": "paired-antigravity-codex-53-reference-1",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 150,
+      "usage": [],
+      "ms": 240348,
+      "inputFingerprint": "cdeef57228d92c2709673b79e07d510dd570274bec67473c05b192b8b6e561d8",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-claude-code-antigravity-17-injection-1",
+      "outcome": "DRIVER_FAILED",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 427,
+      "usage": [],
+      "ms": 13748,
+      "inputFingerprint": "a68f58c70bfdb58ee3deccee87e6be76865a3242630d817103eb9615be10d879",
+      "stdinHash": null,
+      "terminal": "text",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "c449296682aebe33efcf71d157b43dff2cadf82cc7f9aa5e966ce011317b117d"
+    },
+    {
+      "label": "paired-claude-code-antigravity-17-reference-1",
+      "outcome": "DRIVER_FAILED",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 149,
+      "usage": [],
+      "ms": 24128,
+      "inputFingerprint": "d8abad8afa7cac65c07422643849a64b5225eb33dc58807b3c7c82b755a00784",
+      "stdinHash": null,
+      "terminal": "text",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "c449296682aebe33efcf71d157b43dff2cadf82cc7f9aa5e966ce011317b117d"
+    },
+    {
+      "label": "paired-claude-code-antigravity-53-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 427,
+      "usage": [
+        {
+          "input": 11685,
+          "output": 545,
+          "cachedInput": 0,
+          "reasoning": 473
+        }
+      ],
+      "ms": 12924,
+      "inputFingerprint": "adb9f70c3768ce71b49e0ef99031a87625e3aa30e537fb083b324a87d60fe5c6",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1db11d6e585d0ddff59cb48063f2f9da0414ac8a6f79abaf4bfd7e58abb775c6"
+    },
+    {
+      "label": "paired-claude-code-antigravity-53-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 14522,
+          "output": 586,
+          "cachedInput": 9651,
+          "reasoning": 508
+        }
+      ],
+      "ms": 9120,
+      "inputFingerprint": "c002b23893c97e939ddc6e6cbf906fb6b17465aa1ecad42b4b89f959f21e0a1a",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "aa5aa47b5cf10c83a3f62d646ddf046ac176d6d53de41aeb426ebd4b10c9c759"
+    },
+    {
+      "label": "paired-claude-code-antigravity-53-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 150,
+      "usage": [
+        {
+          "input": 11221,
+          "output": 282,
+          "cachedInput": 0,
+          "reasoning": 210
+        }
+      ],
+      "ms": 14831,
+      "inputFingerprint": "741c6c549e35424cddfff0fd28f0d943c3cedcdc45760f171480838163e4e322",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1db11d6e585d0ddff59cb48063f2f9da0414ac8a6f79abaf4bfd7e58abb775c6"
+    },
+    {
+      "label": "paired-claude-code-antigravity-53-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 13797,
+          "output": 321,
+          "cachedInput": 9197,
+          "reasoning": 243
+        }
+      ],
+      "ms": 9400,
+      "inputFingerprint": "b24aedf2e910d63367a2e6f6864eb946dad7c944c37ed3d71105e2c13e47f996",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "aa5aa47b5cf10c83a3f62d646ddf046ac176d6d53de41aeb426ebd4b10c9c759"
+    },
+    {
+      "label": "paired-claude-code-codex-17-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 425,
+      "usage": [
+        {
+          "input": 21507,
+          "output": 102,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 39
+        }
+      ],
+      "ms": 21684,
+      "inputFingerprint": "1705c9a1e7f4267b01068909baabc3c6c4aa7e5f321ff397c66c1b6fbfb911ca",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1f63cf041160bc029223bb263e41b3f76c9ee115e59eae423646d4adca9e259b"
+    },
+    {
+      "label": "paired-claude-code-codex-17-injection-2",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [],
+      "ms": 240320,
+      "inputFingerprint": "73e97bc77a7e81e1f002384e4873ffdee77266681af432da42f0871f5d2d4f8e",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-claude-code-codex-17-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 149,
+      "usage": [
+        {
+          "input": 21158,
+          "output": 92,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 29
+        }
+      ],
+      "ms": 22820,
+      "inputFingerprint": "7f25a6cc7ec409f35cd538c6125eca6e4899003339803240149f90d507420077",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1f63cf041160bc029223bb263e41b3f76c9ee115e59eae423646d4adca9e259b"
+    },
+    {
+      "label": "paired-claude-code-codex-17-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 42430,
+          "output": 101,
+          "cachedInput": 29952,
+          "cacheWrite": 0,
+          "reasoning": 29
+        }
+      ],
+      "ms": 19060,
+      "inputFingerprint": "04d929c61451bef4fb7b4519cf03228c3fad20959648846a40af308d67b167d5",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "caec47d02d014b4fa65ea8c4ae3d5ff3b8117c728fc08224edec03d81f7026ba"
+    },
+    {
+      "label": "paired-claude-code-codex-53-injection-1",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 426,
+      "usage": [],
+      "ms": 240349,
+      "inputFingerprint": "6aaa1150c5b835a0a862b61417fba78b5f5646b6160e0fb04eaa7315b7024a67",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-claude-code-codex-53-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 150,
+      "usage": [
+        {
+          "input": 21158,
+          "output": 63,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 73093,
+      "inputFingerprint": "ad66c82f7a693aa00416d2662516fb4f7e6de8a9b3675fdd072a0e477e5ddb36",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "aa28629cbaf8691f9b965cc9c50fa73504b0c76b35a073e35090df99148cda05"
+    },
+    {
+      "label": "paired-claude-code-codex-53-reference-2",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [],
+      "ms": 240363,
+      "inputFingerprint": "d2fdc7ccd059ad559f794852395059780e580f4723ca4a821981432f7a5f1e03",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "paired-codex-antigravity-17-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 387,
+      "usage": [
+        {
+          "input": 11593,
+          "output": 593,
+          "cachedInput": 0,
+          "reasoning": 521
+        }
+      ],
+      "ms": 10509,
+      "inputFingerprint": "e903477636004fd397a0c23d34c9091b4992c4994ab995b994b0c4c827ea9b9d",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "c449296682aebe33efcf71d157b43dff2cadf82cc7f9aa5e966ce011317b117d"
+    },
+    {
+      "label": "paired-codex-antigravity-17-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 14478,
+          "output": 657,
+          "cachedInput": 9559,
+          "reasoning": 579
+        }
+      ],
+      "ms": 12081,
+      "inputFingerprint": "ef6d775ca247a1b240ec6826d0fc04c2c3c9d67d2312f733ff59dfc2171bb052",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e41657a8dff3150fd6a60aa52678cf1cdbfb36efa2c4b830c2bdefa29c24a658"
+    },
+    {
+      "label": "paired-codex-antigravity-17-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 149,
+      "usage": [
+        {
+          "input": 11216,
+          "output": 301,
+          "cachedInput": 0,
+          "reasoning": 229
+        }
+      ],
+      "ms": 11297,
+      "inputFingerprint": "9f94b86c50f56bdf8dfa3e247489bc118e799f66720022fae2ba53df10d8a76c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "c449296682aebe33efcf71d157b43dff2cadf82cc7f9aa5e966ce011317b117d"
+    },
+    {
+      "label": "paired-codex-antigravity-17-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 13818,
+          "output": 354,
+          "cachedInput": 9213,
+          "reasoning": 276
+        }
+      ],
+      "ms": 9734,
+      "inputFingerprint": "88a3f0ef15c95abdbd4592faea813e2cd246ecf752a8e20ae80f37bf930866b1",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e41657a8dff3150fd6a60aa52678cf1cdbfb36efa2c4b830c2bdefa29c24a658"
+    },
+    {
+      "label": "paired-codex-antigravity-53-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 388,
+      "usage": [
+        {
+          "input": 11594,
+          "output": 460,
+          "cachedInput": 0,
+          "reasoning": 388
+        }
+      ],
+      "ms": 26745,
+      "inputFingerprint": "879949c0104c1ce51b5306d8c30a93bc77b98051b6f229040e7f6a505d55f59c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1db11d6e585d0ddff59cb48063f2f9da0414ac8a6f79abaf4bfd7e58abb775c6"
+    },
+    {
+      "label": "paired-codex-antigravity-53-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 14347,
+          "output": 508,
+          "cachedInput": 9563,
+          "reasoning": 430
+        }
+      ],
+      "ms": 17459,
+      "inputFingerprint": "d6baf99ffe92042c3a1b66ced0db555cc5112561b2d8abc0b5b3a3c47ae7cc97",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "aa5aa47b5cf10c83a3f62d646ddf046ac176d6d53de41aeb426ebd4b10c9c759"
+    },
+    {
+      "label": "paired-codex-antigravity-53-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 150,
+      "usage": [
+        {
+          "input": 11215,
+          "output": 414,
+          "cachedInput": 0,
+          "reasoning": 342
+        }
+      ],
+      "ms": 13650,
+      "inputFingerprint": "ee71a12a7f3375251f9cbb27fabda250878f6087ee430449e35c1e56468f68e3",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "1db11d6e585d0ddff59cb48063f2f9da0414ac8a6f79abaf4bfd7e58abb775c6"
+    },
+    {
+      "label": "paired-codex-antigravity-53-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 13923,
+          "output": 466,
+          "cachedInput": 9186,
+          "reasoning": 388
+        }
+      ],
+      "ms": 9237,
+      "inputFingerprint": "10832813e9b3eaee3de4680846dc962736948c07de64523a34756326d426e9b2",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "aa5aa47b5cf10c83a3f62d646ddf046ac176d6d53de41aeb426ebd4b10c9c759"
+    },
+    {
+      "label": "paired-codex-claude-code-17-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 387,
+      "usage": [
+        {
+          "input": 763,
+          "output": 269,
+          "cachedInput": 0,
+          "cacheWrite": 59971
+        }
+      ],
+      "ms": 28373,
+      "inputFingerprint": "881a55ef9b5bf52c278555712041fedf43501e05162c777c110584e44f7aeee3",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "d7245fbc5cfea3edaee0732b620d425841b5d6cc9af06a83895e027bcaa6845e"
+    },
+    {
+      "label": "paired-codex-claude-code-17-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 2613,
+          "output": 63,
+          "cachedInput": 252956,
+          "cacheWrite": 19987
+        }
+      ],
+      "ms": 5606,
+      "inputFingerprint": "63a313d03d32886cbb56ec6fa4a5d416e2dc9333884e080e366e7d481214152c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "caec47d02d014b4fa65ea8c4ae3d5ff3b8117c728fc08224edec03d81f7026ba"
+    },
+    {
+      "label": "paired-codex-claude-code-17-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 149,
+      "usage": [
+        {
+          "input": 4648,
+          "output": 132,
+          "cachedInput": 41195,
+          "cacheWrite": 39743
+        }
+      ],
+      "ms": 60063,
+      "inputFingerprint": "85413a6bc96a91e05cadb44d9c2141f52d2ce72e4eb89b5fcee3900496647934",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e0cda7978bd477b480c3f157adfed63fe1735d84f786fb1c167402ac4992f61b"
+    },
+    {
+      "label": "paired-codex-claude-code-17-reference-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 5924,
+          "output": 15,
+          "cachedInput": 135848,
+          "cacheWrite": 0
+        }
+      ],
+      "ms": 9220,
+      "inputFingerprint": "5b6a58b82425c935ae3921e37bfcca55f1dd60e4da282f7b8aa4c68b9a74a555",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "caec47d02d014b4fa65ea8c4ae3d5ff3b8117c728fc08224edec03d81f7026ba"
+    },
+    {
+      "label": "paired-codex-claude-code-53-injection-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 388,
+      "usage": [
+        {
+          "input": 9247,
+          "output": 254,
+          "cachedInput": 0,
+          "cacheWrite": 51260
+        }
+      ],
+      "ms": 5994,
+      "inputFingerprint": "3da4a1d76041dc84d719846b0283ab1c10b23bc1884d2f1a9c3f51f2de5f34e7",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "9229a78a4259350107d6846d43b3253858041f2ee33b9b0c7d3899b77a09c2e3"
+    },
+    {
+      "label": "paired-codex-claude-code-53-injection-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 26695,
+          "output": 73,
+          "cachedInput": 388443,
+          "cacheWrite": 0
+        }
+      ],
+      "ms": 7248,
+      "inputFingerprint": "632c9cc934177d10e686a696243b5e9d367483c6601c27aa4a40dc537d793a6a",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "22489ba88ddbc75ab8ef4ccded4f3afa917b7bbf8f023d27aab5addd52832abc"
+    },
+    {
+      "label": "paired-codex-claude-code-53-reference-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 150,
+      "usage": [
+        {
+          "input": 1544,
+          "output": 129,
+          "cachedInput": 40636,
+          "cacheWrite": 9259
+        }
+      ],
+      "ms": 20452,
+      "inputFingerprint": "fea77b5787599d139bd9978288b4c949e7e923a45a855296640f88ebbfe5cd41",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "9229a78a4259350107d6846d43b3253858041f2ee33b9b0c7d3899b77a09c2e3"
+    },
+    {
+      "label": "paired-codex-claude-code-53-reference-2",
+      "outcome": "empty-terminal-success",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 28,
+      "usage": [
+        {
+          "input": 2083,
+          "output": 0,
+          "cachedInput": 0,
+          "cacheWrite": 86261
+        }
+      ],
+      "ms": 91415,
+      "inputFingerprint": "3bae7465a3e05f72585084f93147f4dd55c1f1b391b8e57c7359070273d71a71",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "relay-b1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 330,
+      "usage": [
+        {
+          "input": 642,
+          "output": 220,
+          "cachedInput": 0,
+          "cacheWrite": 59645
+        }
+      ],
+      "ms": 11060,
+      "inputFingerprint": "04fd3c1b7168fbc138848c71ed7b18b6ade787c6ffebe756400ed7ff89711474",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "193ab29b0cb2f47d9562ab92fd6cf8a56d4e4dbb6393875de01a19f3d9125ea7"
+    },
+    {
+      "label": "relay-b2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 31,
+      "usage": [
+        {
+          "input": 24021,
+          "output": 146,
+          "cachedInput": 272296,
+          "cacheWrite": 29434
+        }
+      ],
+      "ms": 126795,
+      "inputFingerprint": "79d9c2d216a6a40ad0270fcbc4fca9a56ca4595c78f8b1c6898f204c417a235a",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "0492fb3ae4a223648c2fb12d5f6dd99d1db3bc8c134c3110db393c3e12177dc4"
+    },
+    {
+      "label": "relay-c1",
+      "outcome": "service-unavailable",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 2426,
+      "usage": [],
+      "ms": 22882,
+      "inputFingerprint": "5dbc45374b3ff084ce9575d9161387d9eb2124da791942d5be687d4d9b25adaf",
+      "stdinHash": null,
+      "terminal": "text",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a9c04ea643403ae1fe9b302301b339436c60e333f640ebc3cab4459366c57b4a"
+    },
+    {
+      "label": "retest-green-antigravity",
+      "outcome": "tool-only-terminal-success",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 50,
+      "usage": [
+        {
+          "input": 13603,
+          "output": 140,
+          "cachedInput": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 8090,
+      "inputFingerprint": "358b64932028fa02ad9e50141a454b8e41b5f3c463ccc8b137a4645fd0f79b43",
+      "stdinHash": "3c5e36b00d2a4d8ef866b01f9b066b7be388036e91e69e98a620190633ccb9fe",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [
+        [
+          "call_mcp_tool",
+          "ACTIVE"
+        ],
+        [
+          "call_mcp_tool",
+          "ERROR"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "retest-green-claude-code",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 50,
+      "usage": [
+        {
+          "input": 20019,
+          "output": 167,
+          "cachedInput": 0,
+          "cacheWrite": 74351
+        }
+      ],
+      "ms": 12817,
+      "inputFingerprint": "0d5f952698eb2109104092291fc64326e24ae07f8d1828d5b7621e4ea3142335",
+      "stdinHash": "bba0f0ced702858dfd6a54d91a81183f6fd5b5dc4fc17234192332b5d63cfe18",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [
+        [
+          "mcp__m31green__lookup",
+          "started"
+        ],
+        [
+          "toolu_01qjxhq9zxKDEWPPU51pXuHh",
+          "completed"
+        ]
+      ],
+      "answerHash": "657f9de9b95514b524736a2c6e851a8908b44335e812300f649466f239209e9d"
+    },
+    {
+      "label": "retest-green-codex",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": [],
+      "estimatedTokens": 50,
+      "usage": [
+        {
+          "input": 42400,
+          "output": 123,
+          "cachedInput": 35840,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 19221,
+      "inputFingerprint": "2030903a2752c96a6802d36111b901421258a873bcbf96c40c7d990ed1731282",
+      "stdinHash": "bba0f0ced702858dfd6a54d91a81183f6fd5b5dc4fc17234192332b5d63cfe18",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [
+        [
+          "lookup",
+          "in_progress"
+        ],
+        [
+          "lookup",
+          "completed"
+        ]
+      ],
+      "answerHash": "8e8a03d5701e8514a512225d0a2df998878968deec34840c630c9f96c9693a02"
+    },
+    {
+      "label": "retest-native-antigravity-claude-code",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 552,
+      "usage": [
+        {
+          "input": 2203,
+          "output": 129,
+          "cachedInput": 0,
+          "cacheWrite": 52872
+        }
+      ],
+      "ms": 17122,
+      "inputFingerprint": "b331eccb7ef7c19c96bbfcd7f26f4807bb434189b6a84cf3f67a63be042484a1",
+      "stdinHash": "354b6a7c5948a1713eb45733fd25bedfa8055b0778af08210948fe755ef3e88f",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "9229a78a4259350107d6846d43b3253858041f2ee33b9b0c7d3899b77a09c2e3"
+    },
+    {
+      "label": "retest-native-claude-code-codex",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": [],
+      "estimatedTokens": 2001,
+      "usage": [
+        {
+          "input": 23243,
+          "output": 63,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 187173,
+      "inputFingerprint": "1247a7fecf41da7442f4a15d33c2b60d9db6d45681fb0a1e577a366b11bfc907",
+      "stdinHash": "002c9bb46cd7592c79452ab4badea517bdbebbea020b652ba65e9148175db84d",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "aa28629cbaf8691f9b965cc9c50fa73504b0c76b35a073e35090df99148cda05"
+    },
+    {
+      "label": "retest-relay-c1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 2426,
+      "usage": [
+        {
+          "input": 16300,
+          "output": 173,
+          "cachedInput": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 20582,
+      "inputFingerprint": "385334e11a377d6d64d88943a26763797e38dff364b8a70d512b990b3c88786c",
+      "stdinHash": "074e049b5b38aef99d1baa762db4c5dce4770745f892fc4ab9e1e13d73873996",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "a9c04ea643403ae1fe9b302301b339436c60e333f640ebc3cab4459366c57b4a"
+    },
+    {
+      "label": "retest-relay-c2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 25,
+      "usage": [
+        {
+          "input": 20450,
+          "output": 186,
+          "cachedInput": 12540,
+          "reasoning": 0
+        }
+      ],
+      "ms": 10558,
+      "inputFingerprint": "82d4e44759becea7fdd64c3698a6fd8a6d2fe1343ea880147bd66e4e20587cc3",
+      "stdinHash": "a9136f8dc08ae73d78a7fe0d499f7eae20de8ff7af5ca6cd367d27ee9a9d60a8",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "eedb85ab90d324a555a45560d75c88cecf23721990c3b6353697d707e6465c74"
+    },
+    {
+      "label": "retest-switch-agy1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 17,
+      "usage": [
+        {
+          "input": 7455,
+          "output": 13,
+          "cachedInput": 5560,
+          "reasoning": 0
+        }
+      ],
+      "ms": 13705,
+      "inputFingerprint": "6277433ee5d5d2bdf58d6934c2c687d8981e321ef32097da48b9483320ae71df",
+      "stdinHash": "0e2d6ac44776e3fef135adf663eb4e4b979616366a55e2aae8f6176faa49c2e1",
+      "terminal": "done",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+    },
+    {
+      "label": "retest-switch-agy2",
+      "outcome": "service-unavailable",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-low",
+      "modelObserved": [
+        "gemini-3.8-flash-low"
+      ],
+      "estimatedTokens": 15,
+      "usage": [],
+      "ms": 15576,
+      "inputFingerprint": "01484be6845128dcbe413f10935f9317cabc48079b10bb4af9811a262dc269f1",
+      "stdinHash": "25fd865e1d1de913473fb97f1ba61c93a52a1d8be73382b83a1b57ffb224eb94",
+      "terminal": "text",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "4d12ef373dd2334e8a07a261c8708cfb07df2079ccf215afab6129535bffac4c"
+    },
+    {
+      "label": "retest-terminal-check",
+      "outcome": "DRIVER_FAILED",
+      "status": 3,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": [
+        "claude-sonnet-4-6"
+      ],
+      "estimatedTokens": 50,
+      "usage": [],
+      "ms": 11058,
+      "inputFingerprint": "b3c6e6cdffe376dfb30973f273e1c5c67a1c1c0e6f3aa908b0af02404df547bf",
+      "stdinHash": "3c5e36b00d2a4d8ef866b01f9b066b7be388036e91e69e98a620190633ccb9fe",
+      "terminal": "tool",
+      "compactionEvents": [],
+      "observedTools": [
+        [
+          "call_mcp_tool",
+          "ACTIVE"
+        ],
+        [
+          "call_mcp_tool",
+          "ERROR"
+        ]
+      ],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "retest-unavailable-model",
+      "outcome": "service-unavailable",
+      "status": 3,
+      "modelRequested": "coverse-unavailable-test-model",
+      "modelObserved": [
+        "coverse-unavailable-test-model",
+        "<synthetic>"
+      ],
+      "estimatedTokens": 9,
+      "usage": [],
+      "ms": 199215,
+      "inputFingerprint": "b3caf8feeb81c4be3b5b65f0e7f4db8ece3d19a65b8536cb164cdcf859aad5bd",
+      "stdinHash": "3220f36efb8728d55804a847269ab9d198c2f19226d842f24d2fc5bea80dcc59",
+      "terminal": "session",
+      "compactionEvents": [],
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "source-antigravity-17-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 63,
+      "usage": [
+        {
+          "input": 11134,
+          "output": 1,
+          "cachedInput": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 14491,
+      "inputFingerprint": "373dce4f546536565f7aa79e38715a26d82b8e41ff68652d862da1cb95e6ffbc",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e12c759830c2d48901ac4a4d7729fc218d96f1eb8f4a418a0634f732ad6492f0"
+    },
+    {
+      "label": "source-antigravity-17-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 35,
+      "usage": [
+        {
+          "input": 13428,
+          "output": 2,
+          "cachedInput": 9068,
+          "reasoning": 0
+        }
+      ],
+      "ms": 10012,
+      "inputFingerprint": "333a249c9c256213cafa9aa7e6b4cc5c160f6166c63bdfa0abdc78008ff932de",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e12c759830c2d48901ac4a4d7729fc218d96f1eb8f4a418a0634f732ad6492f0"
+    },
+    {
+      "label": "source-antigravity-53-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 91,
+      "usage": [
+        {
+          "input": 11165,
+          "output": 118,
+          "cachedInput": 0,
+          "reasoning": 117
+        }
+      ],
+      "ms": 13786,
+      "inputFingerprint": "26a59a5de2e040ca07819c5ce88db54409aa0c85cb935ed4d4e8d8842bc08b8f",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e12c759830c2d48901ac4a4d7729fc218d96f1eb8f4a418a0634f732ad6492f0"
+    },
+    {
+      "label": "source-claude-code-17-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 63,
+      "usage": [
+        {
+          "input": 2963,
+          "output": 226,
+          "cachedInput": 0,
+          "cacheWrite": 57872
+        }
+      ],
+      "ms": 7681,
+      "inputFingerprint": "e58fc6f21120c500860ee2f4acde4aa196f42e710ab33799efcfd0ea656a81d4",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a2f1a6d79bfb0fe6d2fe2f0f08c2f32ce53cc935520e9d8a9f8daa051b4f239b"
+    },
+    {
+      "label": "source-claude-code-17-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 35,
+      "usage": [
+        {
+          "input": 22851,
+          "output": 106,
+          "cachedInput": 322498,
+          "cacheWrite": 0
+        }
+      ],
+      "ms": 6021,
+      "inputFingerprint": "906718acdddaa068564a93a9cbee5d2880316cf0e800514c194f03847af0e20d",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a2f1a6d79bfb0fe6d2fe2f0f08c2f32ce53cc935520e9d8a9f8daa051b4f239b"
+    },
+    {
+      "label": "source-claude-code-53-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 91,
+      "usage": [
+        {
+          "input": 1727,
+          "output": 319,
+          "cachedInput": 0,
+          "cacheWrite": 59328
+        }
+      ],
+      "ms": 6351,
+      "inputFingerprint": "fb7c67754ae68292d96793216b36c17e669e4a893f40d3dfa0055194ec2dc0dc",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a2f1a6d79bfb0fe6d2fe2f0f08c2f32ce53cc935520e9d8a9f8daa051b4f239b"
+    },
+    {
+      "label": "source-codex-17-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 63,
+      "usage": [
+        {
+          "input": 21058,
+          "output": 5,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 158150,
+      "inputFingerprint": "66c153c72ba186fe5136e6cc41aa36f42bb5d7841f339024a945f5cee6b6d066",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a2f1a6d79bfb0fe6d2fe2f0f08c2f32ce53cc935520e9d8a9f8daa051b4f239b"
+    },
+    {
+      "label": "source-codex-17-2",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 35,
+      "usage": [],
+      "ms": 240409,
+      "inputFingerprint": "ac3e9cd20b12b419d54cfc72e8621440f850735a0a86f89cfe66416ab56f206a",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "source-codex-53-1",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 91,
+      "usage": [],
+      "ms": 240410,
+      "inputFingerprint": "c6bfa2ff39868ee1b2b06932b5ea81cc8db9f20db1418d6170a75e57cf503f5a",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "switch-antigravity-changed-1",
+      "outcome": "DRIVER_FAILED",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [],
+      "ms": 12675,
+      "inputFingerprint": "ad056b2cb704ee9908379a9db9a417edca749cf146789a7a3d34a0f1759f762c",
+      "stdinHash": null,
+      "terminal": "text",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+    },
+    {
+      "label": "switch-antigravity-same-1",
+      "outcome": "DRIVER_FAILED",
+      "status": 3,
+      "modelRequested": "gemini-3.8-flash-medium",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [],
+      "ms": 19271,
+      "inputFingerprint": "b15ad014b41819b2475e4c445b09465e9454eaa3fd359b9ba61d615d5839a76c",
+      "stdinHash": null,
+      "terminal": "text",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+    },
+    {
+      "label": "switch-claude-code-changed-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [
+        {
+          "input": 2579,
+          "output": 52,
+          "cachedInput": 0,
+          "cacheWrite": 56850
+        }
+      ],
+      "ms": 15028,
+      "inputFingerprint": "338469ef6b7e5777ee7231d1feeeeb7659117332e4d3e79f6c279341f44ce0d2",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "b814aabdde112d89d45105c3205482949a86d7bbc33040034db21f7a85c84c4a"
+    },
+    {
+      "label": "switch-claude-code-changed-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-haiku-4-5-20251001",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [
+        {
+          "input": 1986,
+          "output": 18,
+          "cachedInput": 0,
+          "cacheWrite": 47648
+        }
+      ],
+      "ms": 9561,
+      "inputFingerprint": "679b442bccfb42aec9c5afbb25678d48cc5b0a892a3711e64b3528b50d28367c",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "13603391db0c043a0d3fb8feed2a059380a300986f886202339531fb3fcb0f54"
+    },
+    {
+      "label": "switch-claude-code-same-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [
+        {
+          "input": 3584,
+          "output": 84,
+          "cachedInput": 0,
+          "cacheWrite": 55288
+        }
+      ],
+      "ms": 16175,
+      "inputFingerprint": "c74d170e9387c607348c06c334c901efa54a5b38bd8e013e5e247c25a373c3a1",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "9c8434f7b7af695dfbdc78da90dedff3428b05dff5e2726b3d3ec2dd5d3ca992"
+    },
+    {
+      "label": "switch-claude-code-same-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "claude-sonnet-4-6",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [
+        {
+          "input": 2194,
+          "output": 55,
+          "cachedInput": 277372,
+          "cacheWrite": 20572
+        }
+      ],
+      "ms": 6245,
+      "inputFingerprint": "4a6bd3895cfd096bc5cbc9071cfbc43f49b4cfc5a299fc3069f92e5c913d3714",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "0bfc535d910d696aaacd8524f80277bb53585fb120ad22160333d0050cd91281"
+    },
+    {
+      "label": "switch-codex-changed-1",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [
+        {
+          "input": 21004,
+          "output": 5,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 124404,
+      "inputFingerprint": "81c8719c104bcaaf6de2930039d2335fb1509a9ccc5fa53ac13839da3e8bd237",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "565339bc4d33d72817b583024112eb7f5cdf3e5eef0252d6ec1b9c9a94e12bb3"
+    },
+    {
+      "label": "switch-codex-changed-2",
+      "outcome": "complete",
+      "status": 0,
+      "modelRequested": "gpt-6.1-sol",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [
+        {
+          "input": 53680,
+          "output": 15,
+          "cachedInput": 14976,
+          "cacheWrite": 0,
+          "reasoning": 0
+        }
+      ],
+      "ms": 20721,
+      "inputFingerprint": "c78aaab2132fec08b58efb0ae5da69bdd34879255a5af57cf66e6a6b4ac955b9",
+      "stdinHash": null,
+      "terminal": "done",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "69a7a7f11973f7631ded365e46b05eeb6dff18e91e19cd59169b90a5abb5375a"
+    },
+    {
+      "label": "switch-codex-same-1",
+      "outcome": "evaluation-timeout",
+      "status": 3,
+      "modelRequested": "gpt-6.2-sol",
+      "modelObserved": null,
+      "estimatedTokens": 19,
+      "usage": [],
+      "ms": 240363,
+      "inputFingerprint": "c14ec2cd47b7ceeb6b8fc59a1dbf99a0dbbf1dd4c5c7e37b014a321ef396ebe4",
+      "stdinHash": null,
+      "terminal": "session",
+      "compactionEvents": null,
+      "observedTools": [],
+      "answerHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "priorConversions": [
+    {
+      "case": "relay",
+      "target": "antigravity",
+      "status": 3,
+      "code": "UNINTERPRETED_CONTENT",
+      "path": "/turns/2/content/0",
+      "sourceHash": "9df3816c12f334eaf95474dd8ccd4cc9c8dcc63e2a2c84b70658725e429154ef"
+    },
+    {
+      "case": "source/source-claude-code-17",
+      "target": "codex",
+      "status": 3,
+      "code": "UNINTERPRETED_CONTENT",
+      "path": "/turns/2/content/0",
+      "sourceHash": "d51bf6ace6cb58806e8ab3f2f65ac729370f15a720da893e267d1916648e3137"
+    },
+    {
+      "case": "source/source-claude-code-17",
+      "target": "antigravity",
+      "status": 3,
+      "code": "UNINTERPRETED_CONTENT",
+      "path": "/turns/2/content/0",
+      "sourceHash": "d51bf6ace6cb58806e8ab3f2f65ac729370f15a720da893e267d1916648e3137"
+    },
+    {
+      "case": "source/source-claude-code-53",
+      "target": "codex",
+      "status": 3,
+      "code": "UNINTERPRETED_CONTENT",
+      "path": "/turns/2/content/0",
+      "sourceHash": "953d12470f8b6e3ac44bb90c96c56ce0f7c8dcdccbc0bcb6267e0ce59d598879"
+    },
+    {
+      "case": "source/source-claude-code-53",
+      "target": "antigravity",
+      "status": 3,
+      "code": "UNINTERPRETED_CONTENT",
+      "path": "/turns/2/content/0",
+      "sourceHash": "953d12470f8b6e3ac44bb90c96c56ce0f7c8dcdccbc0bcb6267e0ce59d598879"
+    }
+  ],
+  "offline": {
+    "passed": 245,
+    "total": 245,
+    "lossExpected": 24,
+    "lossFound": 24,
+    "lossMatched": 24,
+    "toolEdges": {
+      "expected": 5,
+      "actual": 5,
+      "matched": 5
+    },
+    "negative": [
+      {
+        "label": "orphan",
+        "expected": "BROKEN_TOOL_REFERENCE",
+        "actual": "BROKEN_TOOL_REFERENCE"
+      },
+      {
+        "label": "redacted",
+        "expected": "UNINTERPRETED_CONTENT",
+        "actual": "UNINTERPRETED_CONTENT"
+      },
+      {
+        "label": "encrypted",
+        "expected": "UNINTERPRETED_CONTENT",
+        "actual": "UNINTERPRETED_CONTENT"
+      },
+      {
+        "label": "truncated",
+        "expected": "INVALID_INPUT",
+        "actual": "INVALID_INPUT"
+      }
+    ],
+    "controlledFailures": [
+      {
+        "fault": "auth",
+        "code": "AUTH_REQUIRED",
+        "status": 3
+      },
+      {
+        "fault": "quota",
+        "code": "QUOTA_EXHAUSTED",
+        "status": 3
+      },
+      {
+        "fault": "rate",
+        "code": "DRIVER_FAILED",
+        "status": 3
+      },
+      {
+        "fault": "model",
+        "code": "DRIVER_FAILED",
+        "status": 3
+      },
+      {
+        "fault": "signature",
+        "code": "DRIVER_FAILED",
+        "status": 3
+      },
+      {
+        "fault": "limit",
+        "code": "CONTEXT_LIMIT",
+        "status": 3
+      },
+      {
+        "fault": "incomplete",
+        "code": "DRIVER_FAILED",
+        "status": 3
+      },
+      {
+        "fault": "late",
+        "code": "DRIVER_FAILED",
+        "status": 3
+      },
+      {
+        "fault": "cancel",
+        "code": "CANCELLED",
+        "status": 3
+      },
+      {
+        "fault": "mismatch",
+        "code": "SESSION_MISMATCH",
+        "status": 3
+      }
+    ],
+    "assertions": [
+      [
+        "codex-codex-17/accept",
+        true
+      ],
+      [
+        "codex-codex-17/source-hash",
+        true
+      ],
+      [
+        "codex-codex-17/csr",
+        true
+      ],
+      [
+        "codex-codex-17/artifact-origin",
+        true
+      ],
+      [
+        "codex-codex-17/record-order",
+        true
+      ],
+      [
+        "codex-codex-17/quoted-order",
+        true
+      ],
+      [
+        "codex-codex-17/ledger",
+        true
+      ],
+      [
+        "codex-codex-17/ledger-reason",
+        true
+      ],
+      [
+        "codex-codex-17/run",
+        true
+      ],
+      [
+        "codex-codex-17/stdin-hash",
+        true
+      ],
+      [
+        "codex-codex-17/events",
+        true
+      ],
+      [
+        "codex-codex-53/accept",
+        true
+      ],
+      [
+        "codex-codex-53/source-hash",
+        true
+      ],
+      [
+        "codex-codex-53/csr",
+        true
+      ],
+      [
+        "codex-codex-53/artifact-origin",
+        true
+      ],
+      [
+        "codex-codex-53/record-order",
+        true
+      ],
+      [
+        "codex-codex-53/quoted-order",
+        true
+      ],
+      [
+        "codex-codex-53/ledger",
+        true
+      ],
+      [
+        "codex-codex-53/ledger-reason",
+        true
+      ],
+      [
+        "codex-codex-53/run",
+        true
+      ],
+      [
+        "codex-codex-53/stdin-hash",
+        true
+      ],
+      [
+        "codex-codex-53/events",
+        true
+      ],
+      [
+        "codex-claude-code-17/accept",
+        true
+      ],
+      [
+        "codex-claude-code-17/source-hash",
+        true
+      ],
+      [
+        "codex-claude-code-17/csr",
+        true
+      ],
+      [
+        "codex-claude-code-17/artifact-origin",
+        true
+      ],
+      [
+        "codex-claude-code-17/record-order",
+        true
+      ],
+      [
+        "codex-claude-code-17/quoted-order",
+        true
+      ],
+      [
+        "codex-claude-code-17/ledger",
+        true
+      ],
+      [
+        "codex-claude-code-17/ledger-reason",
+        true
+      ],
+      [
+        "codex-claude-code-17/run",
+        true
+      ],
+      [
+        "codex-claude-code-17/stdin-hash",
+        true
+      ],
+      [
+        "codex-claude-code-17/events",
+        true
+      ],
+      [
+        "codex-claude-code-53/accept",
+        true
+      ],
+      [
+        "codex-claude-code-53/source-hash",
+        true
+      ],
+      [
+        "codex-claude-code-53/csr",
+        true
+      ],
+      [
+        "codex-claude-code-53/artifact-origin",
+        true
+      ],
+      [
+        "codex-claude-code-53/record-order",
+        true
+      ],
+      [
+        "codex-claude-code-53/quoted-order",
+        true
+      ],
+      [
+        "codex-claude-code-53/ledger",
+        true
+      ],
+      [
+        "codex-claude-code-53/ledger-reason",
+        true
+      ],
+      [
+        "codex-claude-code-53/run",
+        true
+      ],
+      [
+        "codex-claude-code-53/stdin-hash",
+        true
+      ],
+      [
+        "codex-claude-code-53/events",
+        true
+      ],
+      [
+        "codex-antigravity-17/accept",
+        true
+      ],
+      [
+        "codex-antigravity-17/source-hash",
+        true
+      ],
+      [
+        "codex-antigravity-17/csr",
+        true
+      ],
+      [
+        "codex-antigravity-17/artifact-origin",
+        true
+      ],
+      [
+        "codex-antigravity-17/record-order",
+        true
+      ],
+      [
+        "codex-antigravity-17/quoted-order",
+        true
+      ],
+      [
+        "codex-antigravity-17/ledger",
+        true
+      ],
+      [
+        "codex-antigravity-17/ledger-reason",
+        true
+      ],
+      [
+        "codex-antigravity-17/run",
+        true
+      ],
+      [
+        "codex-antigravity-17/stdin-hash",
+        true
+      ],
+      [
+        "codex-antigravity-17/events",
+        true
+      ],
+      [
+        "codex-antigravity-53/accept",
+        true
+      ],
+      [
+        "codex-antigravity-53/source-hash",
+        true
+      ],
+      [
+        "codex-antigravity-53/csr",
+        true
+      ],
+      [
+        "codex-antigravity-53/artifact-origin",
+        true
+      ],
+      [
+        "codex-antigravity-53/record-order",
+        true
+      ],
+      [
+        "codex-antigravity-53/quoted-order",
+        true
+      ],
+      [
+        "codex-antigravity-53/ledger",
+        true
+      ],
+      [
+        "codex-antigravity-53/ledger-reason",
+        true
+      ],
+      [
+        "codex-antigravity-53/run",
+        true
+      ],
+      [
+        "codex-antigravity-53/stdin-hash",
+        true
+      ],
+      [
+        "codex-antigravity-53/events",
+        true
+      ],
+      [
+        "claude-code-codex-17/accept",
+        true
+      ],
+      [
+        "claude-code-codex-17/source-hash",
+        true
+      ],
+      [
+        "claude-code-codex-17/csr",
+        true
+      ],
+      [
+        "claude-code-codex-17/artifact-origin",
+        true
+      ],
+      [
+        "claude-code-codex-17/record-order",
+        true
+      ],
+      [
+        "claude-code-codex-17/parents",
+        true
+      ],
+      [
+        "claude-code-codex-17/branch",
+        true
+      ],
+      [
+        "claude-code-codex-17/quoted-order",
+        true
+      ],
+      [
+        "claude-code-codex-17/ledger",
+        true
+      ],
+      [
+        "claude-code-codex-17/ledger-reason",
+        true
+      ],
+      [
+        "claude-code-codex-17/run",
+        true
+      ],
+      [
+        "claude-code-codex-17/stdin-hash",
+        true
+      ],
+      [
+        "claude-code-codex-17/events",
+        true
+      ],
+      [
+        "claude-code-codex-53/accept",
+        true
+      ],
+      [
+        "claude-code-codex-53/source-hash",
+        true
+      ],
+      [
+        "claude-code-codex-53/csr",
+        true
+      ],
+      [
+        "claude-code-codex-53/artifact-origin",
+        true
+      ],
+      [
+        "claude-code-codex-53/record-order",
+        true
+      ],
+      [
+        "claude-code-codex-53/parents",
+        true
+      ],
+      [
+        "claude-code-codex-53/branch",
+        true
+      ],
+      [
+        "claude-code-codex-53/quoted-order",
+        true
+      ],
+      [
+        "claude-code-codex-53/ledger",
+        true
+      ],
+      [
+        "claude-code-codex-53/ledger-reason",
+        true
+      ],
+      [
+        "claude-code-codex-53/run",
+        true
+      ],
+      [
+        "claude-code-codex-53/stdin-hash",
+        true
+      ],
+      [
+        "claude-code-codex-53/events",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/accept",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/source-hash",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/csr",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/artifact-origin",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/record-order",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/parents",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/branch",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/quoted-order",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/ledger",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/ledger-reason",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/run",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/stdin-hash",
+        true
+      ],
+      [
+        "claude-code-claude-code-17/events",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/accept",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/source-hash",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/csr",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/artifact-origin",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/record-order",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/parents",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/branch",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/quoted-order",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/ledger",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/ledger-reason",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/run",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/stdin-hash",
+        true
+      ],
+      [
+        "claude-code-claude-code-53/events",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/accept",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/source-hash",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/csr",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/artifact-origin",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/record-order",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/parents",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/branch",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/quoted-order",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/ledger",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/ledger-reason",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/run",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/stdin-hash",
+        true
+      ],
+      [
+        "claude-code-antigravity-17/events",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/accept",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/source-hash",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/csr",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/artifact-origin",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/record-order",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/parents",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/branch",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/quoted-order",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/ledger",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/ledger-reason",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/run",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/stdin-hash",
+        true
+      ],
+      [
+        "claude-code-antigravity-53/events",
+        true
+      ],
+      [
+        "antigravity-codex-17/accept",
+        true
+      ],
+      [
+        "antigravity-codex-17/source-hash",
+        true
+      ],
+      [
+        "antigravity-codex-17/csr",
+        true
+      ],
+      [
+        "antigravity-codex-17/artifact-origin",
+        true
+      ],
+      [
+        "antigravity-codex-17/record-order",
+        true
+      ],
+      [
+        "antigravity-codex-17/quoted-order",
+        true
+      ],
+      [
+        "antigravity-codex-17/ledger",
+        true
+      ],
+      [
+        "antigravity-codex-17/ledger-reason",
+        true
+      ],
+      [
+        "antigravity-codex-17/run",
+        true
+      ],
+      [
+        "antigravity-codex-17/stdin-hash",
+        true
+      ],
+      [
+        "antigravity-codex-17/events",
+        true
+      ],
+      [
+        "antigravity-codex-53/accept",
+        true
+      ],
+      [
+        "antigravity-codex-53/source-hash",
+        true
+      ],
+      [
+        "antigravity-codex-53/csr",
+        true
+      ],
+      [
+        "antigravity-codex-53/artifact-origin",
+        true
+      ],
+      [
+        "antigravity-codex-53/record-order",
+        true
+      ],
+      [
+        "antigravity-codex-53/quoted-order",
+        true
+      ],
+      [
+        "antigravity-codex-53/ledger",
+        true
+      ],
+      [
+        "antigravity-codex-53/ledger-reason",
+        true
+      ],
+      [
+        "antigravity-codex-53/run",
+        true
+      ],
+      [
+        "antigravity-codex-53/stdin-hash",
+        true
+      ],
+      [
+        "antigravity-codex-53/events",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/accept",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/source-hash",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/csr",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/artifact-origin",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/record-order",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/quoted-order",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/ledger",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/ledger-reason",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/run",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/stdin-hash",
+        true
+      ],
+      [
+        "antigravity-claude-code-17/events",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/accept",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/source-hash",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/csr",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/artifact-origin",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/record-order",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/quoted-order",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/ledger",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/ledger-reason",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/run",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/stdin-hash",
+        true
+      ],
+      [
+        "antigravity-claude-code-53/events",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/accept",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/source-hash",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/csr",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/artifact-origin",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/record-order",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/quoted-order",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/ledger",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/ledger-reason",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/run",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/stdin-hash",
+        true
+      ],
+      [
+        "antigravity-antigravity-17/events",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/accept",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/source-hash",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/csr",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/artifact-origin",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/record-order",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/quoted-order",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/ledger",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/ledger-reason",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/run",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/stdin-hash",
+        true
+      ],
+      [
+        "antigravity-antigravity-53/events",
+        true
+      ],
+      [
+        "tool/accepted",
+        true
+      ],
+      [
+        "tool/associated-edges",
+        true
+      ],
+      [
+        "tool/unfinished",
+        true
+      ],
+      [
+        "tool/forks",
+        true
+      ],
+      [
+        "tool/loss-paths",
+        true
+      ],
+      [
+        "refusal/orphan",
+        true
+      ],
+      [
+        "refusal/redacted",
+        true
+      ],
+      [
+        "refusal/encrypted",
+        true
+      ],
+      [
+        "refusal/truncated",
+        true
+      ],
+      [
+        "driver/auth",
+        true
+      ],
+      [
+        "driver/quota",
+        true
+      ],
+      [
+        "driver/rate",
+        true
+      ],
+      [
+        "driver/model",
+        true
+      ],
+      [
+        "driver/signature",
+        true
+      ],
+      [
+        "driver/limit",
+        true
+      ],
+      [
+        "driver/incomplete",
+        true
+      ],
+      [
+        "driver/late",
+        true
+      ],
+      [
+        "driver/cancel",
+        true
+      ],
+      [
+        "driver/mismatch",
+        true
+      ],
+      [
+        "grader/unknown-equivalence",
+        true
+      ],
+      [
+        "grader/contradiction",
+        true
+      ],
+      [
+        "sessions/distinct",
+        true
+      ],
+      [
+        "sessions/explicit-older",
+        true
+      ],
+      [
+        "m31blue/exit",
+        true
+      ],
+      [
+        "m31blue/schema",
+        true
+      ],
+      [
+        "m31blue/receipt",
+        true
+      ],
+      [
+        "m31blue/resource",
+        true
+      ],
+      [
+        "m31blue/error",
+        true
+      ],
+      [
+        "m31blue/audited-calls",
+        true
+      ],
+      [
+        "m31green/exit",
+        true
+      ],
+      [
+        "m31green/schema",
+        true
+      ],
+      [
+        "m31green/receipt",
+        true
+      ],
+      [
+        "m31green/resource",
+        true
+      ],
+      [
+        "m31green/error",
+        true
+      ],
+      [
+        "m31green/audited-calls",
+        true
+      ]
+    ]
+  }
+}
