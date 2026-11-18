@@ -66,7 +66,7 @@ it("rejects an empty Antigravity success after an unresolved failed tool", () =>
   expect(()=>decode({event:"result",result:{conversation_id:"s",status:"SUCCESS",response:""}})).toThrow(/failed tool/i);
 });
 it("rejects changed source bytes even when only the outer manifest was regenerated", () => {
-  const out=buildInjectionBundle({schemaVersion:"1.0",meta:{agent:"test",id:"s",agentFormatVersion:"v1"},turns:[],xExtensions:{},
+  const out=buildInjectionBundle({schemaVersion:"1.0",meta:{agent:"test",id:"s",agentFormatVersion:"v1"},turns:[{id:"u",role:"user",content:[{type:"attachment",path:"a.txt",mediaType:"text/plain"}]}],xExtensions:{},
     sourceArtifacts:[{path:"a.txt",bytes:Buffer.from("original")}]}, "codex");
   const changed=out.artifacts.map(f=>f.path==="source/a.txt"?{...f,bytes:Buffer.from("replaced")}:f);
   const manifest=JSON.parse(Buffer.from(changed.at(-1)!.bytes).toString());

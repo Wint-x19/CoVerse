@@ -111,6 +111,18 @@ for(const [fault,code] of Object.entries({auth:"AUTH_REQUIRED",quota:"QUOTA_EXHA
 }
 check("grader/unknown-equivalence",score('{"fee":"not disclosed","port":"39"}',{fee:"unknown",port:39}).matches,{fee:true,port:true});
 check("grader/contradiction",score('{"port":12}',{port:39}).matches.port,false);
+const sessionDriver=createDriverRegistry({codex:{command:process.execPath,prefix:[path.join(root,"tools/m31/fault-agent.mjs"),"session-map"]}});
+async function sessionProbe(prompt,id) {
+  const args=["run","--agent","codex","--cwd",out,"--json","--prompt",prompt];
+  if(id)args.push("--session",id);
+  const r=await cli(args,undefined,sessionDriver);
+  return {status:r.status,events:r.stdout.trim().split("\n").map(line=>JSON.parse(line))};
+}
+const older=await sessionProbe("case-one"),newer=await sessionProbe("case-two");
+const olderId=older.events[0].id,newerId=newer.events[0].id;
+check("sessions/distinct",olderId!==newerId,true);
+const resumed=await sessionProbe("recall",olderId);
+check("sessions/explicit-older",[resumed.status,resumed.events[0].id,resumed.events[1].text],[0,olderId,"case-one"]);
 for(const [server,revision,key] of [["m31blue","1","id"],["m31green","2","ticket"]]){
   const log=path.join(out,server+".jsonl");
   const methods=[["initialize",{protocolVersion:"2025-11-25"}],["tools/list",{}],
