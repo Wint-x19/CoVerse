@@ -2,6 +2,8 @@
 
 [2026-11-18 首轮报告](./REPORT-2026-11-18.md) · [可机器读取的首轮结果](./results/2026-11-18.json)
 
+2026-11-19 在 Antigravity CLI 1.5.11 上单独复验换模。此前返回 503 的 Sonnet → Gemini Flash Low 路线、Gemini Flash Medium 同模型对照和 Medium → Low 路线均通过。三个新会话的六轮都收到原生 `SUCCESS`，每次追问均在原会话答对标记。[复验记录](./results/2026-11-19-antigravity-switch.json)
+
 ## 运行与证据
 
 在仓库根目录使用已锁定的依赖。离线入口运行协议、适配器、驱动和专项回归，再启动可控子进程验证九个方向。完整的 `pnpm check` 已包含这些断言。

@@ -1,0 +1,71 @@
+{
+  "date": "2026-11-19",
+  "agent": "antigravity",
+  "cliVersion": "1.5.11",
+  "scenario": "resume an explicit session on the same or a different model",
+  "cases": [
+    {
+      "name": "previous-503",
+      "sameSession": true,
+      "markerCorrect": true,
+      "rounds": [
+        {
+          "requestedModel": "claude-sonnet-4-6",
+          "observedModel": "claude-sonnet-4-6",
+          "nativeStatus": "SUCCESS",
+          "exitCode": 0,
+          "durationMs": 26738
+        },
+        {
+          "requestedModel": "gemini-3.8-flash-low",
+          "observedModel": "gemini-3.8-flash-low",
+          "nativeStatus": "SUCCESS",
+          "exitCode": 0,
+          "durationMs": 22763
+        }
+      ]
+    },
+    {
+      "name": "same-model",
+      "sameSession": true,
+      "markerCorrect": true,
+      "rounds": [
+        {
+          "requestedModel": "gemini-3.8-flash-medium",
+          "observedModel": "gemini-3.8-flash-medium",
+          "nativeStatus": "SUCCESS",
+          "exitCode": 0,
+          "durationMs": 20535
+        },
+        {
+          "requestedModel": "gemini-3.8-flash-medium",
+          "observedModel": "gemini-3.8-flash-medium",
+          "nativeStatus": "SUCCESS",
+          "exitCode": 0,
+          "durationMs": 19137
+        }
+      ]
+    },
+    {
+      "name": "change-model",
+      "sameSession": true,
+      "markerCorrect": true,
+      "rounds": [
+        {
+          "requestedModel": "gemini-3.8-flash-medium",
+          "observedModel": "gemini-3.8-flash-medium",
+          "nativeStatus": "SUCCESS",
+          "exitCode": 0,
+          "durationMs": 24890
+        },
+        {
+          "requestedModel": "gemini-3.8-flash-low",
+          "observedModel": "gemini-3.8-flash-low",
+          "nativeStatus": "SUCCESS",
+          "exitCode": 0,
+          "durationMs": 18713
+        }
+      ]
+    }
+  ]
+}
