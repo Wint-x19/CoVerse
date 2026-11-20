@@ -1,9 +1,11 @@
 import * as React from "react";
-import { ArrowUp, Cpu, FileUp, Folder, FolderOpen, Square } from "lucide-react";
+import { ArrowUp, FileUp, Folder, FolderOpen, Square } from "lucide-react";
 import type { DriverSummary } from "../../shared/types.js";
+import type { I18nMessages } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { agentLabel, cn, shortPath } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
+import { ModelPicker } from "./ModelPicker";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -18,6 +20,7 @@ interface ComposerProps {
   cwd: string;
   running: boolean;
   centered?: boolean;
+  t: I18nMessages;
   onAgentChange: (agent: string) => void;
   onModelChange: (model: string) => void;
   onCwdChange: (cwd: string) => void;
@@ -34,6 +37,7 @@ export function Composer({
   cwd,
   running,
   centered = false,
+  t,
   onAgentChange,
   onModelChange,
   onCwdChange,
@@ -42,15 +46,9 @@ export function Composer({
   onImportClick,
 }: ComposerProps) {
   const [value, setValue] = React.useState("");
-  const [modelDraft, setModelDraft] = React.useState(model);
   const [cwdDraft, setCwdDraft] = React.useState(cwd);
-  const [modelOpen, setModelOpen] = React.useState(false);
   const [cwdOpen, setCwdOpen] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-
-  React.useEffect(() => {
-    setModelDraft(model);
-  }, [model]);
 
   React.useEffect(() => {
     setCwdDraft(cwd);
@@ -78,12 +76,13 @@ export function Composer({
   };
 
   const currentDriver = drivers.find((d) => d.id === agent);
+  const models = currentDriver?.models ?? [];
 
   return (
     <div
       data-testid="composer"
       className={cn(
-        "w-full rounded-xl border border-white/[0.09] bg-[#101114] shadow-[0_12px_40px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors focus-within:border-white/[0.17]",
+        "w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-[var(--shadow-card)] transition-colors focus-within:border-[var(--border-strong)]",
         centered ? "max-w-[680px]" : "max-w-[740px]",
       )}
     >
@@ -94,21 +93,20 @@ export function Composer({
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
         disabled={running}
-        placeholder={`Message ${agentLabel(agent)}…`}
+        placeholder={t.messageAgent(agentLabel(agent))}
         aria-label="Prompt"
         data-testid="composer-input"
-        className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-relaxed text-[#f7f8f8] placeholder:text-[#555a63] focus:outline-none disabled:opacity-60"
+        className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none disabled:opacity-60"
       />
 
       <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-          {/* Agent selector */}
           {agentLocked ? (
             <div
               data-testid="composer-agent-locked"
-              className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-white/[0.07] bg-[#0b0c0e] px-2 text-[12px] text-[#b8bec8]"
+              className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2 text-[12px] text-[var(--text-secondary)]"
             >
-              <AgentGlyph agent={agent} className="h-3.5 w-3.5 text-[#8a8f98]" />
+              <AgentGlyph agent={agent} className="h-3.5 w-3.5" />
               <span>{agentLabel(agent)}</span>
             </div>
           ) : (
@@ -116,10 +114,10 @@ export function Composer({
               <SelectTrigger
                 aria-label="Agent"
                 data-testid="composer-agent-select"
-                className="h-7 w-auto shrink-0 gap-1.5 whitespace-nowrap border-transparent bg-transparent px-2 text-[12px] text-[#b8bec8] hover:border-white/[0.08] hover:bg-white/[0.04]"
+                className="h-7 w-auto shrink-0 gap-1.5 whitespace-nowrap border-transparent bg-transparent px-2 text-[12px] text-[var(--text-secondary)] hover:border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
               >
                 <span className="flex items-center gap-1.5 whitespace-nowrap">
-                  <AgentGlyph agent={agent} className="h-3.5 w-3.5 text-[#8a8f98]" />
+                  <AgentGlyph agent={agent} className="h-3.5 w-3.5" />
                   <SelectValue />
                 </span>
               </SelectTrigger>
@@ -130,7 +128,7 @@ export function Composer({
                       <span
                         className={cn(
                           "h-1.5 w-1.5 rounded-full",
-                          driver.available ? "bg-[#3ecf8e]" : "bg-[#3f434a]",
+                          driver.available ? "bg-[#3ecf8e]" : "bg-[var(--status-muted)]",
                         )}
                       />
                       <span>{agentLabel(driver.id)}</span>
@@ -141,58 +139,14 @@ export function Composer({
             </Select>
           )}
 
-          {/* Model popover */}
-          <Popover open={modelOpen} onOpenChange={setModelOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                data-testid="composer-model-btn"
-                className="inline-flex h-7 min-w-0 max-w-[140px] shrink items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] text-[#8a8f98] transition-colors hover:bg-white/[0.05] hover:text-[#d0d6e0] cursor-pointer"
-              >
-                <Cpu className="h-3 w-3 shrink-0" />
-                <span className="truncate font-mono text-[11.5px]">{model || "Default"}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-2.5">
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  onModelChange(modelDraft.trim());
-                  setModelOpen(false);
-                }}
-                className="flex flex-col gap-2"
-              >
-                <Input
-                  value={modelDraft}
-                  onChange={(event) => setModelDraft(event.target.value)}
-                  placeholder="Model name"
-                  aria-label="Model name"
-                  data-testid="composer-model-input"
-                  className="font-mono text-[12px]"
-                  autoFocus
-                />
-                <div className="flex justify-end gap-1.5">
-                  {model && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => {
-                        setModelDraft("");
-                        onModelChange("");
-                        setModelOpen(false);
-                      }}
-                    >
-                      Reset
-                    </Button>
-                  )}
-                  <Button type="submit" size="xs">
-                    Apply
-                  </Button>
-                </div>
-              </form>
-            </PopoverContent>
-          </Popover>
+          {/* Auto-discovered Model Picker */}
+          <ModelPicker
+            value={model}
+            models={models}
+            t={t}
+            onChange={onModelChange}
+            testId="composer-model-btn"
+          />
 
           {/* Working directory popover */}
           <Popover open={cwdOpen} onOpenChange={setCwdOpen}>
@@ -201,7 +155,7 @@ export function Composer({
                 type="button"
                 data-testid="composer-cwd-btn"
                 title={cwd}
-                className="hidden sm:inline-flex h-7 min-w-0 flex-1 max-w-[200px] items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] text-[#8a8f98] transition-colors hover:bg-white/[0.05] hover:text-[#d0d6e0] cursor-pointer"
+                className="hidden sm:inline-flex h-7 min-w-0 flex-1 max-w-[200px] items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] cursor-pointer"
               >
                 <Folder className="h-3 w-3 shrink-0" />
                 <span className="truncate font-mono text-[11.5px]">{shortPath(cwd)}</span>
@@ -219,8 +173,8 @@ export function Composer({
                 <Input
                   value={cwdDraft}
                   onChange={(event) => setCwdDraft(event.target.value)}
-                  placeholder="Absolute directory path"
-                  aria-label="Working directory"
+                  placeholder={t.workspaceDirectory}
+                  aria-label={t.workspaceDirectory}
                   data-testid="composer-cwd-input"
                   className="font-mono text-[12px]"
                   autoFocus
@@ -240,10 +194,10 @@ export function Composer({
                     }}
                   >
                     <FolderOpen className="h-3 w-3" />
-                    <span>Browse</span>
+                    <span>{t.browse}</span>
                   </Button>
                   <Button type="submit" size="xs">
-                    Apply
+                    {t.apply}
                   </Button>
                 </div>
               </form>
@@ -258,14 +212,14 @@ export function Composer({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Import session file"
+                aria-label={t.importSession}
                 data-testid="composer-import-btn"
                 onClick={onImportClick}
               >
                 <FileUp className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top">Import session</TooltipContent>
+            <TooltipContent side="top">{t.importSession}</TooltipContent>
           </Tooltip>
 
           {running ? (

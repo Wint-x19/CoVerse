@@ -1,13 +1,16 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { SessionDiagnostic } from "@coverse/core";
 import type {
+  AppSettings,
   BundleDetailResponse,
   CapabilitiesResponse,
   ConvertRequest,
   CoverseDesktopBridge,
   IpcEnvelope,
+  LocalSessionRef,
   PickedFile,
   StreamEventPayload,
+  ThemeMode,
   UiSession,
   UploadedFilePayload,
 } from "../shared/types.js";
@@ -41,7 +44,13 @@ let runCounter = 0;
 const bridge: CoverseDesktopBridge = {
   platform: process.platform,
 
-  capabilities: () => invoke<CapabilitiesResponse>(IPC_CHANNELS.capabilities),
+  capabilities: (refresh) => invoke<CapabilitiesResponse>(IPC_CHANNELS.capabilities, Boolean(refresh)),
+
+  getSettings: () => invoke<AppSettings>(IPC_CHANNELS.getSettings),
+
+  updateSettings: (patch) => invoke<AppSettings>(IPC_CHANNELS.updateSettings, patch),
+
+  listLocalSessions: (agent) => invoke<LocalSessionRef[]>(IPC_CHANNELS.listLocalSessions, agent),
 
   listSessions: () => invoke<UiSession[]>(IPC_CHANNELS.listSessions),
 
@@ -88,6 +97,12 @@ const bridge: CoverseDesktopBridge = {
   pickDirectory: (defaultPath) => invoke<string | null>(IPC_CHANNELS.pickDirectory, defaultPath),
 
   pickSessionFiles: () => invoke<PickedFile[]>(IPC_CHANNELS.pickSessionFiles),
+
+  pickExecutable: (defaultPath) => invoke<string | null>(IPC_CHANNELS.pickExecutable, defaultPath),
+
+  setWindowTheme: async (theme: ThemeMode) => {
+    await invoke<{ applied: boolean }>(IPC_CHANNELS.setWindowTheme, theme);
+  },
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 };

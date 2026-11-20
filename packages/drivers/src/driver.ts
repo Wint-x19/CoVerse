@@ -19,6 +19,23 @@ export type DriverEvent =
   | { type: "usage"; usage: ProtocolUsage; nativeUsage: WireRecord }
   | { type: "done" };
 
+export interface ModelOption {
+  id: string;
+  label: string;
+  isDefault?: boolean;
+}
+
+export interface LocalSessionRef {
+  id: string;
+  agent: string;
+  title: string;
+  path: string;
+  cwd?: string;
+  updatedAt: string;
+  size: number;
+  active?: boolean;
+}
+
 export type WireRecord = Record<string, JsonValue>;
 export interface DriverPlugin {
   id: string;
@@ -26,6 +43,8 @@ export interface DriverPlugin {
   verifiedVersions: readonly string[];
   invocation(options: RunOptions): { args: string[]; input: string };
   decoder(): (record: WireRecord) => DriverEvent[];
+  listModels?(executable: Executable | null): Promise<ModelOption[]>;
+  listLocalSessions?(limit?: number): Promise<LocalSessionRef[]>;
 }
 const sessionUuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -89,8 +108,32 @@ export class AgentDriver {
       });
       version = (result.stdout.trim() || result.stderr.trim()).split(/\r?\n/)[0] || null;
     } catch { /* Discovery is local. Authentication is checked by the actual run. */ }
-    return { id: this.id, available: version !== null, version, verifiedVersions: this.plugin.verifiedVersions,
-      verifiedCapabilities: version && this.plugin.verifiedVersions.includes(version) ? ["run", "inject", "resume"] : [] };
+    return {
+      id: this.id,
+      available: version !== null,
+      version,
+      executablePath: this.executable?.command ?? null,
+      verifiedVersions: this.plugin.verifiedVersions,
+      verifiedCapabilities: version && this.plugin.verifiedVersions.includes(version) ? ["run", "inject", "resume"] : [],
+    };
+  }
+
+  async listModels(): Promise<ModelOption[]> {
+    if (!this.plugin.listModels) return [];
+    try {
+      return await this.plugin.listModels(this.executable);
+    } catch {
+      return [];
+    }
+  }
+
+  async listLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
+    if (!this.plugin.listLocalSessions) return [];
+    try {
+      return await this.plugin.listLocalSessions(limit);
+    } catch {
+      return [];
+    }
   }
 
   async *run(options: RunOptions): AsyncGenerator<DriverEvent> {

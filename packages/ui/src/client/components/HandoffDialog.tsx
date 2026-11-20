@@ -2,9 +2,11 @@ import * as React from "react";
 import { AlertCircle, ArrowRight, FolderOpen, Loader2 } from "lucide-react";
 import type { SessionDiagnostic } from "@coverse/core";
 import type { AdapterSummary, DriverSummary, UiSession } from "../../shared/types.js";
+import type { I18nMessages } from "@/lib/i18n";
 import { api, ApiClientError } from "@/lib/api";
 import { agentLabel, cn } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
+import { ModelPicker } from "./ModelPicker";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
@@ -15,6 +17,7 @@ interface HandoffDialogProps {
   session: UiSession | null;
   adapters: AdapterSummary[];
   drivers: DriverSummary[];
+  t: I18nMessages;
   onOpenChange: (open: boolean) => void;
   onHandedOff: (session: UiSession) => void;
 }
@@ -24,6 +27,7 @@ export function HandoffDialog({
   session,
   adapters,
   drivers,
+  t,
   onOpenChange,
   onHandedOff,
 }: HandoffDialogProps) {
@@ -38,12 +42,17 @@ export function HandoffDialog({
     setError(null);
     setModel("");
     setCwd(session.cwd);
-    const availableOther = drivers.find((d) => d.available && d.id !== session.agent);
-    const anyOther = adapters.find((a) => a.capabilities.export && a.id !== session.agent);
-    setTo(availableOther?.id ?? anyOther?.id ?? session.agent);
+    const enabledExport = adapters.filter((a) => a.enabled && a.capabilities.export);
+    const availableOther = drivers.find(
+      (d) => d.available && d.id !== session.agent && enabledExport.some((a) => a.id === d.id),
+    );
+    const anyOther = enabledExport.find((a) => a.id !== session.agent);
+    setTo(availableOther?.id ?? anyOther?.id ?? enabledExport[0]?.id ?? session.agent);
   }, [open, session, drivers, adapters]);
 
   if (!session) return null;
+
+  const targetModels = drivers.find((d) => d.id === to)?.models ?? [];
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -73,25 +82,31 @@ export function HandoffDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="handoff-dialog" className="max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>Handoff session</DialogTitle>
+          <DialogTitle>{t.handoffSession}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3.5">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <div className="flex h-8 items-center gap-2 rounded-md border border-white/[0.08] bg-[#0b0c0e] px-2.5 text-[13px] text-[#b8bec8]">
-              <AgentGlyph agent={session.agent} className="h-3.5 w-3.5 text-[#8a8f98]" />
+            <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 text-[13px] text-[var(--text-secondary)]">
+              <AgentGlyph agent={session.agent} className="h-3.5 w-3.5" />
               <span className="truncate">{agentLabel(session.agent)}</span>
             </div>
 
-            <ArrowRight className="h-3.5 w-3.5 text-[#5b6069]" />
+            <ArrowRight className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
 
-            <Select value={to} onValueChange={setTo}>
+            <Select
+              value={to}
+              onValueChange={(next) => {
+                setTo(next);
+                setModel("");
+              }}
+            >
               <SelectTrigger aria-label="Target agent" data-testid="handoff-to-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {adapters
-                  .filter((a) => a.capabilities.export)
+                  .filter((a) => a.enabled && a.capabilities.export)
                   .map((adapter) => {
                     const driver = drivers.find((d) => d.id === adapter.id);
                     return (
@@ -100,7 +115,7 @@ export function HandoffDialog({
                           <span
                             className={cn(
                               "h-1.5 w-1.5 rounded-full",
-                              driver?.available ? "bg-[#3ecf8e]" : "bg-[#3f434a]",
+                              driver?.available ? "bg-[#3ecf8e]" : "bg-[var(--status-muted)]",
                             )}
                           />
                           <span>{agentLabel(adapter.id)}</span>
@@ -116,15 +131,15 @@ export function HandoffDialog({
             <Input
               value={cwd}
               onChange={(event) => setCwd(event.target.value)}
-              placeholder="Workspace directory"
-              aria-label="Workspace directory"
+              placeholder={t.workspaceDirectory}
+              aria-label={t.workspaceDirectory}
               className="font-mono text-[12px]"
             />
             <Button
               type="button"
               variant="secondary"
               size="icon"
-              aria-label="Choose workspace directory"
+              aria-label={t.browse}
               onClick={async () => {
                 const picked = await api.pickDirectory(cwd).catch(() => null);
                 if (picked) setCwd(picked);
@@ -135,18 +150,19 @@ export function HandoffDialog({
             </Button>
           </div>
 
-          <Input
+          <ModelPicker
             value={model}
-            onChange={(event) => setModel(event.target.value)}
-            placeholder="Model (optional)"
-            aria-label="Model"
-            className="font-mono text-[12px]"
+            models={targetModels}
+            t={t}
+            compact={false}
+            onChange={setModel}
+            testId="handoff-model-picker"
           />
 
           {error && (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-lg border border-[#e5484d]/30 bg-[#e5484d]/[0.08] px-3 py-2 text-[12px] text-[#ff878b]"
+              className="flex items-start gap-2 rounded-lg border border-[#e5484d]/30 bg-[#e5484d]/[0.08] px-3 py-2 text-[12px] text-[#e5484d]"
             >
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <div className="min-w-0">
@@ -159,11 +175,11 @@ export function HandoffDialog({
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t.cancel}
             </Button>
             <Button type="submit" disabled={submitting || !to} data-testid="handoff-submit-btn">
               {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>Continue in {agentLabel(to)}</span>
+              <span>{t.continueIn(agentLabel(to))}</span>
             </Button>
           </div>
         </form>

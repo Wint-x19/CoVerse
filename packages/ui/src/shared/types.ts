@@ -1,9 +1,37 @@
 import type { AdapterCapabilities, LossLedger, ProtocolUsage, SessionDiagnostic } from "@coverse/core";
 
+export type ThemeMode = "light" | "dark";
+export type LanguageCode = "zh-CN" | "en";
+
+export interface AppSettings {
+  theme: ThemeMode;
+  language: LanguageCode;
+  disabledAdapters: string[];
+  driverExecutables: Record<string, string>;
+}
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  isDefault?: boolean;
+}
+
+export interface LocalSessionRef {
+  id: string;
+  agent: string;
+  title: string;
+  path: string;
+  cwd?: string;
+  updatedAt: string;
+  size: number;
+  active?: boolean;
+}
+
 export interface AdapterSummary {
   id: string;
   displayName: string;
   status: "scaffold" | "ready";
+  enabled: boolean;
   supportedVersions: readonly string[];
   capabilities: Readonly<AdapterCapabilities>;
 }
@@ -12,8 +40,11 @@ export interface DriverSummary {
   id: string;
   available: boolean;
   version: string | null;
+  executablePath: string | null;
+  customExecutablePath?: string;
   verifiedVersions: readonly string[];
   verifiedCapabilities: readonly string[];
+  models: ModelOption[];
 }
 
 export interface CapabilitiesResponse {
@@ -69,10 +100,12 @@ export interface ChatMessage {
   createdAt: string;
   agent?: string;
   model?: string;
+  reasoning?: string;
   tools?: ToolActivity[];
   usage?: ProtocolUsage;
   error?: SessionDiagnostic;
   aborted?: boolean;
+  historical?: boolean;
 }
 
 export interface UiSession {
@@ -174,7 +207,10 @@ export interface RunMessageInput {
 
 export interface CoverseDesktopBridge {
   readonly platform: string;
-  capabilities(): Promise<CapabilitiesResponse>;
+  capabilities(refresh?: boolean): Promise<CapabilitiesResponse>;
+  getSettings(): Promise<AppSettings>;
+  updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
+  listLocalSessions(agent?: string): Promise<LocalSessionRef[]>;
   listSessions(): Promise<UiSession[]>;
   getSession(id: string): Promise<UiSession>;
   createSession(input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<UiSession>;
@@ -198,5 +234,7 @@ export interface CoverseDesktopBridge {
   ): Promise<void>;
   pickDirectory(defaultPath?: string): Promise<string | null>;
   pickSessionFiles(): Promise<PickedFile[]>;
+  pickExecutable(defaultPath?: string): Promise<string | null>;
+  setWindowTheme(theme: ThemeMode): Promise<void>;
   getPathForFile(file: File): string;
 }

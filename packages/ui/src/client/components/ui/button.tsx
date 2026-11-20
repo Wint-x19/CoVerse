@@ -9,13 +9,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[#f7f8f8] text-[#08090a] hover:bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]",
+          "bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover)]",
         secondary:
-          "bg-[#16181d] text-[#d0d6e0] border border-white/[0.08] hover:bg-[#1d2027] hover:text-[#f7f8f8]",
+          "bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)]",
         outline:
-          "border border-white/[0.09] bg-transparent text-[#d0d6e0] hover:bg-white/[0.04] hover:text-[#f7f8f8]",
-        ghost: "text-[#8a8f98] hover:bg-white/[0.05] hover:text-[#f7f8f8]",
-        destructive: "bg-[#e5484d]/15 text-[#ff6b70] border border-[#e5484d]/30 hover:bg-[#e5484d]/25",
+          "border border-[var(--border-subtle)] bg-transparent text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
+        ghost: "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
+        destructive: "bg-[#e5484d]/15 text-[#e5484d] border border-[#e5484d]/30 hover:bg-[#e5484d]/25",
       },
       size: {
         default: "h-8 px-3",

@@ -1,56 +1,79 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-background: var(--bg-app);
+  --color-foreground: var(--text-primary);
+  --color-border: var(--border-subtle);
+  --color-ring: #5e6ad2;
 }
 
-:root,
+/* Light theme (白天) — Linear crisp monochrome light */
+:root {
+  --bg-app: #ffffff;
+  --bg-sidebar: #f7f8f9;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f3f4f6;
+  --bg-elevated: #eceef2;
+  --bg-hover: rgba(15, 17, 21, 0.045);
+  --border-subtle: rgba(15, 17, 21, 0.09);
+  --border-strong: rgba(15, 17, 21, 0.16);
+  --text-primary: #0f1115;
+  --text-secondary: #5c6370;
+  --text-tertiary: #8c93a0;
+  --btn-primary-bg: #111318;
+  --btn-primary-fg: #ffffff;
+  --btn-primary-hover: #252932;
+  --user-bubble: #f1f2f5;
+  --code-bg: #f6f7f9;
+  --prose-text: #1c1f26;
+  --prose-code: #111318;
+  --prose-quote: #5c6370;
+  --scrollbar-thumb: rgba(15, 17, 21, 0.14);
+  --scrollbar-hover: rgba(15, 17, 21, 0.24);
+  --shadow-card: 0 6px 24px rgba(15, 17, 21, 0.06);
+  --shadow-modal: 0 20px 60px rgba(15, 17, 21, 0.16);
+  --backdrop: rgba(15, 17, 21, 0.35);
+  --accent: #5e6ad2;
+  --accent-text: #4c57c2;
+  --status-muted: #c2c6cf;
+}
+
+/* Dark theme (黑夜) — Linear obsidian monochrome dark */
 .dark {
-  --background: #08090a;
-  --foreground: #f7f8f8;
-  --card: #101114;
-  --card-foreground: #f7f8f8;
-  --popover: #121316;
-  --popover-foreground: #f7f8f8;
-  --primary: #f7f8f8;
-  --primary-foreground: #08090a;
-  --secondary: #16181d;
-  --secondary-foreground: #d0d6e0;
-  --muted: #141519;
-  --muted-foreground: #8a8f98;
-  --accent: #1a1c22;
-  --accent-foreground: #f7f8f8;
-  --destructive: #e5484d;
-  --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #5e6ad2;
-  --radius: 0.5rem;
+  --bg-app: #08090a;
+  --bg-sidebar: #0b0c0e;
+  --bg-surface: #101114;
+  --bg-subtle: #0e0f12;
+  --bg-elevated: #16181d;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --text-primary: #f7f8f8;
+  --text-secondary: #8a8f98;
+  --text-tertiary: #5b6069;
+  --btn-primary-bg: #f7f8f8;
+  --btn-primary-fg: #08090a;
+  --btn-primary-hover: #ffffff;
+  --user-bubble: #14161a;
+  --code-bg: #0d0e11;
+  --prose-text: #e6e8ec;
+  --prose-code: #f0f2f5;
+  --prose-quote: #9ba1ab;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-hover: rgba(255, 255, 255, 0.18);
+  --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-modal: 0 24px 80px rgba(0, 0, 0, 0.65);
+  --backdrop: rgba(0, 0, 0, 0.7);
+  --accent: #5e6ad2;
+  --accent-text: #828fff;
+  --status-muted: #3f434a;
 }
 
 * {
-  border-color: var(--border);
+  border-color: var(--border-subtle);
 }
 
 html,
@@ -58,8 +81,8 @@ body,
 #root {
   height: 100%;
   margin: 0;
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -83,34 +106,28 @@ body,
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-hover);
 }
 
 /* Crisp Markdown prose for assistant responses */
 .cv-prose {
   font-size: 14px;
   line-height: 1.65;
-  color: #e6e8ec;
+  color: var(--prose-text);
   word-break: break-word;
 }
-.cv-prose > *:first-child {
-  margin-top: 0;
-}
-.cv-prose > *:last-child {
-  margin-bottom: 0;
-}
-.cv-prose p {
-  margin: 0.65em 0;
-}
+.cv-prose > *:first-child { margin-top: 0; }
+.cv-prose > *:last-child { margin-bottom: 0; }
+.cv-prose p { margin: 0.65em 0; }
 .cv-prose h1,
 .cv-prose h2,
 .cv-prose h3,
 .cv-prose h4 {
-  color: #f7f8f8;
+  color: var(--text-primary);
   font-weight: 600;
   letter-spacing: -0.02em;
   margin: 1.2em 0 0.5em;
@@ -126,22 +143,20 @@ body,
 }
 .cv-prose ul { list-style-type: disc; }
 .cv-prose ol { list-style-type: decimal; }
-.cv-prose li {
-  margin: 0.25em 0;
-}
+.cv-prose li { margin: 0.25em 0; }
 .cv-prose code {
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   padding: 0.1em 0.35em;
-  color: #f0f2f5;
+  color: var(--prose-code);
 }
 .cv-prose pre {
   margin: 0.85em 0;
-  background: #0d0e11;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--code-bg);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 0.85rem 1rem;
   overflow-x: auto;
@@ -152,13 +167,13 @@ body,
   padding: 0;
   font-size: 12.5px;
   line-height: 1.55;
-  color: #d6dae2;
+  color: var(--prose-text);
 }
 .cv-prose blockquote {
   margin: 0.75em 0;
   padding-left: 0.9rem;
-  border-left: 2px solid rgba(255, 255, 255, 0.16);
-  color: #9ba1ab;
+  border-left: 2px solid var(--border-strong);
+  color: var(--prose-quote);
 }
 .cv-prose table {
   width: 100%;
@@ -168,22 +183,22 @@ body,
 }
 .cv-prose th,
 .cv-prose td {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
   padding: 0.45rem 0.65rem;
   text-align: left;
 }
 .cv-prose th {
-  background: rgba(255, 255, 255, 0.03);
-  color: #f7f8f8;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
   font-weight: 500;
 }
 .cv-prose a {
-  color: #828fff;
+  color: var(--accent-text);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 .cv-prose hr {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-subtle);
   margin: 1.25em 0;
 }

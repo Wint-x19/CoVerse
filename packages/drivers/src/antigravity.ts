@@ -1,4 +1,83 @@
-import { driverError, finalText, object, string, targetFailure, usage, type DriverEvent, type DriverPlugin } from "./driver.js";
+import { execFile } from "node:child_process";
+import * as fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import {
+  driverError,
+  finalText,
+  object,
+  string,
+  targetFailure,
+  usage,
+  type DriverEvent,
+  type DriverPlugin,
+  type Executable,
+  type LocalSessionRef,
+  type ModelOption,
+} from "./driver.js";
+
+async function listAntigravityModels(executable: Executable | null): Promise<ModelOption[]> {
+  if (!executable) return [];
+  try {
+    const result = await promisify(execFile)(
+      executable.command,
+      [...(executable.prefix ?? []), "models"],
+      { timeout: 10000, windowsHide: true, maxBuffer: 256 * 1024 },
+    );
+    const models: ModelOption[] = [];
+    for (const line of result.stdout.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const tab = trimmed.indexOf("\t");
+      if (tab > 0) {
+        const id = trimmed.slice(0, tab).trim();
+        const label = trimmed.slice(tab + 1).trim() || id;
+        if (id && !/\s/.test(id)) models.push({ id, label });
+      }
+    }
+    return models;
+  } catch {
+    return [];
+  }
+}
+
+async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
+  const root = path.join(os.homedir(), ".gemini", "antigravity", "conversations");
+  let entries;
+  try { entries = await fs.readdir(root, { withFileTypes: true }); } catch { return []; }
+
+  const dbs: { fullPath: string; name: string; mtimeMs: number; size: number }[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".db")) continue;
+    const fullPath = path.join(root, entry.name);
+    try {
+      const info = await fs.stat(fullPath);
+      dbs.push({ fullPath, name: entry.name, mtimeMs: info.mtimeMs, size: info.size });
+    } catch { /* ignore */ }
+  }
+
+  dbs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const refs: LocalSessionRef[] = [];
+  for (const db of dbs.slice(0, limit)) {
+    const id = db.name.replace(/\.db$/, "");
+    let active = false;
+    try {
+      const wal = await fs.stat(db.fullPath + "-wal");
+      if (wal.size > 0) active = true;
+    } catch { /* no wal */ }
+    refs.push({
+      id,
+      agent: "antigravity",
+      title: id,
+      path: db.fullPath,
+      updatedAt: new Date(db.mtimeMs).toISOString(),
+      size: db.size,
+      ...(active ? { active: true } : {}),
+    });
+  }
+  return refs;
+}
 
 export const antigravity: DriverPlugin = {
   id: "antigravity", command: "agy", verifiedVersions: ["1.5.11"],
@@ -44,4 +123,6 @@ export const antigravity: DriverPlugin = {
       throw driverError("Unsupported Antigravity event: " + record.event);
     };
   },
+  listModels: listAntigravityModels,
+  listLocalSessions: listAntigravityLocalSessions,
 };

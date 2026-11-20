@@ -1,12 +1,15 @@
 import type { SessionDiagnostic } from "@coverse/core";
 import type {
+  AppSettings,
   BundleDetailResponse,
   CapabilitiesResponse,
   ConvertRequest,
   CoverseDesktopBridge,
   InspectResponse,
+  LocalSessionRef,
   PickedFile,
   StreamEventPayload,
+  ThemeMode,
   UiSession,
   UploadedFilePayload,
 } from "../../shared/types.js";
@@ -59,14 +62,20 @@ export const api = {
     return window.coverse?.platform ?? "win32";
   },
 
-  capabilities: (): Promise<CapabilitiesResponse> =>
-    call("/capabilities", (b) => b.capabilities()),
+  capabilities: (refresh = false): Promise<CapabilitiesResponse> =>
+    call("/capabilities", (b) => b.capabilities(refresh)),
 
-  listSessions: (): Promise<UiSession[]> =>
-    call("/sessions", (b) => b.listSessions()),
+  getSettings: (): Promise<AppSettings> => call("/settings", (b) => b.getSettings()),
 
-  getSession: (id: string): Promise<UiSession> =>
-    call(`/sessions/${id}`, (b) => b.getSession(id)),
+  updateSettings: (patch: Partial<AppSettings>): Promise<AppSettings> =>
+    call("/settings", (b) => b.updateSettings(patch)),
+
+  listLocalSessions: (agent?: string): Promise<LocalSessionRef[]> =>
+    call("/sessions/local", (b) => b.listLocalSessions(agent)),
+
+  listSessions: (): Promise<UiSession[]> => call("/sessions", (b) => b.listSessions()),
+
+  getSession: (id: string): Promise<UiSession> => call(`/sessions/${id}`, (b) => b.getSession(id)),
 
   createSession: (input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<UiSession> =>
     call("/sessions/create", (b) => b.createSession(input)),
@@ -74,11 +83,9 @@ export const api = {
   updateSession: (
     id: string,
     patch: { title?: string; model?: string | null; cwd?: string; agent?: string },
-  ): Promise<UiSession> =>
-    call(`/sessions/${id}`, (b) => b.updateSession(id, patch)),
+  ): Promise<UiSession> => call(`/sessions/${id}`, (b) => b.updateSession(id, patch)),
 
-  deleteSession: (id: string): Promise<void> =>
-    call(`/sessions/${id}`, (b) => b.deleteSession(id)),
+  deleteSession: (id: string): Promise<void> => call(`/sessions/${id}`, (b) => b.deleteSession(id)),
 
   inspectSource: (input: { paths?: string[]; files?: UploadedFilePayload[] }): Promise<InspectResponse> =>
     call("/sessions/inspect", (b) => b.inspectSource(input)),
@@ -89,8 +96,7 @@ export const api = {
   handoffSession: (
     id: string,
     input: { to: string; model?: string; cwd?: string; title?: string },
-  ): Promise<UiSession> =>
-    call(`/sessions/${id}/handoff`, (b) => b.handoffSession(id, input)),
+  ): Promise<UiSession> => call(`/sessions/${id}/handoff`, (b) => b.handoffSession(id, input)),
 
   getBundle: (bundleId: string): Promise<BundleDetailResponse> =>
     call(`/bundles/${bundleId}`, (b) => b.getBundle(bundleId)),
@@ -102,14 +108,18 @@ export const api = {
     id: string,
     input: { prompt: string; model?: string; cwd?: string },
     onEvent: (event: StreamEventPayload) => void,
-  ): Promise<void> =>
-    call(`/sessions/${id}/messages`, (b) => b.streamMessage(id, input, onEvent)),
+  ): Promise<void> => call(`/sessions/${id}/messages`, (b) => b.streamMessage(id, input, onEvent)),
 
   pickDirectory: (defaultPath?: string): Promise<string | null> =>
     call("/dialog/directory", (b) => b.pickDirectory(defaultPath)),
 
-  pickSessionFiles: (): Promise<PickedFile[]> =>
-    call("/dialog/files", (b) => b.pickSessionFiles()),
+  pickSessionFiles: (): Promise<PickedFile[]> => call("/dialog/files", (b) => b.pickSessionFiles()),
+
+  pickExecutable: (defaultPath?: string): Promise<string | null> =>
+    call("/dialog/executable", (b) => b.pickExecutable(defaultPath)),
+
+  setWindowTheme: (theme: ThemeMode): Promise<void> =>
+    call("/window/theme", (b) => b.setWindowTheme(theme)),
 
   getPathForFile: (file: File): string => {
     try {

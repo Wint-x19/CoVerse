@@ -2,7 +2,7 @@ import { decompress } from "fzstd";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
-const verifiedWriters = new Set(["0.169.0-alpha.11.1"]);
+const verifiedWriters = new Set(["0.169.0-alpha.11.1", "0.169.1"]);
 const operationalEvents = new Set(["task_started", "task_complete", "task_aborted", "turn_aborted", "token_count", "thread_settings_applied", "item_started", "item_completed", "agent_message_delta", "agent_reasoning_delta", "exec_command_begin", "exec_command_end", "exec_command_output_delta", "mcp_tool_call_begin", "mcp_tool_call_end", "patch_apply_begin", "patch_apply_end", "user_message", "agent_message", "agent_reasoning", "agent_reasoning_raw_content", "context_compacted", "session_configured"]);
 function load(files: FileSet) {
   const logs = files.filter(f => /\.jsonl(?:\.zst)?$/.test(f.path));

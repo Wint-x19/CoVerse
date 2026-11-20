@@ -1,9 +1,11 @@
 import type {
+  AppSettings,
   ConvertRequest,
   IpcEnvelope,
   PickedFile,
   RunMessageInput,
   StreamEventPayload,
+  ThemeMode,
   UploadedFilePayload,
 } from "../shared/types.js";
 import { toDiagnostic, UiService } from "./service.js";
@@ -24,10 +26,15 @@ export interface IpcMainLike {
 export interface DesktopDialogs {
   pickDirectory(defaultPath?: string): Promise<string | null>;
   pickSessionFiles(): Promise<PickedFile[]>;
+  pickExecutable?(defaultPath?: string): Promise<string | null>;
+  setWindowTheme?(theme: ThemeMode): Promise<void>;
 }
 
 export const IPC_CHANNELS = {
   capabilities: "coverse:capabilities",
+  getSettings: "coverse:settings:get",
+  updateSettings: "coverse:settings:update",
+  listLocalSessions: "coverse:sessions:local",
   listSessions: "coverse:sessions:list",
   getSession: "coverse:sessions:get",
   createSession: "coverse:sessions:create",
@@ -41,6 +48,8 @@ export const IPC_CHANNELS = {
   runAbort: "coverse:run:abort",
   pickDirectory: "coverse:dialog:pick-directory",
   pickSessionFiles: "coverse:dialog:pick-session-files",
+  pickExecutable: "coverse:dialog:pick-executable",
+  setWindowTheme: "coverse:window:set-theme",
 } as const;
 
 export function runEventChannel(runId: string): string {
@@ -60,7 +69,27 @@ export function registerIpcHandlers(
   service: UiService,
   dialogs: DesktopDialogs,
 ): void {
-  ipc.handle(IPC_CHANNELS.capabilities, () => wrap("/capabilities", () => service.getCapabilities()));
+  ipc.handle(IPC_CHANNELS.capabilities, (_event, refresh) =>
+    wrap("/capabilities", () => service.getCapabilities(Boolean(refresh))),
+  );
+
+  ipc.handle(IPC_CHANNELS.getSettings, () => wrap("/settings", () => service.getSettings()));
+
+  ipc.handle(IPC_CHANNELS.updateSettings, (_event, patch) =>
+    wrap("/settings", async () => {
+      const updated = await service.updateSettings(patch as Partial<AppSettings>);
+      if (patch && typeof patch === "object" && "theme" in patch && dialogs.setWindowTheme) {
+        await dialogs.setWindowTheme(updated.theme);
+      }
+      return updated;
+    }),
+  );
+
+  ipc.handle(IPC_CHANNELS.listLocalSessions, (_event, agent) =>
+    wrap("/sessions/local", () =>
+      service.listLocalSessions(typeof agent === "string" && agent ? agent : undefined),
+    ),
+  );
 
   ipc.handle(IPC_CHANNELS.listSessions, () => wrap("/sessions", () => service.listSessions()));
 
@@ -148,5 +177,22 @@ export function registerIpcHandlers(
 
   ipc.handle(IPC_CHANNELS.pickSessionFiles, () =>
     wrap("/dialog/files", () => dialogs.pickSessionFiles()),
+  );
+
+  ipc.handle(IPC_CHANNELS.pickExecutable, (_event, defaultPath) =>
+    wrap("/dialog/executable", async () =>
+      dialogs.pickExecutable
+        ? dialogs.pickExecutable(typeof defaultPath === "string" && defaultPath ? defaultPath : undefined)
+        : null,
+    ),
+  );
+
+  ipc.handle(IPC_CHANNELS.setWindowTheme, (_event, theme) =>
+    wrap("/window/theme", async () => {
+      if (dialogs.setWindowTheme && (theme === "light" || theme === "dark")) {
+        await dialogs.setWindowTheme(theme);
+      }
+      return { applied: true };
+    }),
   );
 }

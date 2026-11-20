@@ -20,6 +20,9 @@ it("imports verified message records without duplicating UI events", async () =>
   expect(r.session.turns.find(t => t.origin?.kind === "compaction")).toBeDefined();
   expect(JSON.stringify(r.session.raw)).toContain("future_field");
   expect((await adapter.export(r.session, { ledger: r.ledger })).artifacts.map(a => a.path)).toContain("source/rollout.jsonl");
+
+  const sample01691 = [{ ...header, payload: { ...header.payload, cli_version: "0.169.1" } }, ...sample.slice(1)];
+  expect(await adapter.detect(encode(sample01691))).toMatchObject({ confidence: 1, formatVersion });
 });
 it("rejects unverified writers, corrupt input and broken tool associations", () => {
   expect(() => adapter.import(encode([{ ...header, payload: { ...header.payload, cli_version: "future" } }]))).toThrow("not been verified");

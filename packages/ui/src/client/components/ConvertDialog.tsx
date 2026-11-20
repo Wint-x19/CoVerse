@@ -9,9 +9,11 @@ import type {
   UiSession,
   UploadedFilePayload,
 } from "../../shared/types.js";
+import type { I18nMessages } from "@/lib/i18n";
 import { api, ApiClientError } from "@/lib/api";
 import { agentLabel, cn, formatBytes } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
+import { ModelPicker } from "./ModelPicker";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
@@ -29,6 +31,7 @@ interface ConvertDialogProps {
   adapters: AdapterSummary[];
   drivers: DriverSummary[];
   defaultCwd: string;
+  t: I18nMessages;
   onOpenChange: (open: boolean) => void;
   onConverted: (session: UiSession) => void;
 }
@@ -39,6 +42,7 @@ export function ConvertDialog({
   adapters,
   drivers,
   defaultCwd,
+  t,
   onOpenChange,
   onConverted,
 }: ConvertDialogProps) {
@@ -73,10 +77,15 @@ export function ConvertDialog({
         if (detected) setFrom(detected);
         if (result.preview?.cwd) setCwd(result.preview.cwd);
 
-        const availableOther = drivers.find((d) => d.available && d.id !== detected);
-        const anyOther = adapters.find((a) => a.capabilities.export && a.id !== detected);
-        const firstAvailable = drivers.find((d) => d.available);
-        setTo(availableOther?.id ?? anyOther?.id ?? firstAvailable?.id ?? adapters[0]?.id ?? "claude-code");
+        const enabledExportAdapters = adapters.filter((a) => a.enabled && a.capabilities.export);
+        const availableOther = drivers.find(
+          (d) => d.available && d.id !== detected && enabledExportAdapters.some((a) => a.id === d.id),
+        );
+        const anyOther = enabledExportAdapters.find((a) => a.id !== detected);
+        const firstAvailable = drivers.find(
+          (d) => d.available && enabledExportAdapters.some((a) => a.id === d.id),
+        );
+        setTo(availableOther?.id ?? anyOther?.id ?? firstAvailable?.id ?? enabledExportAdapters[0]?.id ?? "");
       })
       .catch((err) => {
         if (!active) return;
@@ -94,6 +103,8 @@ export function ConvertDialog({
       active = false;
     };
   }, [open, source, defaultCwd, drivers, adapters]);
+
+  const targetModels = drivers.find((d) => d.id === to)?.models ?? [];
 
   const handleConvert = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -126,7 +137,7 @@ export function ConvertDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="convert-dialog" className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Convert session</DialogTitle>
+          <DialogTitle>{t.convertSession}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleConvert} className="mt-4 flex flex-col gap-4">
@@ -135,37 +146,37 @@ export function ConvertDialog({
               <div
                 key={item.path}
                 title={item.path}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#0b0c0e] px-2 py-1 font-mono text-[11.5px] text-[#c8cdd6]"
+                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2 py-1 font-mono text-[11.5px] text-[var(--text-primary)]"
               >
-                <FileText className="h-3 w-3 text-[#6d727c]" />
+                <FileText className="h-3 w-3 text-[var(--text-tertiary)]" />
                 <span className="max-w-[220px] truncate">{item.name}</span>
-                {item.size > 0 && <span className="text-[#5b6069]">{formatBytes(item.size)}</span>}
+                {item.size > 0 && <span className="text-[var(--text-tertiary)]">{formatBytes(item.size)}</span>}
               </div>
             ))}
           </div>
 
           {inspecting ? (
-            <div className="flex items-center gap-2 py-3 text-[12.5px] text-[#8a8f98]">
+            <div className="flex items-center gap-2 py-3 text-[12.5px] text-[var(--text-secondary)]">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>Detecting format…</span>
+              <span>{t.detecting}</span>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <Select value={from} onValueChange={setFrom}>
                   <SelectTrigger aria-label="Source adapter" data-testid="convert-from-select">
-                    <SelectValue placeholder="Source" />
+                    <SelectValue placeholder={t.auto} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto</SelectItem>
+                    <SelectItem value="auto">{t.auto}</SelectItem>
                     {adapters
-                      .filter((a) => a.capabilities.import)
+                      .filter((a) => a.enabled && a.capabilities.import)
                       .map((adapter) => {
                         const match = inspectResult?.candidates.find((c) => c.id === adapter.id);
                         return (
                           <SelectItem key={adapter.id} value={adapter.id}>
                             <span className="flex items-center gap-2">
-                              <AgentGlyph agent={adapter.id} className="h-3.5 w-3.5 text-[#8a8f98]" />
+                              <AgentGlyph agent={adapter.id} className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                               <span>{agentLabel(adapter.id)}</span>
                               {match && match.confidence >= 0.9 && (
                                 <span className="font-mono text-[10.5px] text-[#3ecf8e]">
@@ -179,15 +190,21 @@ export function ConvertDialog({
                   </SelectContent>
                 </Select>
 
-                <ArrowRight className="h-3.5 w-3.5 text-[#5b6069]" />
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
 
-                <Select value={to} onValueChange={setTo}>
+                <Select
+                  value={to}
+                  onValueChange={(next) => {
+                    setTo(next);
+                    setModel("");
+                  }}
+                >
                   <SelectTrigger aria-label="Target adapter" data-testid="convert-to-select">
-                    <SelectValue placeholder="Target" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {adapters
-                      .filter((a) => a.capabilities.export)
+                      .filter((a) => a.enabled && a.capabilities.export)
                       .map((adapter) => {
                         const driver = drivers.find((d) => d.id === adapter.id);
                         return (
@@ -196,7 +213,7 @@ export function ConvertDialog({
                               <span
                                 className={cn(
                                   "h-1.5 w-1.5 rounded-full",
-                                  driver?.available ? "bg-[#3ecf8e]" : "bg-[#3f434a]",
+                                  driver?.available ? "bg-[#3ecf8e]" : "bg-[var(--status-muted)]",
                                 )}
                               />
                               <span>{agentLabel(adapter.id)}</span>
@@ -211,16 +228,16 @@ export function ConvertDialog({
               {inspectResult?.preview && (
                 <div
                   data-testid="convert-preview"
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-white/[0.07] bg-[#0b0c0e] px-2.5 py-2 font-mono text-[11.5px] text-[#8a8f98]"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-2 font-mono text-[11.5px] text-[var(--text-secondary)]"
                 >
-                  <span className="text-[#d0d6e0]">{inspectResult.preview.agentFormatVersion}</span>
-                  <span>{inspectResult.preview.turns} turns</span>
+                  <span className="text-[var(--text-primary)]">{inspectResult.preview.agentFormatVersion}</span>
+                  <span>{t.turns(inspectResult.preview.turns)}</span>
                   {inspectResult.preview.model && <span>{inspectResult.preview.model}</span>}
                 </div>
               )}
 
               {inspectResult?.previewError && !error && (
-                <div className="flex items-start gap-2 rounded-lg border border-[#e5a93b]/30 bg-[#e5a93b]/[0.07] px-3 py-2 text-[12px] text-[#f0be67]">
+                <div className="flex items-start gap-2 rounded-lg border border-[#e5a93b]/30 bg-[#e5a93b]/[0.08] px-3 py-2 text-[12px] text-[#d4921e]">
                   <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <div className="min-w-0">
                     <span className="font-mono">{inspectResult.previewError.code}</span>
@@ -235,8 +252,8 @@ export function ConvertDialog({
                   <Input
                     value={cwd}
                     onChange={(event) => setCwd(event.target.value)}
-                    placeholder="Workspace directory"
-                    aria-label="Workspace directory"
+                    placeholder={t.workspaceDirectory}
+                    aria-label={t.workspaceDirectory}
                     data-testid="convert-cwd-input"
                     className="font-mono text-[12px]"
                   />
@@ -244,7 +261,7 @@ export function ConvertDialog({
                     type="button"
                     variant="secondary"
                     size="icon"
-                    aria-label="Choose workspace directory"
+                    aria-label={t.browse}
                     onClick={async () => {
                       const picked = await api.pickDirectory(cwd).catch(() => null);
                       if (picked) setCwd(picked);
@@ -254,13 +271,14 @@ export function ConvertDialog({
                     <FolderOpen className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                <Input
+
+                <ModelPicker
                   value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                  placeholder="Model (optional)"
-                  aria-label="Model"
-                  data-testid="convert-model-input"
-                  className="font-mono text-[12px]"
+                  models={targetModels}
+                  t={t}
+                  compact={false}
+                  onChange={setModel}
+                  testId="convert-model-picker"
                 />
               </div>
             </>
@@ -270,7 +288,7 @@ export function ConvertDialog({
             <div
               role="alert"
               data-testid="convert-error"
-              className="flex items-start gap-2 rounded-lg border border-[#e5484d]/30 bg-[#e5484d]/[0.08] px-3 py-2 text-[12px] text-[#ff878b]"
+              className="flex items-start gap-2 rounded-lg border border-[#e5484d]/30 bg-[#e5484d]/[0.08] px-3 py-2 text-[12px] text-[#e5484d]"
             >
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <div className="min-w-0">
@@ -283,7 +301,7 @@ export function ConvertDialog({
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t.cancel}
             </Button>
             <Button
               type="submit"
@@ -291,7 +309,7 @@ export function ConvertDialog({
               data-testid="convert-submit-btn"
             >
               {converting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>Convert</span>
+              <span>{t.convert}</span>
             </Button>
           </div>
         </form>

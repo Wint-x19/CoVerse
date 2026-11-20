@@ -1,6 +1,7 @@
 import * as React from "react";
-import { ArrowRightLeft, Cpu, FileUp, PanelRight, Plus, Search } from "lucide-react";
+import { ArrowRightLeft, FileUp, PanelRight, Plus, Search, Settings } from "lucide-react";
 import type { UiSession } from "../../shared/types.js";
+import type { I18nMessages } from "@/lib/i18n";
 import { agentLabel, cn } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
@@ -10,13 +11,14 @@ interface CommandPaletteProps {
   sessions: UiSession[];
   hasActiveSession: boolean;
   canHandoff: boolean;
+  t: I18nMessages;
   onOpenChange: (open: boolean) => void;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
   onImport: () => void;
   onHandoff: () => void;
   onToggleInspector: () => void;
-  onOpenEnvironment: () => void;
+  onOpenSettings: () => void;
 }
 
 interface PaletteItem {
@@ -32,13 +34,14 @@ export function CommandPalette({
   sessions,
   hasActiveSession,
   canHandoff,
+  t,
   onOpenChange,
   onSelectSession,
   onNewSession,
   onImport,
   onHandoff,
   onToggleInspector,
-  onOpenEnvironment,
+  onOpenSettings,
 }: CommandPaletteProps) {
   const [query, setQuery] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -54,8 +57,8 @@ export function CommandPalette({
     const actions: PaletteItem[] = [
       {
         id: "action-new",
-        label: "New session",
-        icon: <Plus className="h-3.5 w-3.5 text-[#8a8f98]" />,
+        label: t.actionNew,
+        icon: <Plus className="h-3.5 w-3.5 text-[var(--text-secondary)]" />,
         onSelect: () => {
           onNewSession();
           onOpenChange(false);
@@ -63,8 +66,8 @@ export function CommandPalette({
       },
       {
         id: "action-import",
-        label: "Import session file",
-        icon: <FileUp className="h-3.5 w-3.5 text-[#8a8f98]" />,
+        label: t.actionImport,
+        icon: <FileUp className="h-3.5 w-3.5 text-[var(--text-secondary)]" />,
         onSelect: () => {
           onOpenChange(false);
           onImport();
@@ -75,8 +78,8 @@ export function CommandPalette({
     if (canHandoff) {
       actions.push({
         id: "action-handoff",
-        label: "Handoff active session",
-        icon: <ArrowRightLeft className="h-3.5 w-3.5 text-[#8a8f98]" />,
+        label: t.actionHandoff,
+        icon: <ArrowRightLeft className="h-3.5 w-3.5 text-[var(--text-secondary)]" />,
         onSelect: () => {
           onOpenChange(false);
           onHandoff();
@@ -87,8 +90,8 @@ export function CommandPalette({
     if (hasActiveSession) {
       actions.push({
         id: "action-inspector",
-        label: "Toggle inspector",
-        icon: <PanelRight className="h-3.5 w-3.5 text-[#8a8f98]" />,
+        label: t.actionInspector,
+        icon: <PanelRight className="h-3.5 w-3.5 text-[var(--text-secondary)]" />,
         onSelect: () => {
           onOpenChange(false);
           onToggleInspector();
@@ -97,12 +100,12 @@ export function CommandPalette({
     }
 
     actions.push({
-      id: "action-env",
-      label: "Drivers & adapters",
-      icon: <Cpu className="h-3.5 w-3.5 text-[#8a8f98]" />,
+      id: "action-settings",
+      label: t.actionSettings,
+      icon: <Settings className="h-3.5 w-3.5 text-[var(--text-secondary)]" />,
       onSelect: () => {
         onOpenChange(false);
-        onOpenEnvironment();
+        onOpenSettings();
       },
     });
 
@@ -110,7 +113,7 @@ export function CommandPalette({
       id: `session-${session.id}`,
       label: session.title,
       meta: agentLabel(session.agent),
-      icon: <AgentGlyph agent={session.agent} className="text-[#8a8f98]" />,
+      icon: <AgentGlyph agent={session.agent} className="text-[var(--text-secondary)]" />,
       onSelect: () => {
         onSelectSession(session.id);
         onOpenChange(false);
@@ -129,11 +132,12 @@ export function CommandPalette({
     sessions,
     hasActiveSession,
     canHandoff,
+    t,
     onNewSession,
     onImport,
     onHandoff,
     onToggleInspector,
-    onOpenEnvironment,
+    onOpenSettings,
     onSelectSession,
     onOpenChange,
   ]);
@@ -163,18 +167,18 @@ export function CommandPalette({
         className="top-[24%] translate-y-0 max-w-[480px] overflow-hidden p-0"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <div className="flex items-center gap-2 border-b border-white/[0.07] px-3.5 h-11">
-          <Search className="h-3.5 w-3.5 text-[#6d727c]" />
+        <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-3.5 h-11">
+          <Search className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Jump to session or action…"
-            aria-label="Search commands and sessions"
+            placeholder={t.jumpPlaceholder}
+            aria-label={t.jumpPlaceholder}
             autoFocus
-            className="flex-1 bg-transparent text-[13.5px] text-[#f7f8f8] placeholder:text-[#5b6069] focus:outline-none"
+            className="flex-1 bg-transparent text-[13.5px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
           />
-          <kbd className="font-mono text-[10.5px] text-[#555a63]">ESC</kbd>
+          <kbd className="font-mono text-[10.5px] text-[var(--text-tertiary)]">ESC</kbd>
         </div>
 
         <div className="max-h-[300px] overflow-y-auto p-1.5">
@@ -186,14 +190,16 @@ export function CommandPalette({
               onClick={item.onSelect}
               className={cn(
                 "flex h-8 w-full items-center justify-between gap-2 rounded-md px-2.5 text-[13px] transition-colors cursor-pointer",
-                index === selectedIndex ? "bg-[#1a1c22] text-[#f7f8f8]" : "text-[#a8aeb8]",
+                index === selectedIndex
+                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+                  : "text-[var(--text-secondary)]",
               )}
             >
               <span className="flex min-w-0 items-center gap-2.5">
                 {item.icon}
                 <span className="truncate">{item.label}</span>
               </span>
-              {item.meta && <span className="shrink-0 font-mono text-[11px] text-[#6d727c]">{item.meta}</span>}
+              {item.meta && <span className="shrink-0 font-mono text-[11px] text-[var(--text-tertiary)]">{item.meta}</span>}
             </button>
           ))}
         </div>

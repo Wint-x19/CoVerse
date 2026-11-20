@@ -10,6 +10,7 @@ import {
   runEventChannel,
   UiService,
   UiStore,
+  type AppSettings,
   type BundleDetailResponse,
   type CapabilitiesResponse,
   type DesktopDialogs,
@@ -17,6 +18,7 @@ import {
   type IpcEnvelope,
   type IpcInvokeEventLike,
   type IpcMainLike,
+  type LocalSessionRef,
   type StreamEventPayload,
   type UiSession,
 } from "../dist/main/core.js";
@@ -92,6 +94,17 @@ function createFakeDriverPlugin(id: string): DriverPlugin {
       if (record.event === "done") return [{ type: "done" }];
       return [];
     },
+    listModels: async () => [{ id: `${id}-model-1`, label: `${id} Model 1`, isDefault: true }],
+    listLocalSessions: async () => [
+      {
+        id: `local-${id}-1`,
+        agent: id,
+        title: `Sample ${id} local session`,
+        path: path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl"),
+        updatedAt: "2026-11-20T00:00:00.000Z",
+        size: 1024,
+      },
+    ],
   };
 }
 
@@ -150,6 +163,35 @@ describe("CoVerse M4 desktop IPC & service", () => {
     if (capsRes.ok) {
       expect(capsRes.data.adapters.map((a) => a.id).sort()).toEqual(["antigravity", "claude-code", "codex"]);
       expect(capsRes.data.drivers.every((d) => d.available)).toBe(true);
+      expect(capsRes.data.drivers.every((d) => d.models.length === 1)).toBe(true);
+    }
+
+    // Settings: appearance, language, adapter plugin enable/disable
+    const defaultSettings = await invoke<AppSettings>(IPC_CHANNELS.getSettings);
+    expect(defaultSettings.ok).toBe(true);
+    const updatedSettings = await invoke<AppSettings>(IPC_CHANNELS.updateSettings, {
+      theme: "light",
+      language: "en",
+      disabledAdapters: ["codex"],
+    });
+    expect(updatedSettings.ok).toBe(true);
+    if (updatedSettings.ok) {
+      expect(updatedSettings.data.theme).toBe("light");
+      expect(updatedSettings.data.language).toBe("en");
+      expect(updatedSettings.data.disabledAdapters).toEqual(["codex"]);
+    }
+    const capsAfterDisable = await invoke<CapabilitiesResponse>(IPC_CHANNELS.capabilities, true);
+    expect(capsAfterDisable.ok).toBe(true);
+    if (capsAfterDisable.ok) {
+      expect(capsAfterDisable.data.adapters.find((a) => a.id === "codex")?.enabled).toBe(false);
+    }
+
+    // Local session discovery per agent
+    const localSessions = await invoke<LocalSessionRef[]>(IPC_CHANNELS.listLocalSessions, "claude-code");
+    expect(localSessions.ok).toBe(true);
+    if (localSessions.ok) {
+      expect(localSessions.data).toHaveLength(1);
+      expect(localSessions.data[0]?.agent).toBe("claude-code");
     }
 
     const picked = await invoke<string | null>(IPC_CHANNELS.pickDirectory, workDir);
@@ -214,6 +256,9 @@ describe("CoVerse M4 desktop IPC & service", () => {
       expect(convertRes.data.handoff?.nativeResume).toBe(false);
       expect(convertRes.data.handoff?.losses.dropped).toBe(0);
       expect(convertRes.data.handoff?.losses.downgraded).toBeGreaterThan(0);
+      // Converted conversation must populate readable historical user & assistant messages
+      expect(convertRes.data.messages.some((m) => m.role === "user" && m.historical)).toBe(true);
+      expect(convertRes.data.messages.some((m) => m.role === "assistant" && m.historical)).toBe(true);
 
       const bundleRes = await invoke<BundleDetailResponse>(IPC_CHANNELS.getBundle, convertRes.data.handoff!.bundleId);
       expect(bundleRes.ok).toBe(true);
@@ -269,7 +314,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
     if (done1?.type === "done") {
       expect(done1.session.bundlePending).toBe(false);
       expect(done1.session.targetSessionId).toBe("11111111-2222-4333-8444-555555555555");
-      expect(done1.session.messages[1]?.content).toBe("echo:claude-code:injected:claude-sonnet-4-6");
+      expect(done1.session.messages.at(-1)?.content).toBe("echo:claude-code:injected:claude-sonnet-4-6");
     }
 
     // 2. Follow-up resumes by UUID without re-injecting bundle
@@ -282,7 +327,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
     expect(events2.some((e) => e.type === "bundle")).toBe(false);
     const done2 = events2.find((e) => e.type === "done");
     if (done2?.type === "done") {
-      expect(done2.session.messages[3]?.content).toBe("echo:claude-code:resumed:claude-sonnet-4-6");
+      expect(done2.session.messages.at(-1)?.content).toBe("echo:claude-code:resumed:claude-sonnet-4-6");
     }
 
     // 3. Handoff active session to Antigravity

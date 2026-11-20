@@ -4,8 +4,14 @@ import claudeCode from "@coverse/adapter-claude-code";
 import antigravity from "@coverse/adapter-antigravity";
 
 export * from "../shared/types.js";
-export { UiStore } from "./store.js";
-export { UiService, decodeUploadedFiles, loadPathsAsFileSet, toDiagnostic } from "./service.js";
+export { UiStore, DEFAULT_SETTINGS } from "./store.js";
+export {
+  UiService,
+  csrTurnsToChatMessages,
+  decodeUploadedFiles,
+  loadPathsAsFileSet,
+  toDiagnostic,
+} from "./service.js";
 export {
   IPC_CHANNELS,
   registerIpcHandlers,

@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { SessionError, type FileSet } from "@coverse/core";
-import type { UiSession } from "../shared/types.js";
+import type { AppSettings, UiSession } from "../shared/types.js";
 
 const SAFE_ID = /^[a-zA-Z0-9_-]{4,64}$/;
 
@@ -11,14 +11,23 @@ interface PersistedState {
   sessions: UiSession[];
 }
 
+export const DEFAULT_SETTINGS: AppSettings = {
+  theme: "dark",
+  language: "zh-CN",
+  disabledAdapters: [],
+  driverExecutables: {},
+};
+
 export class UiStore {
   private writeQueue: Promise<void> = Promise.resolve();
   readonly bundlesDir: string;
   readonly statePath: string;
+  readonly settingsPath: string;
 
   constructor(readonly dataDir: string) {
     this.bundlesDir = path.join(dataDir, "bundles");
     this.statePath = path.join(dataDir, "sessions.json");
+    this.settingsPath = path.join(dataDir, "settings.json");
   }
 
   private assertSafeId(id: string, field: string): void {
@@ -29,6 +38,13 @@ export class UiStore {
 
   private async ensureDir(dir: string): Promise<void> {
     await fs.mkdir(dir, { recursive: true });
+  }
+
+  private async writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
+    await this.ensureDir(this.dataDir);
+    const temp = path.join(this.dataDir, `.tmp-${randomUUID()}.json`);
+    await fs.writeFile(temp, JSON.stringify(value, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
+    await fs.rename(temp, filePath);
   }
 
   private async readState(): Promise<PersistedState> {
@@ -47,17 +63,44 @@ export class UiStore {
     }
   }
 
-  private async writeStateAtomic(state: PersistedState): Promise<void> {
-    await this.ensureDir(this.dataDir);
-    const temp = path.join(this.dataDir, `.sessions-${randomUUID()}.tmp`);
-    await fs.writeFile(temp, JSON.stringify(state, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
-    await fs.rename(temp, this.statePath);
-  }
-
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.writeQueue.then(fn, fn);
     this.writeQueue = result.then(() => undefined, () => undefined);
     return result;
+  }
+
+  async getSettings(): Promise<AppSettings> {
+    try {
+      const raw = await fs.readFile(this.settingsPath, "utf8");
+      const parsed = JSON.parse(raw) as Partial<AppSettings>;
+      return {
+        theme: parsed.theme === "light" ? "light" : "dark",
+        language: parsed.language === "en" ? "en" : "zh-CN",
+        disabledAdapters: Array.isArray(parsed.disabledAdapters)
+          ? parsed.disabledAdapters.filter((v): v is string => typeof v === "string")
+          : [],
+        driverExecutables:
+          parsed.driverExecutables && typeof parsed.driverExecutables === "object"
+            ? Object.fromEntries(
+                Object.entries(parsed.driverExecutables).filter(
+                  ([k, v]) => typeof k === "string" && typeof v === "string" && v.trim().length > 0,
+                ),
+              )
+            : {},
+      };
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        return { ...DEFAULT_SETTINGS, disabledAdapters: [], driverExecutables: {} };
+      }
+      throw error;
+    }
+  }
+
+  async saveSettings(settings: AppSettings): Promise<AppSettings> {
+    return this.enqueue(async () => {
+      await this.writeJsonAtomic(this.settingsPath, settings);
+      return settings;
+    });
   }
 
   async listSessions(): Promise<UiSession[]> {
@@ -81,7 +124,7 @@ export class UiStore {
       } else {
         state.sessions.unshift(session);
       }
-      await this.writeStateAtomic(state);
+      await this.writeJsonAtomic(this.statePath, state);
       return session;
     });
   }
@@ -96,7 +139,7 @@ export class UiStore {
       }
       const next = updater(state.sessions[index]!);
       state.sessions[index] = next;
-      await this.writeStateAtomic(state);
+      await this.writeJsonAtomic(this.statePath, state);
       return next;
     });
   }
@@ -108,7 +151,7 @@ export class UiStore {
       const before = state.sessions.length;
       state.sessions = state.sessions.filter((item) => item.id !== id);
       if (state.sessions.length === before) return false;
-      await this.writeStateAtomic(state);
+      await this.writeJsonAtomic(this.statePath, state);
       return true;
     });
   }

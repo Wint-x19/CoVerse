@@ -18,8 +18,9 @@ import {
   type SessionDiagnostic,
   type Turn,
 } from "@coverse/core";
-import type { DriverRegistry } from "@coverse/drivers";
+import { createDriverRegistry, type DriverRegistry, type Executable } from "@coverse/drivers";
 import type {
+  AppSettings,
   BundleDetailResponse,
   BundleFileEntry,
   BundleStatistics,
@@ -30,7 +31,9 @@ import type {
   InspectCandidate,
   InspectPreview,
   InspectResponse,
+  LocalSessionRef,
   LossCounts,
+  ModelOption,
   StreamEventPayload,
   ToolActivity,
   UiSession,
@@ -108,9 +111,125 @@ async function existsLstat(filename: string) {
 }
 
 /**
- * Load local filesystem session inputs with snapshot stability checks and SQLite
- * companion file detection (-wal, -shm, -journal), mirroring session-cli.ts.
+ * Convert CSR turns into clean historical user/assistant ChatMessages so converted
+ * sessions immediately display readable conversation history in the main thread.
  */
+export function csrTurnsToChatMessages(
+  turns: readonly Turn[],
+  sourceAgent: string,
+  timestampFallback: string,
+): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+  const toolCallIndex = new Map<string, { message: ChatMessage; toolIdx: number }>();
+
+  const appendAssistant = (
+    textParts: string[],
+    reasoningParts: string[],
+    tools: ToolActivity[],
+    callIds: string[],
+  ) => {
+    const text = textParts.join("\n\n").trim();
+    const reasoning = reasoningParts.join("\n\n").trim();
+    if (!text && !reasoning && tools.length === 0) return;
+
+    // Merge consecutive tool-only or text-after-tool assistant records cleanly
+    const prev = messages.at(-1);
+    if (prev && prev.role === "assistant" && prev.historical && !prev.content && prev.tools && text && tools.length === 0) {
+      prev.content = text;
+      if (reasoning) prev.reasoning = prev.reasoning ? `${prev.reasoning}\n\n${reasoning}` : reasoning;
+      return;
+    }
+
+    const msg: ChatMessage = {
+      id: makeId("hist"),
+      role: "assistant",
+      content: text,
+      createdAt: timestampFallback,
+      agent: sourceAgent,
+      historical: true,
+      ...(reasoning ? { reasoning } : {}),
+      ...(tools.length > 0 ? { tools } : {}),
+    };
+    messages.push(msg);
+    if (msg.tools) {
+      callIds.forEach((callId, idx) => {
+        if (callId) toolCallIndex.set(callId, { message: msg, toolIdx: idx });
+      });
+    }
+  };
+
+  for (const turn of turns) {
+    if (turn.role === "system" || turn.role === "developer") continue;
+
+    if (turn.role === "user") {
+      const parts: string[] = [];
+      for (const block of turn.content) {
+        if (block.type === "text" && block.text.trim()) parts.push(block.text.trim());
+        else if (block.type === "attachment") parts.push(`[${block.path}]`);
+        else if (block.type === "image") parts.push(`[image: ${block.url}]`);
+      }
+      const text = parts.join("\n\n").trim();
+      if (text) {
+        messages.push({
+          id: makeId("hist"),
+          role: "user",
+          content: text,
+          createdAt: timestampFallback,
+          historical: true,
+        });
+      }
+      continue;
+    }
+
+    if (turn.role === "assistant") {
+      const textParts: string[] = [];
+      const reasoningParts: string[] = [];
+      const tools: ToolActivity[] = [];
+      const callIds: string[] = [];
+
+      for (const block of turn.content) {
+        if (block.type === "text" && block.text.trim()) {
+          textParts.push(block.text.trim());
+        } else if (block.type === "reasoning" && block.text.trim()) {
+          reasoningParts.push(block.text.trim());
+        } else if (block.type === "tool_call") {
+          tools.push({ name: block.name, state: "called", timestamp: timestampFallback });
+          callIds.push(block.id);
+        } else if (block.type === "tool_result") {
+          const linked = toolCallIndex.get(block.callId);
+          if (linked && linked.message.tools?.[linked.toolIdx]) {
+            linked.message.tools[linked.toolIdx]!.state = block.isError ? "failed" : "completed";
+          } else {
+            tools.push({
+              name: block.callId,
+              state: block.isError ? "failed" : "completed",
+              timestamp: timestampFallback,
+            });
+            callIds.push("");
+          }
+        } else if (block.type === "attachment") {
+          textParts.push(`[${block.path}]`);
+        }
+      }
+      appendAssistant(textParts, reasoningParts, tools, callIds);
+      continue;
+    }
+
+    if (turn.role === "tool") {
+      for (const block of turn.content) {
+        if (block.type === "tool_result") {
+          const linked = toolCallIndex.get(block.callId);
+          if (linked && linked.message.tools?.[linked.toolIdx]) {
+            linked.message.tools[linked.toolIdx]!.state = block.isError ? "failed" : "completed";
+          }
+        }
+      }
+    }
+  }
+
+  return messages;
+}
+
 export async function loadPathsAsFileSet(inputPaths: readonly string[]): Promise<FileSet> {
   if (!Array.isArray(inputPaths) || inputPaths.length === 0) {
     throw new SessionError("INVALID_INPUT", "/paths", "At least one file path is required");
@@ -242,24 +361,102 @@ export function toDiagnostic(error: unknown, fallbackPath = "/ipc"): SessionDiag
 
 export class UiService {
   private readonly activeRuns = new Map<string, AbortController>();
+  private readonly modelCache = new Map<string, ModelOption[]>();
+  private readonly customDriversInjected: boolean;
+  private drivers: DriverRegistry;
 
   constructor(
     readonly adapters: AdapterRegistry,
-    readonly drivers: DriverRegistry,
+    drivers: DriverRegistry | null,
     readonly store: UiStore,
     readonly defaultCwd: string,
-  ) {}
+  ) {
+    this.customDriversInjected = drivers !== null;
+    this.drivers = drivers ?? createDriverRegistry();
+  }
 
-  async getCapabilities(): Promise<CapabilitiesResponse> {
+  private async ensureDriversConfigured(): Promise<DriverRegistry> {
+    if (this.customDriversInjected) return this.drivers;
+    const settings = await this.store.getSettings();
+    const overrides: Record<string, Executable> = {};
+    for (const [id, execPath] of Object.entries(settings.driverExecutables)) {
+      if (execPath.trim()) {
+        overrides[id] = { command: execPath.trim() };
+      }
+    }
+    this.drivers = createDriverRegistry(overrides);
+    return this.drivers;
+  }
+
+  getSettings(): Promise<AppSettings> {
+    return this.store.getSettings();
+  }
+
+  async updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+    const current = await this.store.getSettings();
+    const next: AppSettings = {
+      theme: patch.theme === "light" || patch.theme === "dark" ? patch.theme : current.theme,
+      language: patch.language === "zh-CN" || patch.language === "en" ? patch.language : current.language,
+      disabledAdapters: Array.isArray(patch.disabledAdapters)
+        ? [...new Set(patch.disabledAdapters.filter((v): v is string => typeof v === "string"))]
+        : current.disabledAdapters,
+      driverExecutables:
+        patch.driverExecutables && typeof patch.driverExecutables === "object"
+          ? Object.fromEntries(
+              Object.entries(patch.driverExecutables)
+                .map(([k, v]): [string, string] => [k, typeof v === "string" ? v.trim() : ""])
+                .filter(([, v]) => v.length > 0),
+            )
+          : current.driverExecutables,
+    };
+    await this.store.saveSettings(next);
+    this.modelCache.clear();
+    if (!this.customDriversInjected) {
+      await this.ensureDriversConfigured();
+    }
+    return next;
+  }
+
+  async getCapabilities(refresh = false): Promise<CapabilitiesResponse> {
+    if (refresh) this.modelCache.clear();
+    const settings = await this.store.getSettings();
+    const disabled = new Set(settings.disabledAdapters);
+    const registry = await this.ensureDriversConfigured();
+
     const adapters = this.adapters.list().map((adapter) => ({
       id: adapter.id,
       displayName: adapter.displayName,
       status: adapter.status,
+      enabled: !disabled.has(adapter.id),
       supportedVersions: adapter.supportedVersions,
       capabilities: adapter.capabilities,
     }));
-    const drivers = await Promise.all(this.drivers.list().map((driver) => driver.probe()));
+
+    const drivers = await Promise.all(
+      registry.list().map(async (driver) => {
+        const probed = await driver.probe();
+        let models = this.modelCache.get(driver.id);
+        if (!models) {
+          models = await driver.listModels();
+          this.modelCache.set(driver.id, models);
+        }
+        const customExec = settings.driverExecutables[driver.id];
+        return {
+          ...probed,
+          ...(customExec ? { customExecutablePath: customExec } : {}),
+          models,
+        };
+      }),
+    );
+
     return { adapters, drivers, defaultCwd: this.defaultCwd };
+  }
+
+  async listLocalSessions(agent?: string): Promise<LocalSessionRef[]> {
+    const registry = await this.ensureDriversConfigured();
+    const targets = agent ? [registry.get(agent)] : registry.list();
+    const batches = await Promise.all(targets.map((driver) => driver.listLocalSessions(80)));
+    return batches.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   listSessions(): Promise<UiSession[]> {
@@ -278,7 +475,8 @@ export class UiService {
     cwd?: string;
     title?: string;
   }): Promise<UiSession> {
-    this.drivers.get(input.agent);
+    const registry = await this.ensureDriversConfigured();
+    registry.get(input.agent);
     const resolvedCwd = input.cwd
       ? (await resolveExistingDirectory(input.cwd)) ??
         (() => {
@@ -322,7 +520,8 @@ export class UiService {
           "Active sessions switch agents via handoff to preserve context and ledger honesty",
         );
       }
-      this.drivers.get(patch.agent);
+      const registry = await this.ensureDriversConfigured();
+      registry.get(patch.agent);
       nextAgent = patch.agent;
     }
     return this.store.mutateSession(id, (session) => {
@@ -366,7 +565,12 @@ export class UiService {
     files?: readonly UploadedFilePayload[];
   }): Promise<InspectResponse> {
     const files = await this.resolveInputFileSet(input);
-    const importable = this.adapters.list().filter((adapter) => adapter.capabilities.import);
+    const settings = await this.store.getSettings();
+    const disabled = new Set(settings.disabledAdapters);
+    const importable = this.adapters
+      .list()
+      .filter((adapter) => adapter.capabilities.import && !disabled.has(adapter.id));
+
     const evaluated = await Promise.all(
       importable.map(async (adapter) => {
         const result = await adapter.detect(files);
@@ -421,11 +625,11 @@ export class UiService {
     };
   }
 
-  private async detectSourceAdapter(files: FileSet): Promise<SessionAdapter> {
+  private async detectSourceAdapter(files: FileSet, disabled: Set<string>): Promise<SessionAdapter> {
     const candidates = await Promise.all(
       this.adapters
         .list()
-        .filter((adapter) => adapter.capabilities.import)
+        .filter((adapter) => adapter.capabilities.import && !disabled.has(adapter.id))
         .map(async (adapter) => ({ adapter, result: await adapter.detect(files) })),
     );
     candidates.sort((a, b) => b.result.confidence - a.result.confidence);
@@ -453,6 +657,7 @@ export class UiService {
     model?: string;
     title: string;
     sourceSessionId?: string;
+    initialMessages?: ChatMessage[];
   }): Promise<UiSession> {
     verifyInjectionBundle(input.artifacts, input.target.id);
     const bundleId = makeId("bnd");
@@ -508,7 +713,7 @@ export class UiService {
       cwd: resolvedCwd,
       bundlePending: true,
       handoff,
-      messages: [],
+      messages: input.initialMessages ?? [],
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -520,9 +725,29 @@ export class UiService {
       ...(request.paths ? { paths: request.paths } : {}),
       ...(request.files ? { files: request.files } : {}),
     });
+    const settings = await this.store.getSettings();
+    const disabled = new Set(settings.disabledAdapters);
+    if (disabled.has(request.to)) {
+      throw new SessionError("ADAPTER_DISABLED", `/adapters/${request.to}`, `Target adapter is disabled in settings: ${request.to}`);
+    }
     const target = this.adapters.get(request.to);
-    this.drivers.get(target.id);
-    const source = request.from === "auto" ? await this.detectSourceAdapter(files) : this.adapters.get(request.from);
+    const registry = await this.ensureDriversConfigured();
+    registry.get(target.id);
+
+    const source =
+      request.from === "auto"
+        ? await this.detectSourceAdapter(files, disabled)
+        : (() => {
+            if (disabled.has(request.from)) {
+              throw new SessionError(
+                "ADAPTER_DISABLED",
+                `/adapters/${request.from}`,
+                `Source adapter is disabled in settings: ${request.from}`,
+              );
+            }
+            return this.adapters.get(request.from);
+          })();
+
     const result = await convertSession({ source, target, artifacts: files });
     const firstUserText = result.session.turns
       .find((turn) => turn.role === "user")
@@ -531,6 +756,12 @@ export class UiService {
       firstUserText && firstUserText.type === "text"
         ? summarizeTitle(firstUserText.text, `${source.id} → ${target.id}`)
         : `${source.id} → ${target.id}`;
+    const initialMessages = csrTurnsToChatMessages(
+      result.session.turns,
+      source.id,
+      result.session.meta.createdAt ?? nowIso(),
+    );
+
     return this.persistBundleAsSession({
       artifacts: result.artifacts,
       target,
@@ -540,6 +771,7 @@ export class UiService {
       ...(request.cwd ? { requestedCwd: request.cwd } : {}),
       ...(request.model ? { model: request.model } : {}),
       title: request.title?.trim() || defaultTitle,
+      initialMessages,
     });
   }
 
@@ -548,13 +780,19 @@ export class UiService {
     options: { to: string; model?: string; cwd?: string; title?: string },
   ): Promise<UiSession> {
     const sourceSession = await this.getSession(sessionId);
+    const settings = await this.store.getSettings();
+    if (settings.disabledAdapters.includes(options.to)) {
+      throw new SessionError("ADAPTER_DISABLED", `/adapters/${options.to}`, `Target adapter is disabled in settings: ${options.to}`);
+    }
     const target = this.adapters.get(options.to);
-    this.drivers.get(target.id);
+    const registry = await this.ensureDriversConfigured();
+    registry.get(target.id);
 
     const turns: Turn[] = [];
     const inheritedLedger = emptyLedger();
     const inheritedDiagnostics: SessionDiagnostic[] = [];
     let sourceArtifacts: FileSet = [];
+    let loadedPriorTurns = false;
 
     if (sourceSession.handoff) {
       try {
@@ -564,6 +802,7 @@ export class UiService {
           const prevCsr = JSON.parse(new TextDecoder().decode(sessionBytes)) as CSR;
           if (Array.isArray(prevCsr.turns)) {
             for (const turn of prevCsr.turns) turns.push(turn);
+            loadedPriorTurns = true;
           }
         }
         sourceArtifacts = prevFiles
@@ -579,7 +818,11 @@ export class UiService {
       }
     }
 
-    for (const [index, message] of sourceSession.messages.entries()) {
+    const messagesToAppend = loadedPriorTurns
+      ? sourceSession.messages.filter((m) => !m.historical)
+      : sourceSession.messages;
+
+    for (const [index, message] of messagesToAppend.entries()) {
       const content: Turn["content"] = [];
       if (message.tools && message.tools.length > 0) {
         for (const [ti, tool] of message.tools.entries()) {
@@ -635,6 +878,12 @@ export class UiService {
       diagnostics: inheritedDiagnostics,
     });
 
+    const carriedMessages: ChatMessage[] = sourceSession.messages.map((m) => ({
+      ...m,
+      id: makeId("hist"),
+      historical: true,
+    }));
+
     return this.persistBundleAsSession({
       artifacts: exported.artifacts,
       target,
@@ -645,6 +894,7 @@ export class UiService {
       ...(options.model ? { model: options.model } : {}),
       title: options.title?.trim() || sourceSession.title,
       sourceSessionId: sourceSession.id,
+      initialMessages: carriedMessages,
     });
   }
 
@@ -699,7 +949,8 @@ export class UiService {
     }
 
     const session = await this.getSession(sessionId);
-    const driver = this.drivers.get(session.agent);
+    const registry = await this.ensureDriversConfigured();
+    const driver = registry.get(session.agent);
 
     const effectiveCwd = input.cwd?.trim() ? input.cwd.trim() : session.cwd;
     const resolvedCwd = await resolveExistingDirectory(effectiveCwd);
@@ -732,8 +983,9 @@ export class UiService {
       createdAt: nowIso(),
     };
 
+    const liveMessagesCount = session.messages.filter((m) => !m.historical).length;
     const nextTitle =
-      session.messages.length === 0 && (session.title === "New session" || !session.title)
+      liveMessagesCount === 0 && (session.title === "New session" || !session.title)
         ? summarizeTitle(promptText, session.title)
         : session.title;
 
