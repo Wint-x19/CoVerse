@@ -74,7 +74,15 @@ export interface Detection {
   diagnostics?: SessionDiagnostic[];
 }
 export interface ImportResult { session: CSR; ledger: LossLedger; diagnostics?: SessionDiagnostic[] }
-export interface ExportContext { ledger?: LossLedger; diagnostics?: readonly SessionDiagnostic[] }
+export interface ExportLossPolicy {
+  /** Explicitly allow omitting uninterpreted opaque/unknown blocks (archived in source/ and logged in LossLedger.dropped). */
+  omitOpaque?: boolean;
+}
+export interface ExportContext {
+  ledger?: LossLedger;
+  diagnostics?: readonly SessionDiagnostic[];
+  lossPolicy?: ExportLossPolicy;
+}
 export interface ExportResult { artifacts: FileSet; ledger: LossLedger; diagnostics?: SessionDiagnostic[] }
 
 /** All agent format knowledge lives in implementations outside core. */

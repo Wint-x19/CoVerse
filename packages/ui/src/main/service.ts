@@ -609,6 +609,19 @@ export class UiService {
       try {
         const imported = await detected.import(files);
         const resolvedLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
+        const opaqueCounts = new Map<string, number>();
+        for (const turn of imported.session.turns) {
+          for (const block of turn.content) {
+            if (block.type === "opaque") {
+              opaqueCounts.set(block.source, (opaqueCounts.get(block.source) ?? 0) + 1);
+            } else if (block.type === "unknown") {
+              opaqueCounts.set("unknown", (opaqueCounts.get("unknown") ?? 0) + 1);
+            }
+          }
+        }
+        const opaqueBlocks = [...opaqueCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([source, count]) => ({ source, count }));
         const canReference = Boolean(
           input.paths &&
             input.paths.length === 1 &&
@@ -625,6 +638,7 @@ export class UiService {
           ...(imported.session.meta.model ? { model: imported.session.meta.model } : {}),
           ...(imported.session.meta.createdAt ? { createdAt: imported.session.meta.createdAt } : {}),
           canReference,
+          ...(opaqueBlocks.length > 0 ? { opaqueBlocks } : {}),
           losses: countLedger(imported.ledger),
         };
       } catch (error) {
@@ -824,7 +838,12 @@ export class UiService {
       }
     }
 
-    const result = await convertSession({ source, target, artifacts: files });
+    const result = await convertSession({
+      source,
+      target,
+      artifacts: files,
+      ...(request.omitOpaque ? { lossPolicy: { omitOpaque: true } } : {}),
+    });
     const firstUserText = result.session.turns
       .find((turn) => turn.role === "user")
       ?.content.find((block) => block.type === "text");
@@ -947,7 +966,7 @@ export class UiService {
 
   async handoffSession(
     sessionId: string,
-    options: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
+    options: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean; omitOpaque?: boolean },
   ): Promise<UiSession> {
     const sourceSession = await this.getSession(sessionId);
     const settings = await this.store.getSettings();
@@ -1046,6 +1065,7 @@ export class UiService {
     const exported = await target.export(csr, {
       ledger: inheritedLedger,
       diagnostics: inheritedDiagnostics,
+      ...(options.omitOpaque !== false ? { lossPolicy: { omitOpaque: true } } : {}),
     });
 
     const carriedMessages: ChatMessage[] = sourceSession.messages.map((m) => ({

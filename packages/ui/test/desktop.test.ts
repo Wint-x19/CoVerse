@@ -346,6 +346,47 @@ describe("CoVerse M4 desktop IPC & service", () => {
     expect(matRes.data.handoff?.materialized).toBe(true);
     expect(matRes.data.bundlePending).toBe(false);
     expect(matRes.data.targetSessionId).toBe("11111111-2222-4333-8444-555555555555");
+
+    // 3. Session with encrypted reasoning (opaque block): inspect reports it, strict mode rejects with UNINTERPRETED_CONTENT,
+    // and explicit omitOpaque archives it and logs OPAQUE_ARCHIVED_ONLY in LossLedger.dropped
+    const opaqueFile = path.join(projectDir, "rollout-encrypted.jsonl");
+    const encryptedRow = JSON.stringify({
+      type: "response_item",
+      payload: { type: "reasoning", summary: [{ type: "summary_text", text: "Plan step." }], encrypted_content: "ciphertext" },
+    });
+    await fs.writeFile(opaqueFile, [JSON.stringify(head), ...lines.slice(1), encryptedRow].join("\n") + "\n", "utf8");
+
+    const opaqueInspect = await invoke<InspectResponse>(IPC_CHANNELS.inspectSource, { paths: [opaqueFile] });
+    expect(opaqueInspect.ok).toBe(true);
+    if (opaqueInspect.ok) {
+      expect(opaqueInspect.data.preview?.opaqueBlocks).toEqual([{ source: "codex:encrypted-reasoning", count: 1 }]);
+    }
+
+    const strictOpaque = await invoke<UiSession>(IPC_CHANNELS.convertSource, {
+      from: "auto",
+      to: "antigravity",
+      paths: [opaqueFile],
+      cwd: realProjectDir,
+      materialize: false,
+    });
+    expect(strictOpaque.ok).toBe(false);
+    if (!strictOpaque.ok) {
+      expect(strictOpaque.error.code).toBe("UNINTERPRETED_CONTENT");
+    }
+
+    const allowedOpaque = await invoke<UiSession>(IPC_CHANNELS.convertSource, {
+      from: "auto",
+      to: "antigravity",
+      paths: [opaqueFile],
+      cwd: realProjectDir,
+      materialize: false,
+      omitOpaque: true,
+    });
+    expect(allowedOpaque.ok).toBe(true);
+    if (allowedOpaque.ok) {
+      expect(allowedOpaque.data.handoff?.losses.dropped).toBe(1);
+      expect(allowedOpaque.data.handoff?.ledger.dropped[0]?.code).toBe("OPAQUE_ARCHIVED_ONLY");
+    }
   });
 
   it("streams bundle injection, resumes by target UUID, supports handoff, and cancels cleanly over IPC", async () => {

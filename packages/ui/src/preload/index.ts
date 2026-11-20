@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { SessionDiagnostic } from "@coverse/core";
 import type {
   AppSettings,
   BundleDetailResponse,
@@ -16,27 +15,36 @@ import type {
 } from "../shared/types.js";
 import { IPC_CHANNELS, runEventChannel } from "../main/ipc.js";
 
-class DesktopIpcError extends Error {
-  constructor(readonly diagnostic: SessionDiagnostic) {
-    super(diagnostic.message);
-    this.name = "DesktopIpcError";
+/**
+ * Return structured IpcEnvelope directly across contextBridge so Electron never
+ * strips SessionDiagnostic fields when cloning Error instances between worlds.
+ */
+async function invoke<T>(channel: string, ...args: unknown[]): Promise<IpcEnvelope<T>> {
+  try {
+    const envelope = (await ipcRenderer.invoke(channel, ...args)) as IpcEnvelope<T>;
+    if (!envelope || typeof envelope !== "object" || !("ok" in envelope)) {
+      return {
+        ok: false,
+        error: {
+          code: "IPC_ERROR",
+          path: channel,
+          message: "Invalid IPC response from desktop main process",
+          severity: "error",
+        },
+      };
+    }
+    return envelope;
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "IPC_ERROR",
+        path: channel,
+        message: error instanceof Error ? error.message : String(error),
+        severity: "error",
+      },
+    };
   }
-}
-
-async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  const envelope = (await ipcRenderer.invoke(channel, ...args)) as IpcEnvelope<T>;
-  if (!envelope || typeof envelope !== "object" || !("ok" in envelope)) {
-    throw new DesktopIpcError({
-      code: "IPC_ERROR",
-      path: channel,
-      message: "Invalid IPC response from desktop main process",
-      severity: "error",
-    });
-  }
-  if (!envelope.ok) {
-    throw new DesktopIpcError(envelope.error);
-  }
-  return envelope.data;
 }
 
 let runCounter = 0;
@@ -60,9 +68,7 @@ const bridge: CoverseDesktopBridge = {
 
   updateSession: (id, patch) => invoke<UiSession>(IPC_CHANNELS.updateSession, id, patch),
 
-  deleteSession: async (id) => {
-    await invoke<{ deleted: boolean }>(IPC_CHANNELS.deleteSession, id);
-  },
+  deleteSession: (id) => invoke<{ deleted: boolean }>(IPC_CHANNELS.deleteSession, id),
 
   inspectSource: (input: { paths?: string[]; files?: UploadedFilePayload[] }) =>
     invoke(IPC_CHANNELS.inspectSource, input),
@@ -85,7 +91,7 @@ const bridge: CoverseDesktopBridge = {
     };
     ipcRenderer.on(channel, listener);
     try {
-      await invoke<{ finished: boolean }>(IPC_CHANNELS.runStart, runId, {
+      return await invoke<{ finished: boolean }>(IPC_CHANNELS.runStart, runId, {
         sessionId: id,
         prompt: input.prompt,
         ...(input.model !== undefined ? { model: input.model } : {}),
@@ -102,9 +108,7 @@ const bridge: CoverseDesktopBridge = {
 
   pickExecutable: (defaultPath) => invoke<string | null>(IPC_CHANNELS.pickExecutable, defaultPath),
 
-  setWindowTheme: async (theme: ThemeMode) => {
-    await invoke<{ applied: boolean }>(IPC_CHANNELS.setWindowTheme, theme);
-  },
+  setWindowTheme: (theme: ThemeMode) => invoke<{ applied: boolean }>(IPC_CHANNELS.setWindowTheme, theme),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 };

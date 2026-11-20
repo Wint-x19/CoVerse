@@ -151,6 +151,11 @@ export interface InspectCandidate {
   diagnostics?: SessionDiagnostic[];
 }
 
+export interface OpaqueBlockSummary {
+  source: string;
+  count: number;
+}
+
 export interface InspectPreview {
   id: string;
   agent: string;
@@ -161,6 +166,7 @@ export interface InspectPreview {
   model?: string;
   createdAt?: string;
   canReference?: boolean;
+  opaqueBlocks?: OpaqueBlockSummary[];
   losses: LossCounts;
 }
 
@@ -181,6 +187,7 @@ export interface ConvertRequest {
   model?: string;
   title?: string;
   materialize?: boolean;
+  omitOpaque?: boolean;
 }
 
 export interface BundleDetailResponse {
@@ -220,35 +227,35 @@ export interface RunMessageInput {
 
 export interface CoverseDesktopBridge {
   readonly platform: string;
-  capabilities(refresh?: boolean): Promise<CapabilitiesResponse>;
-  getSettings(): Promise<AppSettings>;
-  updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
-  listLocalSessions(agent?: string): Promise<LocalSessionRef[]>;
-  listSessions(): Promise<UiSession[]>;
-  getSession(id: string): Promise<UiSession>;
-  createSession(input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<UiSession>;
+  capabilities(refresh?: boolean): Promise<IpcEnvelope<CapabilitiesResponse>>;
+  getSettings(): Promise<IpcEnvelope<AppSettings>>;
+  updateSettings(patch: Partial<AppSettings>): Promise<IpcEnvelope<AppSettings>>;
+  listLocalSessions(agent?: string): Promise<IpcEnvelope<LocalSessionRef[]>>;
+  listSessions(): Promise<IpcEnvelope<UiSession[]>>;
+  getSession(id: string): Promise<IpcEnvelope<UiSession>>;
+  createSession(input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<IpcEnvelope<UiSession>>;
   updateSession(
     id: string,
     patch: { title?: string; model?: string | null; cwd?: string; agent?: string },
-  ): Promise<UiSession>;
-  deleteSession(id: string): Promise<void>;
-  inspectSource(input: { paths?: string[]; files?: UploadedFilePayload[] }): Promise<InspectResponse>;
-  convertSource(input: ConvertRequest): Promise<UiSession>;
+  ): Promise<IpcEnvelope<UiSession>>;
+  deleteSession(id: string): Promise<IpcEnvelope<{ deleted: boolean }>>;
+  inspectSource(input: { paths?: string[]; files?: UploadedFilePayload[] }): Promise<IpcEnvelope<InspectResponse>>;
+  convertSource(input: ConvertRequest): Promise<IpcEnvelope<UiSession>>;
   handoffSession(
     id: string,
-    input: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
-  ): Promise<UiSession>;
-  materializeSession(id: string): Promise<UiSession>;
-  getBundle(bundleId: string): Promise<BundleDetailResponse>;
-  abortSession(id: string): Promise<{ aborted: boolean }>;
+    input: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean; omitOpaque?: boolean },
+  ): Promise<IpcEnvelope<UiSession>>;
+  materializeSession(id: string): Promise<IpcEnvelope<UiSession>>;
+  getBundle(bundleId: string): Promise<IpcEnvelope<BundleDetailResponse>>;
+  abortSession(id: string): Promise<IpcEnvelope<{ aborted: boolean }>>;
   streamMessage(
     id: string,
     input: { prompt: string; model?: string; cwd?: string },
     onEvent: (event: StreamEventPayload) => void,
-  ): Promise<void>;
-  pickDirectory(defaultPath?: string): Promise<string | null>;
-  pickSessionFiles(): Promise<PickedFile[]>;
-  pickExecutable(defaultPath?: string): Promise<string | null>;
-  setWindowTheme(theme: ThemeMode): Promise<void>;
+  ): Promise<IpcEnvelope<{ finished: boolean }>>;
+  pickDirectory(defaultPath?: string): Promise<IpcEnvelope<string | null>>;
+  pickSessionFiles(): Promise<IpcEnvelope<PickedFile[]>>;
+  pickExecutable(defaultPath?: string): Promise<IpcEnvelope<string | null>>;
+  setWindowTheme(theme: ThemeMode): Promise<IpcEnvelope<{ applied: boolean }>>;
   getPathForFile(file: File): string;
 }

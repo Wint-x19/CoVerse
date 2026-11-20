@@ -31,6 +31,11 @@ describe("injection bundle contract", () => {
   it("rejects opaque semantics and missing attachments instead of silently archiving them", () => {
     const s = session(); s.turns[0]!.content = [{ type: "unknown", raw: { new: true } }];
     expect(() => buildInjectionBundle(s, "x")).toThrow("Uninterpreted");
+    const allowed = buildInjectionBundle(s, "x", { lossPolicy: { omitOpaque: true } });
+    expect(allowed.ledger.dropped).toHaveLength(1);
+    expect(allowed.ledger.dropped[0]?.code).toBe("UNKNOWN_ARCHIVED_ONLY");
+    expect(read(allowed.artifacts, "context.md")).toContain("Omitted uninterpreted content");
+    expect(verifyInjectionBundle(allowed.artifacts, "x").losses.dropped).toBe(1);
     s.turns[0]!.content = [{ type: "attachment", path: "absent", mediaType: "text/plain" }];
     expect(() => buildInjectionBundle(s, "x")).toThrow("Attachment not supplied");
   });

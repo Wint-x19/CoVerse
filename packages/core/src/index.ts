@@ -1,4 +1,4 @@
-import type { FileSet, LossLedger, SessionAdapter } from "./types.js";
+import type { ExportLossPolicy, FileSet, LossLedger, SessionAdapter } from "./types.js";
 export type * from "./types.js";
 export type * from "./protocol.js";
 export * from "./session.js";
@@ -67,13 +67,18 @@ export async function convertSession(input: {
   source: SessionAdapter;
   target: SessionAdapter;
   artifacts: FileSet;
+  lossPolicy?: ExportLossPolicy;
 }) {
-  const { source, target, artifacts } = input;
+  const { source, target, artifacts, lossPolicy } = input;
   if (!source.capabilities.import) throw new AdapterUnavailableError(source.id, "import");
   if (!target.capabilities.export) throw new AdapterUnavailableError(target.id, "export");
   validateFileSet(artifacts);
   const imported = await source.import(artifacts);
-  const exported = await target.export(imported.session, { ledger: imported.ledger, diagnostics: imported.diagnostics ?? [] });
+  const exported = await target.export(imported.session, {
+    ledger: imported.ledger,
+    diagnostics: imported.diagnostics ?? [],
+    ...(lossPolicy ? { lossPolicy } : {}),
+  });
   validateFileSet(exported.artifacts);
   return {
     session: imported.session,

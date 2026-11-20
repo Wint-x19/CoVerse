@@ -185,13 +185,14 @@ if (!gotLock) {
             const result = await mainWindow!.webContents.executeJavaScript(
               `(async () => {
                 if (!window.coverse) throw new Error("Missing window.coverse preload bridge");
-                const caps = await window.coverse.capabilities();
-                const settings = await window.coverse.getSettings();
-                const local = await window.coverse.listLocalSessions();
+                const unwrap = (env) => { if (!env || !env.ok) throw new Error(env?.error?.message || "IPC failed"); return env.data; };
+                const caps = unwrap(await window.coverse.capabilities());
+                const settings = unwrap(await window.coverse.getSettings());
+                const local = unwrap(await window.coverse.listLocalSessions());
                 let converted = null;
                 const fixture = ${JSON.stringify(fixturePath ?? null)};
                 if (fixture) {
-                  const session = await window.coverse.convertSource({ from: "auto", to: "codex", paths: [fixture], materialize: false });
+                  const session = unwrap(await window.coverse.convertSource({ from: "auto", to: "codex", paths: [fixture], materialize: false }));
                   converted = { id: session.id, from: session.handoff?.from, to: session.handoff?.to, turns: session.handoff?.statistics.turns, messages: session.messages.length, losses: session.handoff?.losses };
                 }
                 return { platform: window.coverse.platform, theme: settings.theme, language: settings.language, adapters: caps.adapters.map(a => a.id), drivers: caps.drivers.map(d => ({ id: d.id, available: d.available, models: d.models.length })), localSessionsCount: local.length, converted };

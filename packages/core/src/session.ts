@@ -63,7 +63,20 @@ export function buildInjectionBundle(session: CSR, target: string, context: Expo
           break;
         }
         case "image": text = `Historical image reference: ${block.url}`; ledger.downgraded.push({ code: "IMAGE_REFERENCE", path, reason: "Image reference is preserved; the target must load it separately. No remote resource was fetched" }); break;
-        case "opaque": case "unknown": throw new SessionError("UNINTERPRETED_CONTENT", path, "Uninterpreted content is archived but cannot be represented faithfully in an injection bundle");
+        case "opaque":
+        case "unknown": {
+          if (!context.lossPolicy?.omitOpaque) {
+            throw new SessionError("UNINTERPRETED_CONTENT", path, "Uninterpreted content is archived but cannot be represented faithfully in an injection bundle");
+          }
+          const sourceLabel = block.type === "opaque" ? block.source : "unknown";
+          text = `[Omitted uninterpreted content (${sourceLabel}); original record is archived in session.json and source/.]`;
+          ledger.dropped.push({
+            code: block.type === "opaque" ? "OPAQUE_ARCHIVED_ONLY" : "UNKNOWN_ARCHIVED_ONLY",
+            path,
+            reason: `Uninterpreted ${sourceLabel} block was omitted from textual context by explicit loss policy; original record remains archived in session.json/source/`,
+          });
+          break;
+        }
       }
       lines.push(quoted(text), "");
     }

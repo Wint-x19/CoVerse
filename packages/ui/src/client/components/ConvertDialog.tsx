@@ -61,6 +61,7 @@ export function ConvertDialog({
   const [model, setModel] = React.useState("");
   const [cwd, setCwd] = React.useState(defaultCwd);
   const [materialize, setMaterialize] = React.useState(true);
+  const [omitOpaque, setOmitOpaque] = React.useState(false);
   const [converting, setConverting] = React.useState(false);
   const [error, setError] = React.useState<SessionDiagnostic | null>(null);
 
@@ -73,6 +74,7 @@ export function ConvertDialog({
     setFrom("auto");
     setModel("");
     setMaterialize(true);
+    setOmitOpaque(false);
     setCwd(source.originalCwd || defaultCwd);
 
     api
@@ -85,6 +87,9 @@ export function ConvertDialog({
         setInspectResult(result);
         const detected = result.detected;
         if (detected) setFrom(detected);
+        if (result.preview?.opaqueBlocks && result.preview.opaqueBlocks.length > 0) {
+          setOmitOpaque(true);
+        }
 
         // Default to original project directory whenever available
         if (result.preview?.cwd) setCwd(result.preview.cwd);
@@ -148,6 +153,7 @@ export function ConvertDialog({
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
         ...(model.trim() ? { model: model.trim() } : {}),
         materialize: isReferenceImport ? false : materialize,
+        ...(omitOpaque ? { omitOpaque: true } : {}),
       });
       onConverted(session);
       onOpenChange(false);
@@ -317,6 +323,35 @@ export function ConvertDialog({
                   onChange={setModel}
                   testId="convert-model-picker"
                 />
+
+                {!isReferenceImport &&
+                  ((inspectResult?.preview?.opaqueBlocks && inspectResult.preview.opaqueBlocks.length > 0) ||
+                    error?.code === "UNINTERPRETED_CONTENT") && (
+                    <div
+                      data-testid="convert-opaque-notice"
+                      className="flex flex-col gap-2 rounded-md border border-[#e5a93b]/35 bg-[#e5a93b]/[0.07] px-2.5 py-2 text-[12px]"
+                    >
+                      {inspectResult?.preview?.opaqueBlocks && inspectResult.preview.opaqueBlocks.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 font-mono text-[11px] text-[#d4921e]">
+                          {inspectResult.preview.opaqueBlocks.map((item) => (
+                            <span key={item.source}>
+                              {item.source} × {item.count}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <label className="flex items-center justify-between gap-2 text-[var(--text-primary)] cursor-pointer select-none">
+                        <span>{t.omitOpaque}</span>
+                        <input
+                          type="checkbox"
+                          checked={omitOpaque}
+                          onChange={(e) => setOmitOpaque(e.target.checked)}
+                          data-testid="convert-omit-opaque-checkbox"
+                          className="h-3.5 w-3.5 accent-[#5e6ad2] cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                  )}
 
                 {!isReferenceImport && targetDriver?.available && (
                   <label className="flex items-center justify-between rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-2 text-[12px] text-[var(--text-secondary)] cursor-pointer select-none">

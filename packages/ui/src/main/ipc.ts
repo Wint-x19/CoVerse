@@ -134,7 +134,7 @@ export function registerIpcHandlers(
     wrap("/sessions/handoff", () =>
       service.handoffSession(
         String(id),
-        input as { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
+        input as { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean; omitOpaque?: boolean },
       ),
     ),
   );
