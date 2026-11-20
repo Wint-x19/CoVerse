@@ -1,6 +1,6 @@
 # CoVerse 可行性分析与工程设计
 
-> 状态：v0.7，M4 平台 Web UI 已交付（2026-11-20）。M2 格式依据见 §9，M3 验收记录见 §10，M3.1 专项见 §11，M4 实施记录见 §12。
+> 状态：v0.7，M4 可安装桌面应用已交付（2026-11-20）。M2 格式依据见 §9，M3 验收记录见 §10，M3.1 专项见 §11，M4 实施记录见 §12。
 > 配套规范见 [AGENTS.md](AGENTS.md)。
 
 ---
@@ -165,7 +165,7 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 | **M2** 首批适配器 | 仅 Codex、Claude Code、Antigravity：先打通 Codex ↔ Claude Code，再基于实测接入 Antigravity；import → CSR → 注入式引导包 | `coverse convert-session` CLI + 版本化金样本；未验证能力明确不可用 | IR 表达力与 LossLedger；Antigravity 格式可行性 |
 | **M3** 端到端闭环 | drivers + 注入式续接：A 会话 → 在 B agent 里继续对话 | 端到端演示（含 LossLedger 报告） | 核心价值主张成立与否 |
 | **M3.1** 端到端转换质量 | 三家互转六方向配对、真实来源、长窗、换模型、Skill/MCP 与三端接力 | 离线门槛、可重复的真机评测和逐轮质量报告 | 信息最早在哪一层丢失，接收端能否继续任务 |
-| **M4** 平台 UI | Web：会话列表、拖拽转换、选 agent/model 直聊 | 可日常自用的 Web 平台 | 产品形态 |
+| **M4** 平台 UI | 可安装桌面客户端（Electron）：会话列表、拖拽转换、选 agent/model 直聊 | 可本地安装的桌面应用 | 产品形态 |
 | **M5** 原生合成 | codex / claude-code 的原生会话文件合成 + resume；失败回退注入 | 无缝续接（F2/F3 级） | 最高风险项后置攻坚 |
 | **M6** 顶层+生态 | modes/skills 映射；首批三家插件完善；插件贡献模板与漂移 CI | 社区可贡献体系；其它 Agent 另行确认 | 生态化 |
 
@@ -222,8 +222,8 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 
 离线核对源工件、CSR、引导包、驱动 stdin 和目标事件。真机分别测量历史事实、目标运行状态以及下一轮任务完成情况，并使用等价历史对照。按来源文件、方向、模型、长度和具体失败阶段保留分母。七项契约缺陷修复后通过回归；尚未解释的原生块继续明确拒绝。完整数据见 [首轮报告](tools/m31/REPORT-2026-11-18.md) 和 [实验协议](tools/m31/README.md)。
 
-## 12. M4 平台 UI 实施记录
+## 12. M4 桌面应用实施记录
 
-1. **架构边界**：`@coverse/ui` 分为本地 Node HTTP/SSE 服务（`src/server/`）与 React + Tailwind + shadcn/ui 前端（`src/client/`）。服务端通过组合根复用三家适配器与 `@coverse/drivers`，不含特定厂商格式解析；前端与自动化代理共享同一套结构化 JSON/SSE 契约。
-2. **核心体验**：提供会话侧栏、直聊流式渲染与中止、全局拖拽导入（`.jsonl` / `.jsonl.zst` / `.db`）自动探测转换、会话内跨 Agent Handoff、以及右侧审计抽屉（完整 LossLedger、`context.md`、清单文件与等价 CLI 命令）。
-3. **保真度与安全**：转换仍走 `convertSession` 与 `verifyInjectionBundle`，默认绑定 `127.0.0.1`，状态和引导包落盘至被忽略的 `.local/ui/`，复用本地 CLI 登录态，不经手密钥。`nativeResume` 保持 `false`。详见 [UI 说明](packages/ui/README.md)。
+1. **交付形态**：按 [AGENTS.md](AGENTS.md) 规范，CoVerse UI 以**可本地安装的原生桌面应用**（Electron + `electron-builder`）交付，不以浏览器网页形式运行。主进程（`packages/ui/src/main/`）通过组合根直接调用三家适配器与 `@coverse/drivers`；渲染进程（React + Tailwind + shadcn/ui）仅经 `preload` / `contextBridge` 严格类型化 IPC 通信。
+2. **核心体验**：无边框原生标题栏、会话侧栏、原生文件/目录选择器、全局拖拽导入（直接读取磁盘路径并检验 SQLite `-wal`/`-shm`/`-journal` 伴随文件）、直聊流式渲染与中止、会话内跨 Agent Handoff，以及右侧审计抽屉（完整 LossLedger、`context.md`、清单文件与等价 CLI 命令）。
+3. **保真度与安全**：转换仍走 `convertSession` 与 `verifyInjectionBundle`，运行状态与引导包写入系统用户数据目录，退出时统一中止活跃子进程树，复用本地 CLI 登录态，不经手密钥，`nativeResume` 保持 `false`。支持打包 Windows NSIS 安装程序、macOS DMG 与 Linux AppImage/DEB。详见 [桌面应用说明](packages/ui/README.md)。

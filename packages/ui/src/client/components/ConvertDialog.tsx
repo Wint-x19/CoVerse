@@ -1,10 +1,11 @@
 import * as React from "react";
-import { AlertCircle, ArrowRight, FileText, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, FileText, FolderOpen, Loader2 } from "lucide-react";
 import type { SessionDiagnostic } from "@coverse/core";
 import type {
   AdapterSummary,
   DriverSummary,
   InspectResponse,
+  PickedFile,
   UiSession,
   UploadedFilePayload,
 } from "../../shared/types.js";
@@ -16,10 +17,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
+export interface PendingImportSource {
+  items: PickedFile[];
+  paths?: string[];
+  files?: UploadedFilePayload[];
+}
+
 interface ConvertDialogProps {
   open: boolean;
-  files: UploadedFilePayload[];
-  fileSizes: Record<string, number>;
+  source: PendingImportSource | null;
   adapters: AdapterSummary[];
   drivers: DriverSummary[];
   defaultCwd: string;
@@ -29,8 +35,7 @@ interface ConvertDialogProps {
 
 export function ConvertDialog({
   open,
-  files,
-  fileSizes,
+  source,
   adapters,
   drivers,
   defaultCwd,
@@ -47,7 +52,7 @@ export function ConvertDialog({
   const [error, setError] = React.useState<SessionDiagnostic | null>(null);
 
   React.useEffect(() => {
-    if (!open || files.length === 0) return;
+    if (!open || !source || source.items.length === 0) return;
     let active = true;
     setInspecting(true);
     setInspectResult(null);
@@ -57,7 +62,10 @@ export function ConvertDialog({
     setCwd(defaultCwd);
 
     api
-      .inspectFiles(files)
+      .inspectSource({
+        ...(source.paths ? { paths: source.paths } : {}),
+        ...(source.files ? { files: source.files } : {}),
+      })
       .then((result) => {
         if (!active) return;
         setInspectResult(result);
@@ -65,7 +73,6 @@ export function ConvertDialog({
         if (detected) setFrom(detected);
         if (result.preview?.cwd) setCwd(result.preview.cwd);
 
-        // Pick a sensible default target: first available driver different from source, else first available
         const availableOther = drivers.find((d) => d.available && d.id !== detected);
         const anyOther = adapters.find((a) => a.capabilities.export && a.id !== detected);
         const firstAvailable = drivers.find((d) => d.available);
@@ -86,18 +93,19 @@ export function ConvertDialog({
     return () => {
       active = false;
     };
-  }, [open, files, defaultCwd, drivers, adapters]);
+  }, [open, source, defaultCwd, drivers, adapters]);
 
   const handleConvert = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!to || files.length === 0) return;
+    if (!to || !source) return;
     setConverting(true);
     setError(null);
     try {
-      const session = await api.convertFiles({
+      const session = await api.convertSource({
         from,
         to,
-        files,
+        ...(source.paths ? { paths: source.paths } : {}),
+        ...(source.files ? { files: source.files } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
         ...(model.trim() ? { model: model.trim() } : {}),
       });
@@ -122,18 +130,16 @@ export function ConvertDialog({
         </DialogHeader>
 
         <form onSubmit={handleConvert} className="mt-4 flex flex-col gap-4">
-          {/* File list */}
           <div className="flex flex-wrap gap-1.5">
-            {files.map((file) => (
+            {(source?.items ?? []).map((item) => (
               <div
-                key={file.path}
+                key={item.path}
+                title={item.path}
                 className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#0b0c0e] px-2 py-1 font-mono text-[11.5px] text-[#c8cdd6]"
               >
                 <FileText className="h-3 w-3 text-[#6d727c]" />
-                <span className="max-w-[220px] truncate">{file.path}</span>
-                {fileSizes[file.path] !== undefined && (
-                  <span className="text-[#5b6069]">{formatBytes(fileSizes[file.path]!)}</span>
-                )}
+                <span className="max-w-[220px] truncate">{item.name}</span>
+                {item.size > 0 && <span className="text-[#5b6069]">{formatBytes(item.size)}</span>}
               </div>
             ))}
           </div>
@@ -145,7 +151,6 @@ export function ConvertDialog({
             </div>
           ) : (
             <>
-              {/* Source -> Target row */}
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <Select value={from} onValueChange={setFrom}>
                   <SelectTrigger aria-label="Source adapter" data-testid="convert-from-select">
@@ -203,7 +208,6 @@ export function ConvertDialog({
                 </Select>
               </div>
 
-              {/* Compact detected metadata strip */}
               {inspectResult?.preview && (
                 <div
                   data-testid="convert-preview"
@@ -226,16 +230,30 @@ export function ConvertDialog({
                 </div>
               )}
 
-              {/* Workspace + Model */}
               <div className="grid grid-cols-1 gap-2.5">
-                <Input
-                  value={cwd}
-                  onChange={(event) => setCwd(event.target.value)}
-                  placeholder="Workspace directory"
-                  aria-label="Workspace directory"
-                  data-testid="convert-cwd-input"
-                  className="font-mono text-[12px]"
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={cwd}
+                    onChange={(event) => setCwd(event.target.value)}
+                    placeholder="Workspace directory"
+                    aria-label="Workspace directory"
+                    data-testid="convert-cwd-input"
+                    className="font-mono text-[12px]"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Choose workspace directory"
+                    onClick={async () => {
+                      const picked = await api.pickDirectory(cwd).catch(() => null);
+                      if (picked) setCwd(picked);
+                    }}
+                    className="h-8 w-8 shrink-0"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
                 <Input
                   value={model}
                   onChange={(event) => setModel(event.target.value)}

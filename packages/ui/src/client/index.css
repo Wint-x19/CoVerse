@@ -66,6 +66,14 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Electron frameless titlebar drag regions */
+.cv-drag {
+  -webkit-app-region: drag;
+}
+.cv-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Subtle Linear-style scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

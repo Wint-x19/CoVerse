@@ -1,24 +1,28 @@
 {
   "name": "@coverse/ui",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "CoVerse desktop application",
   "private": true,
   "type": "module",
+  "main": "./dist/main/index.mjs",
   "exports": {
     ".": {
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
+      "types": "./dist/main/core.d.ts",
+      "import": "./dist/main/core.js"
     }
   },
-  "bin": {
-    "coverse-ui": "./dist/server/bin.js"
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.server.json && vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.server.json && tsc --noEmit -p tsconfig.client.json",
-    "dev": "vite",
-    "start": "node dist/server/bin.js"
+    "build": "tsc -p tsconfig.main.json && node scripts/bundle-electron.mjs && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.client.json",
+    "start": "electron .",
+    "dev": "node scripts/dev.mjs",
+    "pack": "pnpm build && electron-builder --dir --config electron-builder.yml",
+    "dist": "pnpm build && electron-builder --config electron-builder.yml"
   },
   "dependencies": {
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
     "@coverse/adapter-antigravity": "workspace:*",
     "@coverse/adapter-claude-code": "workspace:*",
     "@coverse/adapter-codex": "workspace:*",
@@ -33,20 +37,21 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@tailwindcss/vite": "^4.1.8",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.5.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron": "^35.2.1",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.2",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.3.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.1.8",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0",
-    "@vitejs/plugin-react": "^4.5.2",
+    "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.8",
     "vite": "^6.3.5"
   }

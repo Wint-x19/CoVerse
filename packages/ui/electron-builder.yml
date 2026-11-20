@@ -1,0 +1,38 @@
+appId: dev.coverse.desktop
+productName: CoVerse
+copyright: Copyright © 2026 CoVerse
+asar: true
+asarUnpack:
+  - "node_modules/sql.js/**"
+directories:
+  output: release
+  buildResources: resources
+files:
+  - "dist/main/index.mjs"
+  - "dist/preload/index.cjs"
+  - "dist/renderer/**"
+  - "package.json"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: CoVerse
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  icon: resources/icon.png
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  icon: resources/icon.png

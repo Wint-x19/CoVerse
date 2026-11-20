@@ -1,5 +1,6 @@
 import { ArrowRight, FileUp, Plus, Search, Trash2 } from "lucide-react";
 import type { DriverSummary, UiSession } from "../../shared/types.js";
+import { api } from "@/lib/api";
 import { agentLabel, cn, relativeTime } from "@/lib/utils";
 import { AgentGlyph, BrandMark } from "./AgentGlyph";
 import { Button } from "./ui/button";
@@ -43,13 +44,18 @@ export function Sidebar({
       data-testid="sidebar"
       className="flex h-full w-[236px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0b0c0e] select-none"
     >
-      {/* Header */}
-      <div className="flex h-11 items-center justify-between px-3 border-b border-white/[0.06]">
+      {/* Header (draggable native desktop titlebar region) */}
+      <div
+        className={cn(
+          "cv-drag flex h-11 items-center justify-between border-b border-white/[0.06] pr-3",
+          api.platform === "darwin" ? "pl-[76px]" : "pl-3",
+        )}
+      >
         <div className="flex items-center gap-2 text-[13px] font-semibold tracking-[-0.02em] text-[#f7f8f8]">
           <BrandMark className="text-[#f7f8f8]" />
           <span>CoVerse</span>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="cv-no-drag flex items-center gap-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

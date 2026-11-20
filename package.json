@@ -17,8 +17,10 @@
     "fixtures:collect": "tsx tools/fixtures/cli.ts",
     "fixtures:check": "tsx tools/fixtures/check-cli.ts",
     "coverse": "node packages/cli/dist/bin.js",
-    "ui": "node packages/ui/dist/server/bin.js",
-    "ui:dev": "pnpm --filter @coverse/ui dev"
+    "ui": "pnpm --filter @coverse/ui start",
+    "ui:dev": "pnpm --filter @coverse/ui dev",
+    "ui:pack": "pnpm --filter @coverse/ui pack",
+    "ui:dist": "pnpm --filter @coverse/ui dist"
   },
   "devDependencies": {
     "@coverse/core": "workspace:*",

@@ -2,6 +2,7 @@
 node_modules/
 dist/
 build/
+release/
 coverage/
 
 # 环境与密钥（严禁提交）

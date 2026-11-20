@@ -7,7 +7,6 @@ import {
   AdapterUnavailableError,
   convertSession,
   emptyLedger,
-  isRecord,
   SessionError,
   validateFileSet,
   verifyInjectionBundle,
@@ -92,6 +91,118 @@ async function resolveExistingDirectory(candidate: string | undefined): Promise<
   return undefined;
 }
 
+function statUnchanged(
+  a: Awaited<ReturnType<typeof fs.lstat>>,
+  b: Awaited<ReturnType<typeof fs.lstat>>,
+): boolean {
+  return a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs;
+}
+
+async function existsLstat(filename: string) {
+  try {
+    return await fs.lstat(filename);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Load local filesystem session inputs with snapshot stability checks and SQLite
+ * companion file detection (-wal, -shm, -journal), mirroring session-cli.ts.
+ */
+export async function loadPathsAsFileSet(inputPaths: readonly string[]): Promise<FileSet> {
+  if (!Array.isArray(inputPaths) || inputPaths.length === 0) {
+    throw new SessionError("INVALID_INPUT", "/paths", "At least one file path is required");
+  }
+
+  async function inventory() {
+    const found: { absolute: string; relative: string }[] = [];
+    const seen = new Set<string>();
+
+    async function add(absolute: string, relative: string): Promise<void> {
+      const info = await fs.lstat(absolute);
+      if (info.isSymbolicLink()) {
+        throw new SessionError("INVALID_INPUT", relative, "Symlink inputs are not stable snapshots");
+      }
+      if (info.isDirectory()) {
+        for (const entry of (await fs.readdir(absolute)).sort()) {
+          await add(path.join(absolute, entry), relative ? `${relative}/${entry}` : entry);
+        }
+      } else if (info.isFile()) {
+        const real = await fs.realpath(absolute);
+        const key = process.platform === "win32" ? real.toLowerCase() : real;
+        if (seen.has(key)) throw new SessionError("INVALID_INPUT", relative, "An input file was supplied more than once");
+        seen.add(key);
+        found.push({ absolute, relative });
+      } else {
+        throw new SessionError("INVALID_INPUT", relative, "Input must contain only regular files");
+      }
+    }
+
+    for (const rawInput of inputPaths) {
+      const absolute = path.resolve(rawInput);
+      const info = await existsLstat(absolute);
+      if (!info) {
+        throw new SessionError("INVALID_INPUT", rawInput, `Input does not exist: ${rawInput}`);
+      }
+      await add(absolute, info.isDirectory() ? "" : path.basename(absolute));
+      if (info.isFile() && absolute.endsWith(".db")) {
+        for (const suffix of ["-wal", "-shm", "-journal"]) {
+          const companion = absolute + suffix;
+          if (await existsLstat(companion)) {
+            const real = await fs.realpath(companion);
+            const key = process.platform === "win32" ? real.toLowerCase() : real;
+            if (!seen.has(key)) await add(companion, path.basename(companion));
+          }
+        }
+      }
+    }
+    return found;
+  }
+
+  const inventoryBefore = await inventory();
+  if (inventoryBefore.length === 0) {
+    throw new SessionError("INVALID_INPUT", "/input", "No input files found");
+  }
+  const before = await Promise.all(inventoryBefore.map((f) => fs.lstat(f.absolute)));
+  const files: { path: string; bytes: Uint8Array }[] = [];
+  for (const [i, file] of inventoryBefore.entries()) {
+    const handle = await fs.open(file.absolute, "r");
+    try {
+      const openedBefore = await handle.stat();
+      if (openedBefore.size !== before[i]!.size || openedBefore.mtimeMs !== before[i]!.mtimeMs) {
+        throw new SessionError("UNSTABLE_INPUT", file.relative, "Input changed before reading");
+      }
+      files.push({ path: file.relative, bytes: new Uint8Array(await handle.readFile()) });
+      if (!statUnchanged(openedBefore, await handle.stat())) {
+        throw new SessionError("UNSTABLE_INPUT", file.relative, "Input changed while reading");
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+  const inventoryAfter = await inventory();
+  if (JSON.stringify(inventoryBefore) !== JSON.stringify(inventoryAfter)) {
+    throw new SessionError("UNSTABLE_INPUT", "/input", "Input file set changed while reading");
+  }
+  for (const [i, file] of inventoryBefore.entries()) {
+    if (!statUnchanged(before[i]!, await fs.lstat(file.absolute))) {
+      throw new SessionError("UNSTABLE_INPUT", file.relative, "Input changed while capturing file set");
+    }
+  }
+  try {
+    validateFileSet(files);
+  } catch {
+    throw new SessionError(
+      "INVALID_INPUT",
+      "/input",
+      "Input paths collide or are not portable; select a directory to preserve relative paths",
+    );
+  }
+  return files;
+}
+
 export function decodeUploadedFiles(uploads: readonly UploadedFilePayload[]): FileSet {
   if (!Array.isArray(uploads) || uploads.length === 0) {
     throw new SessionError("INVALID_INPUT", "/files", "At least one file is required");
@@ -116,7 +227,7 @@ export function decodeUploadedFiles(uploads: readonly UploadedFilePayload[]): Fi
   return files;
 }
 
-export function toDiagnostic(error: unknown, fallbackPath = "/api"): SessionDiagnostic {
+export function toDiagnostic(error: unknown, fallbackPath = "/ipc"): SessionDiagnostic {
   if (error instanceof SessionError) return error.diagnostic;
   if (error instanceof AdapterUnavailableError) {
     return { code: error.code, path: fallbackPath, message: error.message, severity: "error" };
@@ -237,8 +348,24 @@ export class UiService {
     if (!removed) throw new SessionError("NOT_FOUND", `/sessions/${id}`, `Session not found: ${id}`);
   }
 
-  async inspectFiles(uploads: readonly UploadedFilePayload[]): Promise<InspectResponse> {
-    const files = decodeUploadedFiles(uploads);
+  private async resolveInputFileSet(input: {
+    paths?: readonly string[];
+    files?: readonly UploadedFilePayload[];
+  }): Promise<FileSet> {
+    if (input.paths && input.paths.length > 0) {
+      return loadPathsAsFileSet(input.paths);
+    }
+    if (input.files && input.files.length > 0) {
+      return decodeUploadedFiles(input.files);
+    }
+    throw new SessionError("INVALID_INPUT", "/input", "At least one file or path is required");
+  }
+
+  async inspectSource(input: {
+    paths?: readonly string[];
+    files?: readonly UploadedFilePayload[];
+  }): Promise<InspectResponse> {
+    const files = await this.resolveInputFileSet(input);
     const importable = this.adapters.list().filter((adapter) => adapter.capabilities.import);
     const evaluated = await Promise.all(
       importable.map(async (adapter) => {
@@ -388,8 +515,11 @@ export class UiService {
     return this.store.upsertSession(session);
   }
 
-  async convertFiles(request: ConvertRequest): Promise<UiSession> {
-    const files = decodeUploadedFiles(request.files);
+  async convertSource(request: ConvertRequest): Promise<UiSession> {
+    const files = await this.resolveInputFileSet({
+      ...(request.paths ? { paths: request.paths } : {}),
+      ...(request.files ? { files: request.files } : {}),
+    });
     const target = this.adapters.get(request.to);
     this.drivers.get(target.id);
     const source = request.from === "auto" ? await this.detectSourceAdapter(files) : this.adapters.get(request.from);
@@ -433,9 +563,7 @@ export class UiService {
         if (sessionBytes) {
           const prevCsr = JSON.parse(new TextDecoder().decode(sessionBytes)) as CSR;
           if (Array.isArray(prevCsr.turns)) {
-            for (const turn of prevCsr.turns) {
-              turns.push(turn);
-            }
+            for (const turn of prevCsr.turns) turns.push(turn);
           }
         }
         sourceArtifacts = prevFiles
@@ -467,15 +595,13 @@ export class UiService {
           });
         }
       }
-      if (message.content) {
-        content.push({ type: "text", text: message.content });
-      }
+      if (message.content) content.push({ type: "text", text: message.content });
       if (content.length > 0) {
         turns.push({
           id: `ui-${message.id}`,
           role: message.role,
           content,
-          origin: { artifact: "coverse-ui/sessions.json", record: index + 1, kind: "message" },
+          origin: { artifact: "coverse-desktop/sessions.json", record: index + 1, kind: "message" },
         });
       }
     }
@@ -489,14 +615,14 @@ export class UiService {
       meta: {
         id: sourceSession.targetSessionId ?? sourceSession.id,
         agent: sourceSession.agent,
-        agentFormatVersion: "coverse-ui-1.0",
+        agentFormatVersion: "coverse-desktop-1.0",
         cwd: sourceSession.cwd,
         ...(sourceSession.model ? { model: sourceSession.model } : {}),
         createdAt: sourceSession.createdAt,
       },
       turns,
       xExtensions: {
-        "x-coverse-ui": {
+        "x-coverse-desktop": {
           sourceUiSessionId: sourceSession.id,
           ...(sourceSession.targetSessionId ? { targetSessionId: sourceSession.targetSessionId } : {}),
         },
@@ -513,7 +639,7 @@ export class UiService {
       artifacts: exported.artifacts,
       target,
       from: sourceSession.agent,
-      fromFormat: "coverse-ui-1.0",
+      fromFormat: "coverse-desktop-1.0",
       sourceCwd: sourceSession.cwd,
       ...(options.cwd ? { requestedCwd: options.cwd } : {}),
       ...(options.model ? { model: options.model } : {}),
@@ -549,6 +675,13 @@ export class UiService {
     if (!controller) return false;
     controller.abort();
     return true;
+  }
+
+  abortAll(): void {
+    for (const controller of this.activeRuns.values()) {
+      controller.abort();
+    }
+    this.activeRuns.clear();
   }
 
   async runTurn(
@@ -665,16 +798,13 @@ export class UiService {
         ...(latestUsage ? { usage: latestUsage } : {}),
       };
 
-      const saved = await this.store.mutateSession(sessionId, (current) => {
-        const updated: UiSession = {
-          ...current,
-          ...(acquiredSessionId ? { targetSessionId: acquiredSessionId } : {}),
-          bundlePending: false,
-          messages: [...current.messages, assistantMessage],
-          updatedAt: nowIso(),
-        };
-        return updated;
-      });
+      const saved = await this.store.mutateSession(sessionId, (current) => ({
+        ...current,
+        ...(acquiredSessionId ? { targetSessionId: acquiredSessionId } : {}),
+        bundlePending: false,
+        messages: [...current.messages, assistantMessage],
+        updatedAt: nowIso(),
+      }));
       emit({ type: "done", session: saved });
     } catch (error) {
       const diagnostic = toDiagnostic(error, "/run");
@@ -708,8 +838,4 @@ export class UiService {
       this.activeRuns.delete(sessionId);
     }
   }
-}
-
-export function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return isRecord(value as never);
 }

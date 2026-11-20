@@ -1,6 +1,7 @@
 import * as React from "react";
-import { ArrowUp, Cpu, FileUp, Folder, Square } from "lucide-react";
+import { ArrowUp, Cpu, FileUp, Folder, FolderOpen, Square } from "lucide-react";
 import type { DriverSummary } from "../../shared/types.js";
+import { api } from "@/lib/api";
 import { agentLabel, cn, shortPath } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
 import { Button } from "./ui/button";
@@ -224,7 +225,23 @@ export function Composer({
                   className="font-mono text-[12px]"
                   autoFocus
                 />
-                <div className="flex justify-end">
+                <div className="flex justify-between gap-1.5">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={async () => {
+                      const picked = await api.pickDirectory(cwdDraft || cwd).catch(() => null);
+                      if (picked) {
+                        setCwdDraft(picked);
+                        onCwdChange(picked);
+                        setCwdOpen(false);
+                      }
+                    }}
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                    <span>Browse</span>
+                  </Button>
                   <Button type="submit" size="xs">
                     Apply
                   </Button>

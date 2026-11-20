@@ -6,7 +6,8 @@
   },
   "include": [
     "src/shared/**/*.ts",
-    "src/server/**/*.ts"
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts"
   ],
   "exclude": [
     "**/*.test.ts"

@@ -1,176 +1,121 @@
 import type { SessionDiagnostic } from "@coverse/core";
 import type {
-  ApiErrorEnvelope,
   BundleDetailResponse,
   CapabilitiesResponse,
   ConvertRequest,
+  CoverseDesktopBridge,
   InspectResponse,
+  PickedFile,
   StreamEventPayload,
   UiSession,
   UploadedFilePayload,
 } from "../../shared/types.js";
 
 export class ApiClientError extends Error {
-  constructor(readonly diagnostic: SessionDiagnostic, readonly status: number) {
+  constructor(readonly diagnostic: SessionDiagnostic) {
     super(diagnostic.message);
     this.name = "ApiClientError";
   }
 }
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  const text = await response.text();
-  const payload = text ? (JSON.parse(text) as unknown) : {};
-  if (!response.ok) {
-    const envelope = payload as Partial<ApiErrorEnvelope>;
-    const diagnostic: SessionDiagnostic = envelope.error ?? {
-      code: "HTTP_ERROR",
-      path: url,
-      message: response.statusText || `Request failed (${response.status})`,
+function desktopBridge(): CoverseDesktopBridge {
+  if (!window.coverse) {
+    throw new ApiClientError({
+      code: "DESKTOP_BRIDGE_UNAVAILABLE",
+      path: "/bridge",
+      message: "CoVerse must run inside the desktop application",
       severity: "error",
-    };
-    throw new ApiClientError(diagnostic, response.status);
+    });
   }
-  return payload as T;
+  return window.coverse;
+}
+
+function normalizeError(error: unknown, fallbackPath: string): ApiClientError {
+  if (error instanceof ApiClientError) return error;
+  if (error && typeof error === "object" && "diagnostic" in error) {
+    const diagnostic = (error as { diagnostic: SessionDiagnostic }).diagnostic;
+    if (diagnostic && typeof diagnostic.code === "string" && typeof diagnostic.message === "string") {
+      return new ApiClientError(diagnostic);
+    }
+  }
+  return new ApiClientError({
+    code: "IPC_ERROR",
+    path: fallbackPath,
+    message: error instanceof Error ? error.message : String(error),
+    severity: "error",
+  });
+}
+
+async function call<T>(path: string, fn: (bridge: CoverseDesktopBridge) => Promise<T>): Promise<T> {
+  try {
+    return await fn(desktopBridge());
+  } catch (error) {
+    throw normalizeError(error, path);
+  }
 }
 
 export const api = {
-  capabilities: () => requestJson<CapabilitiesResponse>("/api/capabilities"),
+  get platform(): string {
+    return window.coverse?.platform ?? "win32";
+  },
 
-  listSessions: async () => (await requestJson<{ sessions: UiSession[] }>("/api/sessions")).sessions,
+  capabilities: (): Promise<CapabilitiesResponse> =>
+    call("/capabilities", (b) => b.capabilities()),
 
-  getSession: async (id: string) =>
-    (await requestJson<{ session: UiSession }>(`/api/sessions/${encodeURIComponent(id)}`)).session,
+  listSessions: (): Promise<UiSession[]> =>
+    call("/sessions", (b) => b.listSessions()),
 
-  createSession: async (input: { agent: string; model?: string; cwd?: string; title?: string }) =>
-    (
-      await requestJson<{ session: UiSession }>("/api/sessions", {
-        method: "POST",
-        body: JSON.stringify(input),
-      })
-    ).session,
+  getSession: (id: string): Promise<UiSession> =>
+    call(`/sessions/${id}`, (b) => b.getSession(id)),
 
-  updateSession: async (
+  createSession: (input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<UiSession> =>
+    call("/sessions/create", (b) => b.createSession(input)),
+
+  updateSession: (
     id: string,
     patch: { title?: string; model?: string | null; cwd?: string; agent?: string },
-  ) =>
-    (
-      await requestJson<{ session: UiSession }>(`/api/sessions/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      })
-    ).session,
+  ): Promise<UiSession> =>
+    call(`/sessions/${id}`, (b) => b.updateSession(id, patch)),
 
-  deleteSession: (id: string) =>
-    requestJson<{ deleted: boolean }>(`/api/sessions/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    }),
+  deleteSession: (id: string): Promise<void> =>
+    call(`/sessions/${id}`, (b) => b.deleteSession(id)),
 
-  inspectFiles: (files: UploadedFilePayload[]) =>
-    requestJson<InspectResponse>("/api/sessions/inspect", {
-      method: "POST",
-      body: JSON.stringify({ files }),
-    }),
+  inspectSource: (input: { paths?: string[]; files?: UploadedFilePayload[] }): Promise<InspectResponse> =>
+    call("/sessions/inspect", (b) => b.inspectSource(input)),
 
-  convertFiles: async (input: ConvertRequest) =>
-    (
-      await requestJson<{ session: UiSession }>("/api/sessions/convert", {
-        method: "POST",
-        body: JSON.stringify(input),
-      })
-    ).session,
+  convertSource: (input: ConvertRequest): Promise<UiSession> =>
+    call("/sessions/convert", (b) => b.convertSource(input)),
 
-  handoffSession: async (
+  handoffSession: (
     id: string,
     input: { to: string; model?: string; cwd?: string; title?: string },
-  ) =>
-    (
-      await requestJson<{ session: UiSession }>(`/api/sessions/${encodeURIComponent(id)}/handoff`, {
-        method: "POST",
-        body: JSON.stringify(input),
-      })
-    ).session,
+  ): Promise<UiSession> =>
+    call(`/sessions/${id}/handoff`, (b) => b.handoffSession(id, input)),
 
-  getBundle: (bundleId: string) =>
-    requestJson<BundleDetailResponse>(`/api/bundles/${encodeURIComponent(bundleId)}`),
+  getBundle: (bundleId: string): Promise<BundleDetailResponse> =>
+    call(`/bundles/${bundleId}`, (b) => b.getBundle(bundleId)),
 
-  abortSession: (id: string) =>
-    requestJson<{ aborted: boolean }>(`/api/sessions/${encodeURIComponent(id)}/abort`, {
-      method: "POST",
-      body: "{}",
-    }),
+  abortSession: (id: string): Promise<{ aborted: boolean }> =>
+    call(`/sessions/${id}/abort`, (b) => b.abortSession(id)),
 
-  async streamMessage(
+  streamMessage: (
     id: string,
     input: { prompt: string; model?: string; cwd?: string },
     onEvent: (event: StreamEventPayload) => void,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/messages`, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "text/event-stream" },
-      body: JSON.stringify(input),
-      ...(signal ? { signal } : {}),
-    });
+  ): Promise<void> =>
+    call(`/sessions/${id}/messages`, (b) => b.streamMessage(id, input, onEvent)),
 
-    if (!response.ok) {
-      const text = await response.text();
-      const envelope = (text ? JSON.parse(text) : {}) as Partial<ApiErrorEnvelope>;
-      throw new ApiClientError(
-        envelope.error ?? {
-          code: "HTTP_ERROR",
-          path: `/api/sessions/${id}/messages`,
-          message: response.statusText || `Request failed (${response.status})`,
-          severity: "error",
-        },
-        response.status,
-      );
-    }
+  pickDirectory: (defaultPath?: string): Promise<string | null> =>
+    call("/dialog/directory", (b) => b.pickDirectory(defaultPath)),
 
-    if (!response.body) {
-      throw new ApiClientError(
-        { code: "STREAM_ERROR", path: "/stream", message: "Empty event stream", severity: "error" },
-        500,
-      );
-    }
+  pickSessionFiles: (): Promise<PickedFile[]> =>
+    call("/dialog/files", (b) => b.pickSessionFiles()),
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const flushBlock = (block: string) => {
-      const dataLines = block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart());
-      if (dataLines.length === 0) return;
-      const parsed = JSON.parse(dataLines.join("\n")) as StreamEventPayload;
-      onEvent(parsed);
-    };
-
+  getPathForFile: (file: File): string => {
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary !== -1) {
-          const block = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          if (block.trim()) flushBlock(block);
-          boundary = buffer.indexOf("\n\n");
-        }
-      }
-      buffer += decoder.decode();
-      if (buffer.trim()) flushBlock(buffer);
-    } finally {
-      reader.releaseLock();
+      return desktopBridge().getPathForFile(file);
+    } catch {
+      return "";
     }
   },
 };

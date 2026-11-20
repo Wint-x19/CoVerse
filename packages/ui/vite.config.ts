@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   root: path.resolve(import.meta.dirname),
+  base: "./",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -12,18 +13,12 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/client"),
+    outDir: path.resolve(import.meta.dirname, "dist/renderer"),
     emptyOutDir: true,
     sourcemap: true,
   },
   server: {
     port: 5173,
-    strictPort: false,
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:4173",
-        changeOrigin: true,
-      },
-    },
+    strictPort: true,
   },
 });

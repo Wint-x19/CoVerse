@@ -1,0 +1,195 @@
+import * as fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { createDriverRegistry } from "@coverse/drivers";
+import type { PickedFile } from "../shared/types.js";
+import { createAdapterRegistry, registerIpcHandlers, UiService, UiStore, type DesktopDialogs } from "./core.js";
+
+let mainWindow: BrowserWindow | null = null;
+let service: UiService | null = null;
+
+function resolveDataDir(): string {
+  if (process.env.COVERSE_DATA_DIR) {
+    return path.resolve(process.env.COVERSE_DATA_DIR);
+  }
+  return path.join(app.getPath("userData"), "data");
+}
+
+function resolveDefaultCwd(): string {
+  if (process.env.COVERSE_CWD) {
+    return path.resolve(process.env.COVERSE_CWD);
+  }
+  return app.isPackaged ? os.homedir() : process.cwd();
+}
+
+const isSmokeCheck = process.argv.includes("--smoke-check");
+
+function getArgValue(flag: string): string | undefined {
+  const idx = process.argv.indexOf(flag);
+  return idx >= 0 ? process.argv[idx + 1] : undefined;
+}
+
+function createWindow(): BrowserWindow {
+  const isMac = process.platform === "darwin";
+
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 860,
+    minHeight: 580,
+    backgroundColor: "#08090a",
+    show: false,
+    autoHideMenuBar: true,
+    title: "CoVerse",
+    titleBarStyle: isMac ? "hiddenInset" : "hidden",
+    ...(isMac
+      ? { trafficLightPosition: { x: 14, y: 15 } }
+      : {
+          titleBarOverlay: {
+            color: "#08090a",
+            symbolColor: "#8a8f98",
+            height: 43,
+          },
+        }),
+    webPreferences: {
+      preload: path.resolve(import.meta.dirname, "../preload/index.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  win.once("ready-to-show", () => {
+    if (!isSmokeCheck) win.show();
+  });
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+
+  const devUrl = process.env.COVERSE_RENDERER_URL;
+  if (devUrl) {
+    void win.loadURL(devUrl);
+  } else {
+    void win.loadFile(path.resolve(import.meta.dirname, "../renderer/index.html"));
+  }
+
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
+  });
+
+  return win;
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+
+  app.whenReady().then(() => {
+    const store = new UiStore(resolveDataDir());
+    service = new UiService(
+      createAdapterRegistry(),
+      createDriverRegistry(),
+      store,
+      resolveDefaultCwd(),
+    );
+
+    const dialogs: DesktopDialogs = {
+      async pickDirectory(defaultPath?: string) {
+        const result = await dialog.showOpenDialog(mainWindow ?? undefined!, {
+          ...(defaultPath ? { defaultPath } : {}),
+          properties: ["openDirectory"],
+        });
+        if (result.canceled || result.filePaths.length === 0) return null;
+        return result.filePaths[0] ?? null;
+      },
+
+      async pickSessionFiles(): Promise<PickedFile[]> {
+        const result = await dialog.showOpenDialog(mainWindow ?? undefined!, {
+          properties: ["openFile", "multiSelections"],
+          filters: [
+            { name: "Agent Sessions", extensions: ["jsonl", "zst", "db"] },
+            { name: "All Files", extensions: ["*"] },
+          ],
+        });
+        if (result.canceled || result.filePaths.length === 0) return [];
+        const picked: PickedFile[] = [];
+        for (const filePath of result.filePaths) {
+          try {
+            const info = await fs.stat(filePath);
+            picked.push({ path: filePath, name: path.basename(filePath), size: info.size });
+          } catch {
+            picked.push({ path: filePath, name: path.basename(filePath), size: 0 });
+          }
+        }
+        return picked;
+      },
+    };
+
+    registerIpcHandlers(ipcMain, service, dialogs);
+    mainWindow = createWindow();
+
+    if (isSmokeCheck) {
+      const fixturePath = getArgValue("--smoke-fixture");
+      const consoleErrors: string[] = [];
+      mainWindow.webContents.on("console-message", (event) => {
+        if (event.level === "error") consoleErrors.push(event.message);
+      });
+      mainWindow.webContents.once("did-finish-load", () => {
+        void (async () => {
+          try {
+            const result = await mainWindow!.webContents.executeJavaScript(
+              `(async () => {
+                if (!window.coverse) throw new Error("Missing window.coverse preload bridge");
+                const caps = await window.coverse.capabilities();
+                let converted = null;
+                const fixture = ${JSON.stringify(fixturePath ?? null)};
+                if (fixture) {
+                  const session = await window.coverse.convertSource({ from: "auto", to: "codex", paths: [fixture] });
+                  converted = { id: session.id, from: session.handoff?.from, to: session.handoff?.to, turns: session.handoff?.statistics.turns, losses: session.handoff?.losses };
+                }
+                return { platform: window.coverse.platform, adapters: caps.adapters.map(a => a.id), drivers: caps.drivers.map(d => ({ id: d.id, available: d.available })), converted };
+              })()`,
+            );
+            if (consoleErrors.length > 0) {
+              process.stderr.write(JSON.stringify({ consoleErrors }) + "\n");
+              app.exit(1);
+              return;
+            }
+            process.stdout.write(JSON.stringify({ smoke: "ok", ...result }) + "\n");
+            app.exit(0);
+          } catch (error) {
+            process.stderr.write(String(error) + "\n");
+            app.exit(1);
+          }
+        })();
+      });
+    }
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow();
+      }
+    });
+  });
+
+  app.on("before-quit", () => {
+    service?.abortAll();
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+}

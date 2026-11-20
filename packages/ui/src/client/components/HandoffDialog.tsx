@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, FolderOpen, Loader2 } from "lucide-react";
 import type { SessionDiagnostic } from "@coverse/core";
 import type { AdapterSummary, DriverSummary, UiSession } from "../../shared/types.js";
 import { api, ApiClientError } from "@/lib/api";
@@ -112,13 +112,28 @@ export function HandoffDialog({
             </Select>
           </div>
 
-          <Input
-            value={cwd}
-            onChange={(event) => setCwd(event.target.value)}
-            placeholder="Workspace directory"
-            aria-label="Workspace directory"
-            className="font-mono text-[12px]"
-          />
+          <div className="flex items-center gap-1.5">
+            <Input
+              value={cwd}
+              onChange={(event) => setCwd(event.target.value)}
+              placeholder="Workspace directory"
+              aria-label="Workspace directory"
+              className="font-mono text-[12px]"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              aria-label="Choose workspace directory"
+              onClick={async () => {
+                const picked = await api.pickDirectory(cwd).catch(() => null);
+                if (picked) setCwd(picked);
+              }}
+              className="h-8 w-8 shrink-0"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+            </Button>
+          </div>
 
           <Input
             value={model}

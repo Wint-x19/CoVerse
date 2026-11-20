@@ -87,16 +87,17 @@ pnpm coverse run --agent claude-code --session <首轮返回的目标会话UUID>
 
 **M3 真机验收于 2026-11-18 完成（3/3）。** Codex → Claude Code、Claude Code → Antigravity、Antigravity → Codex 均通过首轮历史问答与第二轮按 ID 追问。三家来源 × 三家目标的离线回归通过。版本、事件与完整演示命令见 [执行驱动说明](packages/drivers/README.md)。
 
-## M4 Web UI
+## M4 桌面应用
 
-构建后在仓库根运行：
+CoVerse 提供可本地安装的原生桌面应用（Electron），不以浏览器网页形式运行。在仓库根构建后启动或打包安装包：
 
 ```sh
 pnpm build
-pnpm ui
+pnpm ui          # 启动本地桌面客户端
+pnpm ui:dist     # 打包原生桌面安装包（输出到 packages/ui/release/）
 ```
 
-默认打开 `http://127.0.0.1:4173`（仅绑定本机）。支持会话列表、全局拖拽 `.jsonl` / `.jsonl.zst` / `.db` 自动探测与转换、右侧 Inspector 审计损耗账本（`dropped` / `downgraded` / `approximated`）与引导包文件、以及选 Agent/模型直聊与跨 Agent Handoff。本地状态与引导包写入被忽略的 `.local/ui/`，复用本地 CLI 登录态，不经手密钥。详见 [UI 说明](packages/ui/README.md)。
+支持会话侧栏、原生文件/目录选择与全局拖拽 `.jsonl` / `.jsonl.zst` / `.db` 自动探测转换、右侧 Inspector 审计损耗账本（`dropped` / `downgraded` / `approximated`）与引导包文件、以及选 Agent/模型直聊与跨 Agent Handoff。本地状态与引导包写入系统用户数据目录，复用本地 CLI 登录态，不经手密钥。详见 [桌面应用说明](packages/ui/README.md)。
 
 ## M3.1 质量专项
 

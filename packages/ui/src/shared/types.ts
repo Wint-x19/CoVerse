@@ -94,6 +94,12 @@ export interface UploadedFilePayload {
   contentBase64: string;
 }
 
+export interface PickedFile {
+  path: string;
+  name: string;
+  size: number;
+}
+
 export interface InspectCandidate {
   id: string;
   displayName: string;
@@ -124,14 +130,11 @@ export interface InspectResponse {
 export interface ConvertRequest {
   from: string;
   to: string;
-  files: UploadedFilePayload[];
+  files?: UploadedFilePayload[];
+  paths?: string[];
   cwd?: string;
   model?: string;
   title?: string;
-}
-
-export interface ConvertResponse {
-  session: UiSession;
 }
 
 export interface BundleDetailResponse {
@@ -151,10 +154,6 @@ export interface BundleDetailResponse {
   files: BundleFileEntry[];
 }
 
-export interface ApiErrorEnvelope {
-  error: SessionDiagnostic;
-}
-
 export type StreamEventPayload =
   | { type: "bundle"; report: string; losses: LossCounts }
   | { type: "session"; id: string }
@@ -163,3 +162,41 @@ export type StreamEventPayload =
   | { type: "usage"; usage: ProtocolUsage }
   | { type: "done"; session: UiSession }
   | { type: "error"; diagnostic: SessionDiagnostic; sessionId?: string; session?: UiSession };
+
+export type IpcEnvelope<T> = { ok: true; data: T } | { ok: false; error: SessionDiagnostic };
+
+export interface RunMessageInput {
+  sessionId: string;
+  prompt: string;
+  model?: string;
+  cwd?: string;
+}
+
+export interface CoverseDesktopBridge {
+  readonly platform: string;
+  capabilities(): Promise<CapabilitiesResponse>;
+  listSessions(): Promise<UiSession[]>;
+  getSession(id: string): Promise<UiSession>;
+  createSession(input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<UiSession>;
+  updateSession(
+    id: string,
+    patch: { title?: string; model?: string | null; cwd?: string; agent?: string },
+  ): Promise<UiSession>;
+  deleteSession(id: string): Promise<void>;
+  inspectSource(input: { paths?: string[]; files?: UploadedFilePayload[] }): Promise<InspectResponse>;
+  convertSource(input: ConvertRequest): Promise<UiSession>;
+  handoffSession(
+    id: string,
+    input: { to: string; model?: string; cwd?: string; title?: string },
+  ): Promise<UiSession>;
+  getBundle(bundleId: string): Promise<BundleDetailResponse>;
+  abortSession(id: string): Promise<{ aborted: boolean }>;
+  streamMessage(
+    id: string,
+    input: { prompt: string; model?: string; cwd?: string },
+    onEvent: (event: StreamEventPayload) => void,
+  ): Promise<void>;
+  pickDirectory(defaultPath?: string): Promise<string | null>;
+  pickSessionFiles(): Promise<PickedFile[]>;
+  getPathForFile(file: File): string;
+}

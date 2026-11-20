@@ -1,5 +1,6 @@
 import { ArrowRight, ArrowRightLeft, PanelLeft, PanelRight } from "lucide-react";
 import type { UiSession } from "../../shared/types.js";
+import { api } from "@/lib/api";
 import { agentLabel, cn } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
 import { Button } from "./ui/button";
@@ -25,12 +26,18 @@ export function TopBar({
   const handoff = session?.handoff;
   const canHandoff = Boolean(session && (session.messages.length > 0 || session.handoff));
 
+  const isMac = api.platform === "darwin";
+
   return (
     <header
       data-testid="topbar"
-      className="flex h-11 shrink-0 items-center justify-between border-b border-white/[0.07] bg-[#08090a] px-3"
+      className={cn(
+        "cv-drag flex h-11 shrink-0 items-center justify-between border-b border-white/[0.07] bg-[#08090a] pl-3",
+        isMac ? "pr-3" : "pr-[140px]",
+        !sidebarOpen && isMac && "pl-[76px]",
+      )}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="cv-no-drag flex min-w-0 items-center gap-2">
         {!sidebarOpen && (
           <Button variant="ghost" size="icon" aria-label="Show sidebar" onClick={onToggleSidebar}>
             <PanelLeft className="h-3.5 w-3.5" />
@@ -56,7 +63,7 @@ export function TopBar({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="cv-no-drag flex items-center gap-1.5">
         {handoff && (
           <button
             type="button"

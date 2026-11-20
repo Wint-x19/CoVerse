@@ -1,18 +1,12 @@
 import * as React from "react";
 import { FileUp } from "lucide-react";
-import type {
-  AdapterSummary,
-  DriverSummary,
-  ToolActivity,
-  UiSession,
-  UploadedFilePayload,
-} from "../shared/types.js";
+import type { AdapterSummary, DriverSummary, ToolActivity, UiSession } from "../shared/types.js";
 import { api, ApiClientError } from "@/lib/api";
 import { agentLabel, cn, filesToPayloads } from "@/lib/utils";
 import { AgentGlyph } from "@/components/AgentGlyph";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
-import { ConvertDialog } from "@/components/ConvertDialog";
+import { ConvertDialog, type PendingImportSource } from "@/components/ConvertDialog";
 import { DropOverlay } from "@/components/DropOverlay";
 import { EnvironmentDialog } from "@/components/EnvironmentDialog";
 import { HandoffDialog } from "@/components/HandoffDialog";
@@ -48,17 +42,14 @@ export function App() {
   const [handoffOpen, setHandoffOpen] = React.useState(false);
   const [refreshingCaps, setRefreshingCaps] = React.useState(false);
 
-  // Drag & drop conversion
+  // Drag & drop / native file picker conversion
   const [dragging, setDragging] = React.useState(false);
   const dragCounter = React.useRef(0);
-  const [pendingFiles, setPendingFiles] = React.useState<UploadedFilePayload[]>([]);
-  const [pendingSizes, setPendingSizes] = React.useState<Record<string, number>>({});
+  const [pendingSource, setPendingSource] = React.useState<PendingImportSource | null>(null);
   const [convertOpen, setConvertOpen] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Streaming execution
   const [streaming, setStreaming] = React.useState<StreamingState | null>(null);
-  const streamAbortRef = React.useRef<AbortController | null>(null);
   const [bannerError, setBannerError] = React.useState<string | null>(null);
 
   const loadCapabilities = React.useCallback(async () => {
@@ -116,7 +107,6 @@ export function App() {
         !environmentOpen
       ) {
         event.preventDefault();
-        streamAbortRef.current?.abort();
         void api.abortSession(streaming.sessionId).catch(() => undefined);
       }
     };
@@ -124,19 +114,47 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [streaming, convertOpen, handoffOpen, paletteOpen, environmentOpen]);
 
-  // Global drag-and-drop listeners
-  const openFilesForConversion = React.useCallback(async (fileList: FileList | File[]) => {
+  // Drag-and-drop uses native filesystem paths via Electron webUtils.getPathForFile
+  const openDroppedFiles = React.useCallback(async (fileList: FileList | File[]) => {
     const list = Array.from(fileList);
     if (list.length === 0) return;
+    const nativePaths = list.map((file) => api.getPathForFile(file));
+    if (nativePaths.every((p) => p.length > 0)) {
+      setPendingSource({
+        items: list.map((file, index) => ({
+          path: nativePaths[index]!,
+          name: file.name,
+          size: file.size,
+        })),
+        paths: nativePaths,
+      });
+      setConvertOpen(true);
+      return;
+    }
     const payloads = await filesToPayloads(list);
-    const sizes: Record<string, number> = {};
-    list.forEach((file, index) => {
-      const key = payloads[index]?.path;
-      if (key) sizes[key] = file.size;
+    setPendingSource({
+      items: list.map((file, index) => ({
+        path: payloads[index]?.path ?? file.name,
+        name: file.name,
+        size: file.size,
+      })),
+      files: payloads,
     });
-    setPendingFiles(payloads);
-    setPendingSizes(sizes);
     setConvertOpen(true);
+  }, []);
+
+  const triggerNativeFileImport = React.useCallback(async () => {
+    try {
+      const picked = await api.pickSessionFiles();
+      if (picked.length === 0) return;
+      setPendingSource({
+        items: picked,
+        paths: picked.map((item) => item.path),
+      });
+      setConvertOpen(true);
+    } catch (error) {
+      setBannerError(error instanceof Error ? error.message : "Failed to open file dialog");
+    }
   }, []);
 
   React.useEffect(() => {
@@ -163,7 +181,7 @@ export function App() {
       dragCounter.current = 0;
       setDragging(false);
       if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
-        void openFilesForConversion(event.dataTransfer.files);
+        void openDroppedFiles(event.dataTransfer.files);
       }
     };
 
@@ -177,7 +195,7 @@ export function App() {
       window.removeEventListener("dragleave", onDragLeave);
       window.removeEventListener("drop", onDrop);
     };
-  }, [openFilesForConversion]);
+  }, [openDroppedFiles]);
 
   const upsertLocalSession = React.useCallback((updated: UiSession) => {
     setSessions((prev) => {
@@ -272,7 +290,6 @@ export function App() {
         setActiveSessionId(target.id);
       }
 
-      // Optimistic user turn
       const optimisticUser = {
         id: `pending_${Date.now()}`,
         role: "user" as const,
@@ -292,8 +309,6 @@ export function App() {
         ),
       );
 
-      const abortController = new AbortController();
-      streamAbortRef.current = abortController;
       setStreaming({ sessionId, text: "", tools: [] });
 
       await api.streamMessage(
@@ -323,34 +338,25 @@ export function App() {
             upsertLocalSession(event.session);
           }
         },
-        abortController.signal,
       );
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        // Reload persisted state after abort
-        if (target) {
-          const fresh = await api.getSession(target.id).catch(() => null);
-          if (fresh) upsertLocalSession(fresh);
-        }
-      } else if (error instanceof ApiClientError) {
+      if (error instanceof ApiClientError) {
         setBannerError(`${error.diagnostic.code}: ${error.diagnostic.message}`);
       } else {
         setBannerError(error instanceof Error ? error.message : "Request failed");
       }
+      if (target) {
+        const fresh = await api.getSession(target.id).catch(() => null);
+        if (fresh) upsertLocalSession(fresh);
+      }
     } finally {
-      streamAbortRef.current = null;
       setStreaming(null);
     }
   };
 
   const handleStop = () => {
     if (!streaming) return;
-    streamAbortRef.current?.abort();
     void api.abortSession(streaming.sessionId).catch(() => undefined);
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
   };
 
   const isRunningActive = Boolean(streaming && activeSession && streaming.sessionId === activeSession.id);
@@ -364,20 +370,6 @@ export function App() {
   return (
     <TooltipProvider delayDuration={250}>
       <div className="flex h-full w-full overflow-hidden bg-[#08090a] text-[#f7f8f8]">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          data-testid="hidden-file-input"
-          onChange={(event) => {
-            if (event.target.files && event.target.files.length > 0) {
-              void openFilesForConversion(event.target.files);
-              event.target.value = "";
-            }
-          }}
-        />
-
         {sidebarOpen && (
           <Sidebar
             sessions={sessions}
@@ -386,7 +378,7 @@ export function App() {
             runningSessionId={streaming?.sessionId ?? null}
             onSelectSession={handleSelectSession}
             onNewSession={handleNewSession}
-            onImportClick={triggerFileInput}
+            onImportClick={() => void triggerNativeFileImport()}
             onDeleteSession={handleDeleteSession}
             onOpenPalette={() => setPaletteOpen(true)}
             onOpenEnvironment={() => setEnvironmentOpen(true)}
@@ -427,7 +419,6 @@ export function App() {
                   data-testid="empty-stage"
                   className="flex flex-1 flex-col items-center justify-center px-6 pb-16"
                 >
-                  {/* Minimal segmented agent bar */}
                   <div
                     role="tablist"
                     aria-label="Select agent"
@@ -476,12 +467,12 @@ export function App() {
                     onCwdChange={handleCwdChange}
                     onSend={handleSend}
                     onStop={handleStop}
-                    onImportClick={triggerFileInput}
+                    onImportClick={() => void triggerNativeFileImport()}
                   />
 
                   <button
                     type="button"
-                    onClick={triggerFileInput}
+                    onClick={() => void triggerNativeFileImport()}
                     data-testid="empty-drop-trigger"
                     className="mt-4 inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 font-mono text-[11.5px] text-[#5b6069] transition-colors hover:bg-white/[0.03] hover:text-[#9ba1ab] cursor-pointer"
                   >
@@ -511,7 +502,7 @@ export function App() {
                       onCwdChange={handleCwdChange}
                       onSend={handleSend}
                       onStop={handleStop}
-                      onImportClick={triggerFileInput}
+                      onImportClick={() => void triggerNativeFileImport()}
                     />
                   </div>
                 </>
@@ -530,8 +521,7 @@ export function App() {
 
         <ConvertDialog
           open={convertOpen}
-          files={pendingFiles}
-          fileSizes={pendingSizes}
+          source={pendingSource}
           adapters={adapters}
           drivers={drivers}
           defaultCwd={defaultCwd}
@@ -565,7 +555,7 @@ export function App() {
           onOpenChange={setPaletteOpen}
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
-          onImport={triggerFileInput}
+          onImport={() => void triggerNativeFileImport()}
           onHandoff={() => setHandoffOpen(true)}
           onToggleInspector={() => setInspectorOpen((prev) => !prev)}
           onOpenEnvironment={() => setEnvironmentOpen(true)}
