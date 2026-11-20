@@ -16,7 +16,9 @@
     "eval:m31:live": "node tools/m31/live.mjs",
     "fixtures:collect": "tsx tools/fixtures/cli.ts",
     "fixtures:check": "tsx tools/fixtures/check-cli.ts",
-    "coverse": "node packages/cli/dist/bin.js"
+    "coverse": "node packages/cli/dist/bin.js",
+    "ui": "node packages/ui/dist/server/bin.js",
+    "ui:dev": "pnpm --filter @coverse/ui dev"
   },
   "devDependencies": {
     "@coverse/core": "workspace:*",

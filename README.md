@@ -87,6 +87,17 @@ pnpm coverse run --agent claude-code --session <首轮返回的目标会话UUID>
 
 **M3 真机验收于 2026-11-18 完成（3/3）。** Codex → Claude Code、Claude Code → Antigravity、Antigravity → Codex 均通过首轮历史问答与第二轮按 ID 追问。三家来源 × 三家目标的离线回归通过。版本、事件与完整演示命令见 [执行驱动说明](packages/drivers/README.md)。
 
+## M4 Web UI
+
+构建后在仓库根运行：
+
+```sh
+pnpm build
+pnpm ui
+```
+
+默认打开 `http://127.0.0.1:4173`（仅绑定本机）。支持会话列表、全局拖拽 `.jsonl` / `.jsonl.zst` / `.db` 自动探测与转换、右侧 Inspector 审计损耗账本（`dropped` / `downgraded` / `approximated`）与引导包文件、以及选 Agent/模型直聊与跨 Agent Handoff。本地状态与引导包写入被忽略的 `.local/ui/`，复用本地 CLI 登录态，不经手密钥。详见 [UI 说明](packages/ui/README.md)。
+
 ## M3.1 质量专项
 
 已完成六个跨 Agent 方向的真机配对和三端连续迁移。两个种子下，转换组完成 8/12 个两轮任务，等价历史对照组完成 7/12 个。可用 `pnpm eval:m31:offline` 重跑确定性回归。真机命令单独开启，使用对应账户的模型配额。[首轮结果与已知限制](tools/m31/REPORT-2026-11-18.md) · [复现命令](tools/m31/README.md)

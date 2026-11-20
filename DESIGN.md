@@ -1,6 +1,6 @@
 # CoVerse 可行性分析与工程设计
 
-> 状态：v0.6，M3.1 已完成会话转换专项首测（2026-11-18）。M2 格式依据见 §9，M3 验收记录见 §10，专项报告见 §11。
+> 状态：v0.7，M4 平台 Web UI 已交付（2026-11-20）。M2 格式依据见 §9，M3 验收记录见 §10，M3.1 专项见 §11，M4 实施记录见 §12。
 > 配套规范见 [AGENTS.md](AGENTS.md)。
 
 ---
@@ -221,3 +221,9 @@ interface LossLedger { dropped: LossItem[]; downgraded: LossItem[]; approximated
 ## 11. M3.1 质量基线
 
 离线核对源工件、CSR、引导包、驱动 stdin 和目标事件。真机分别测量历史事实、目标运行状态以及下一轮任务完成情况，并使用等价历史对照。按来源文件、方向、模型、长度和具体失败阶段保留分母。七项契约缺陷修复后通过回归；尚未解释的原生块继续明确拒绝。完整数据见 [首轮报告](tools/m31/REPORT-2026-11-18.md) 和 [实验协议](tools/m31/README.md)。
+
+## 12. M4 平台 UI 实施记录
+
+1. **架构边界**：`@coverse/ui` 分为本地 Node HTTP/SSE 服务（`src/server/`）与 React + Tailwind + shadcn/ui 前端（`src/client/`）。服务端通过组合根复用三家适配器与 `@coverse/drivers`，不含特定厂商格式解析；前端与自动化代理共享同一套结构化 JSON/SSE 契约。
+2. **核心体验**：提供会话侧栏、直聊流式渲染与中止、全局拖拽导入（`.jsonl` / `.jsonl.zst` / `.db`）自动探测转换、会话内跨 Agent Handoff、以及右侧审计抽屉（完整 LossLedger、`context.md`、清单文件与等价 CLI 命令）。
+3. **保真度与安全**：转换仍走 `convertSession` 与 `verifyInjectionBundle`，默认绑定 `127.0.0.1`，状态和引导包落盘至被忽略的 `.local/ui/`，复用本地 CLI 登录态，不经手密钥。`nativeResume` 保持 `false`。详见 [UI 说明](packages/ui/README.md)。
