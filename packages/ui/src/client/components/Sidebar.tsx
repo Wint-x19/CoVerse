@@ -1,4 +1,4 @@
-import { ArrowRight, FileUp, Plus, Search, Settings, Trash2 } from "lucide-react";
+import { ArrowRight, FileUp, Link2, Plus, Search, Settings, Trash2 } from "lucide-react";
 import type { DriverSummary, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
 import { api } from "@/lib/api";
@@ -137,6 +137,9 @@ export function Sidebar({
                   />
                   {session.handoff && (
                     <ArrowRight className="h-2.5 w-2.5 text-[var(--text-tertiary)]" aria-label="Converted" />
+                  )}
+                  {session.reference && !session.handoff && (
+                    <Link2 className="h-2.5 w-2.5 text-[var(--text-tertiary)]" aria-label="Reference" />
                   )}
                 </div>
                 <span className="min-w-0 flex-1 truncate">{session.title}</span>

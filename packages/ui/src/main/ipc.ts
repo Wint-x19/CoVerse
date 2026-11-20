@@ -43,6 +43,7 @@ export const IPC_CHANNELS = {
   inspectSource: "coverse:sessions:inspect",
   convertSource: "coverse:sessions:convert",
   handoffSession: "coverse:sessions:handoff",
+  materializeSession: "coverse:sessions:materialize",
   getBundle: "coverse:bundles:get",
   runStart: "coverse:run:start",
   runAbort: "coverse:run:abort",
@@ -133,9 +134,13 @@ export function registerIpcHandlers(
     wrap("/sessions/handoff", () =>
       service.handoffSession(
         String(id),
-        input as { to: string; model?: string; cwd?: string; title?: string },
+        input as { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
       ),
     ),
+  );
+
+  ipc.handle(IPC_CHANNELS.materializeSession, (_event, id) =>
+    wrap("/sessions/materialize", () => service.materializeSession(String(id))),
   );
 
   ipc.handle(IPC_CHANNELS.getBundle, (_event, bundleId) =>

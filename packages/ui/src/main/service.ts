@@ -41,6 +41,14 @@ import type {
 } from "../shared/types.js";
 import { UiStore } from "./store.js";
 
+const SESSION_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+function sameLocalPath(a: string, b: string): boolean {
+  const na = path.resolve(a);
+  const nb = path.resolve(b);
+  return process.platform === "win32" ? na.toLowerCase() === nb.toLowerCase() : na === nb;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -601,7 +609,14 @@ export class UiService {
       try {
         const imported = await detected.import(files);
         const resolvedLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
+        const canReference = Boolean(
+          input.paths &&
+            input.paths.length === 1 &&
+            SESSION_UUID.test(imported.session.meta.id) &&
+            (resolvedLocalCwd !== undefined || !imported.session.meta.cwd),
+        );
         preview = {
+          id: imported.session.meta.id,
           agent: imported.session.meta.agent,
           agentFormatVersion: imported.session.meta.agentFormatVersion,
           turns: imported.session.turns.length,
@@ -609,6 +624,7 @@ export class UiService {
           ...(imported.session.meta.cwd ? { sourceCwd: imported.session.meta.cwd } : {}),
           ...(imported.session.meta.model ? { model: imported.session.meta.model } : {}),
           ...(imported.session.meta.createdAt ? { createdAt: imported.session.meta.createdAt } : {}),
+          canReference,
           losses: countLedger(imported.ledger),
         };
       } catch (error) {
@@ -748,6 +764,66 @@ export class UiService {
             return this.adapters.get(request.from);
           })();
 
+    // Reference-only import (zero copy, zero bundle) when format AND project path are unchanged
+    if (source.id === target.id && request.paths && request.paths.length === 1) {
+      const imported = await source.import(files);
+      const sourceLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
+      const requestedLocalCwd = request.cwd?.trim()
+        ? await resolveExistingDirectory(request.cwd)
+        : undefined;
+      if (request.cwd?.trim() && !requestedLocalCwd) {
+        throw new SessionError("INVALID_INPUT", "/cwd", `Directory does not exist: ${request.cwd}`);
+      }
+      const effectiveCwd = requestedLocalCwd ?? sourceLocalCwd ?? this.defaultCwd;
+      const pathUnchanged = sourceLocalCwd
+        ? sameLocalPath(effectiveCwd, sourceLocalCwd)
+        : !imported.session.meta.cwd;
+
+      if (pathUnchanged && SESSION_UUID.test(imported.session.meta.id)) {
+        const firstUserText = imported.session.turns
+          .find((turn) => turn.role === "user")
+          ?.content.find((block) => block.type === "text");
+        const defaultTitle =
+          firstUserText && firstUserText.type === "text"
+            ? summarizeTitle(firstUserText.text, imported.session.meta.id.slice(0, 12))
+            : imported.session.meta.id.slice(0, 12);
+        const messages = csrTurnsToChatMessages(
+          imported.session.turns,
+          source.id,
+          imported.session.meta.createdAt ?? nowIso(),
+        );
+        const sourcePath = path.resolve(request.paths[0]!);
+        const existingList = await this.store.listSessions();
+        const existingRef = existingList.find(
+          (item) =>
+            item.reference &&
+            item.agent === source.id &&
+            item.targetSessionId === imported.session.meta.id,
+        );
+        const trimmedModel = request.model?.trim() || imported.session.meta.model;
+        const timestamp = nowIso();
+        const refSession: UiSession = {
+          id: existingRef?.id ?? makeId("ses"),
+          title: request.title?.trim() || existingRef?.title || defaultTitle,
+          agent: source.id,
+          ...(trimmedModel ? { model: trimmedModel } : {}),
+          cwd: effectiveCwd,
+          targetSessionId: imported.session.meta.id,
+          bundlePending: false,
+          reference: {
+            sourcePath,
+            agent: source.id,
+            formatVersion: imported.session.meta.agentFormatVersion,
+            originalCwd: effectiveCwd,
+          },
+          messages,
+          createdAt: existingRef?.createdAt ?? imported.session.meta.createdAt ?? timestamp,
+          updatedAt: timestamp,
+        };
+        return this.store.upsertSession(refSession);
+      }
+    }
+
     const result = await convertSession({ source, target, artifacts: files });
     const firstUserText = result.session.turns
       .find((turn) => turn.role === "user")
@@ -762,7 +838,7 @@ export class UiService {
       result.session.meta.createdAt ?? nowIso(),
     );
 
-    return this.persistBundleAsSession({
+    const created = await this.persistBundleAsSession({
       artifacts: result.artifacts,
       target,
       from: source.id,
@@ -773,11 +849,105 @@ export class UiService {
       title: request.title?.trim() || defaultTitle,
       initialMessages,
     });
+
+    if (request.materialize !== false) {
+      return this.tryMaterializeSession(created);
+    }
+    return created;
+  }
+
+  /**
+   * Register a converted bundle inside the target agent's own native session storage
+   * via the official target CLI so the conversation immediately appears in that agent
+   * and can be continued there as well as inside CoVerse.
+   */
+  async materializeSession(sessionId: string): Promise<UiSession> {
+    const session = await this.getSession(sessionId);
+    if (!session.handoff || !session.bundlePending) {
+      return session;
+    }
+    const registry = await this.ensureDriversConfigured();
+    const driver = registry.get(session.agent);
+    const bundleFiles = await this.store.loadBundleFiles(session.handoff.bundleId);
+    const verified = verifyInjectionBundle(bundleFiles, driver.id);
+    const root = this.store.bundlePath(session.handoff.bundleId);
+    let location = "";
+    let attachmentDirectory: string | undefined;
+    if (verified.attachments.length > 0) {
+      attachmentDirectory = path.join(root, "source");
+      location = `\nAttachment paths are relative to the bundle directory ${JSON.stringify(root)}.\n`;
+    }
+    const seedPrompt =
+      `The historical conversation context above was transferred from ${session.handoff.from} via CoVerse. ` +
+      `Reply briefly confirming the context is loaded without running any tools or modifying any files; wait for the user's next instruction.`;
+    const fullPrompt = `${verified.context}${location}\n## Current user request\n\n${seedPrompt}`;
+
+    const resolvedCwd = await resolveExistingDirectory(session.cwd);
+    if (!resolvedCwd) {
+      throw new SessionError("INVALID_INPUT", "/cwd", `Workspace directory does not exist: ${session.cwd}`);
+    }
+
+    let acquiredSessionId: string | undefined;
+    for await (const event of driver.run({
+      prompt: fullPrompt,
+      cwd: resolvedCwd,
+      ...(session.model ? { model: session.model } : {}),
+      ...(attachmentDirectory ? { attachmentDirectory } : {}),
+    })) {
+      if (event.type === "session") acquiredSessionId = event.id;
+    }
+
+    if (!acquiredSessionId) {
+      throw new SessionError("DRIVER_FAILED", "/materialize", "Target agent did not return a session ID");
+    }
+
+    return this.store.mutateSession(sessionId, (current) => {
+      const nextHandoff = current.handoff
+        ? (() => {
+            const copy: HandoffMetadata = { ...current.handoff, materialized: true };
+            delete copy.materializationError;
+            return copy;
+          })()
+        : undefined;
+      return {
+        ...current,
+        targetSessionId: acquiredSessionId,
+        bundlePending: false,
+        ...(nextHandoff ? { handoff: nextHandoff } : {}),
+        updatedAt: nowIso(),
+      };
+    });
+  }
+
+  private async tryMaterializeSession(session: UiSession): Promise<UiSession> {
+    if (!session.handoff || !session.bundlePending) return session;
+    const registry = await this.ensureDriversConfigured();
+    const driver = registry.get(session.agent);
+    const probed = await driver.probe();
+    if (!probed.available) return session;
+    try {
+      return await this.materializeSession(session.id);
+    } catch (error) {
+      const diagnostic = toDiagnostic(error, "/materialize");
+      return this.store.mutateSession(session.id, (current) => ({
+        ...current,
+        ...(current.handoff
+          ? {
+              handoff: {
+                ...current.handoff,
+                materialized: false,
+                materializationError: diagnostic,
+              },
+            }
+          : {}),
+        updatedAt: nowIso(),
+      }));
+    }
   }
 
   async handoffSession(
     sessionId: string,
-    options: { to: string; model?: string; cwd?: string; title?: string },
+    options: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
   ): Promise<UiSession> {
     const sourceSession = await this.getSession(sessionId);
     const settings = await this.store.getSettings();
@@ -884,7 +1054,7 @@ export class UiService {
       historical: true,
     }));
 
-    return this.persistBundleAsSession({
+    const created = await this.persistBundleAsSession({
       artifacts: exported.artifacts,
       target,
       from: sourceSession.agent,
@@ -896,6 +1066,11 @@ export class UiService {
       sourceSessionId: sourceSession.id,
       initialMessages: carriedMessages,
     });
+
+    if (options.materialize !== false) {
+      return this.tryMaterializeSession(created);
+    }
+    return created;
   }
 
   async getBundleDetail(bundleId: string): Promise<BundleDetailResponse> {

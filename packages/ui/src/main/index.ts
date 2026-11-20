@@ -191,7 +191,7 @@ if (!gotLock) {
                 let converted = null;
                 const fixture = ${JSON.stringify(fixturePath ?? null)};
                 if (fixture) {
-                  const session = await window.coverse.convertSource({ from: "auto", to: "codex", paths: [fixture] });
+                  const session = await window.coverse.convertSource({ from: "auto", to: "codex", paths: [fixture], materialize: false });
                   converted = { id: session.id, from: session.handoff?.from, to: session.handoff?.to, turns: session.handoff?.statistics.turns, messages: session.messages.length, losses: session.handoff?.losses };
                 }
                 return { platform: window.coverse.platform, theme: settings.theme, language: settings.language, adapters: caps.adapters.map(a => a.id), drivers: caps.drivers.map(d => ({ id: d.id, available: d.available, models: d.models.length })), localSessionsCount: local.length, converted };

@@ -247,6 +247,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
         from: "auto",
         to: route.to,
         paths: [fixturePath],
+        materialize: false,
       });
       expect(convertRes.ok).toBe(true);
       if (!convertRes.ok) continue;
@@ -277,11 +278,74 @@ describe("CoVerse M4 desktop IPC & service", () => {
       from: "antigravity",
       to: "codex",
       paths: [dbCopy],
+      materialize: false,
     });
     expect(walRes.ok).toBe(false);
     if (!walRes.ok) {
       expect(walRes.error.code).toBe("UNSTABLE_INPUT");
     }
+  });
+
+  it("imports same-agent same-path local sessions by reference only (zero copy) and materializes converted sessions into target agent", async () => {
+    const dataDir = await makeTempDir("coverse-desktop-ref-");
+    const projectDir = await makeTempDir("coverse-desktop-proj-");
+    const realProjectDir = await fs.realpath(projectDir);
+    const store = new UiStore(dataDir);
+    const service = new UiService(createAdapterRegistry(), createFakeDrivers(), store, realProjectDir);
+    const { invoke, emitted } = createMockIpc(service);
+
+    // Create a local Codex rollout whose meta.cwd points to realProjectDir
+    const rawFixture = await fs.readFile(path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl"), "utf8");
+    const lines = rawFixture.trim().split(/\r?\n/);
+    const head = JSON.parse(lines[0]!) as { type: string; payload: Record<string, unknown> };
+    const nativeUuid = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    head.payload.id = nativeUuid;
+    head.payload.cwd = realProjectDir;
+    const localSessionFile = path.join(projectDir, `rollout-2026-11-20-${nativeUuid}.jsonl`);
+    await fs.writeFile(localSessionFile, [JSON.stringify(head), ...lines.slice(1)].join("\n") + "\n", "utf8");
+
+    // 1. Same format (codex -> codex) + same cwd => reference-only import with ZERO bundle files created
+    const refRes = await invoke<UiSession>(IPC_CHANNELS.convertSource, {
+      from: "auto",
+      to: "codex",
+      paths: [localSessionFile],
+      cwd: realProjectDir,
+    });
+    expect(refRes.ok).toBe(true);
+    if (!refRes.ok) return;
+    expect(refRes.data.reference?.sourcePath).toBe(path.resolve(localSessionFile));
+    expect(refRes.data.handoff).toBeUndefined();
+    expect(refRes.data.bundlePending).toBe(false);
+    expect(refRes.data.targetSessionId).toBe(nativeUuid);
+    expect(refRes.data.messages.some((m) => m.role === "user" && m.historical)).toBe(true);
+    await expect(fs.readdir(store.bundlesDir)).rejects.toThrow();
+
+    // Follow-up on referenced session resumes original UUID directly
+    const refTurn = await invoke(IPC_CHANNELS.runStart, "ref-run", {
+      sessionId: refRes.data.id,
+      prompt: "Continue original session",
+    });
+    expect(refTurn.ok).toBe(true);
+    const refEvents = emitted.get(runEventChannel("ref-run")) ?? [];
+    const refDone = refEvents.find((e) => e.type === "done");
+    expect(refDone?.type).toBe("done");
+    if (refDone?.type === "done") {
+      expect(refDone.session.messages.at(-1)?.content).toBe("echo:codex:resumed:default");
+    }
+
+    // 2. Cross-agent conversion (codex -> claude-code) with default materialize=true registers target session immediately
+    const matRes = await invoke<UiSession>(IPC_CHANNELS.convertSource, {
+      from: "auto",
+      to: "claude-code",
+      paths: [localSessionFile],
+      cwd: realProjectDir,
+    });
+    expect(matRes.ok).toBe(true);
+    if (!matRes.ok) return;
+    expect(matRes.data.agent).toBe("claude-code");
+    expect(matRes.data.handoff?.materialized).toBe(true);
+    expect(matRes.data.bundlePending).toBe(false);
+    expect(matRes.data.targetSessionId).toBe("11111111-2222-4333-8444-555555555555");
   });
 
   it("streams bundle injection, resumes by target UUID, supports handoff, and cancels cleanly over IPC", async () => {
@@ -296,6 +360,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
       to: "claude-code",
       paths: [fixturePath],
       model: "claude-sonnet-4-6",
+      materialize: false,
     });
     expect(conv.ok).toBe(true);
     if (!conv.ok) return;
@@ -330,8 +395,11 @@ describe("CoVerse M4 desktop IPC & service", () => {
       expect(done2.session.messages.at(-1)?.content).toBe("echo:claude-code:resumed:claude-sonnet-4-6");
     }
 
-    // 3. Handoff active session to Antigravity
-    const handoff = await invoke<UiSession>(IPC_CHANNELS.handoffSession, conv.data.id, { to: "antigravity" });
+    // 3. Handoff active session to Antigravity (deferred materialization)
+    const handoff = await invoke<UiSession>(IPC_CHANNELS.handoffSession, conv.data.id, {
+      to: "antigravity",
+      materialize: false,
+    });
     expect(handoff.ok).toBe(true);
     if (!handoff.ok) return;
     expect(handoff.data.agent).toBe("antigravity");

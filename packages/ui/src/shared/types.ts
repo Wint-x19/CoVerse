@@ -79,12 +79,21 @@ export interface HandoffMetadata {
   fromFormat: string;
   to: string;
   nativeResume: false;
+  materialized?: boolean;
+  materializationError?: SessionDiagnostic;
   statistics: BundleStatistics;
   losses: LossCounts;
   ledger: LossLedger;
   diagnostics: SessionDiagnostic[];
   files: BundleFileEntry[];
   sourceSessionId?: string;
+}
+
+export interface SessionReference {
+  sourcePath: string;
+  agent: string;
+  formatVersion: string;
+  originalCwd: string;
 }
 
 export interface ToolActivity {
@@ -116,6 +125,7 @@ export interface UiSession {
   cwd: string;
   targetSessionId?: string;
   bundlePending?: boolean;
+  reference?: SessionReference;
   handoff?: HandoffMetadata;
   messages: ChatMessage[];
   createdAt: string;
@@ -142,6 +152,7 @@ export interface InspectCandidate {
 }
 
 export interface InspectPreview {
+  id: string;
   agent: string;
   agentFormatVersion: string;
   turns: number;
@@ -149,6 +160,7 @@ export interface InspectPreview {
   sourceCwd?: string;
   model?: string;
   createdAt?: string;
+  canReference?: boolean;
   losses: LossCounts;
 }
 
@@ -168,6 +180,7 @@ export interface ConvertRequest {
   cwd?: string;
   model?: string;
   title?: string;
+  materialize?: boolean;
 }
 
 export interface BundleDetailResponse {
@@ -223,8 +236,9 @@ export interface CoverseDesktopBridge {
   convertSource(input: ConvertRequest): Promise<UiSession>;
   handoffSession(
     id: string,
-    input: { to: string; model?: string; cwd?: string; title?: string },
+    input: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
   ): Promise<UiSession>;
+  materializeSession(id: string): Promise<UiSession>;
   getBundle(bundleId: string): Promise<BundleDetailResponse>;
   abortSession(id: string): Promise<{ aborted: boolean }>;
   streamMessage(

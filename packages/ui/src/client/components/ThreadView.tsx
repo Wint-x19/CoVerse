@@ -159,12 +159,17 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
         <span className="whitespace-nowrap text-[var(--text-primary)]">{agentLabel(handoff.to)}</span>
         <span className="text-[var(--text-tertiary)]">·</span>
         <span className="whitespace-nowrap">{t.turns(handoff.statistics.turns)}</span>
-        {session.bundlePending && (
+        {handoff.materialized && session.targetSessionId ? (
+          <>
+            <span className="text-[var(--text-tertiary)]">·</span>
+            <span className="whitespace-nowrap text-[#3ecf8e]">{t.synced}</span>
+          </>
+        ) : session.bundlePending ? (
           <>
             <span className="text-[var(--text-tertiary)]">·</span>
             <span className="whitespace-nowrap text-[var(--accent-text)]">{t.ready}</span>
           </>
-        )}
+        ) : null}
       </span>
       <span className="flex items-center gap-2.5 font-mono text-[11.5px] whitespace-nowrap">
         <span className={handoff.losses.dropped > 0 ? "text-[#e5484d]" : "text-[var(--text-tertiary)]"}>

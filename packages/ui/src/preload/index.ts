@@ -71,6 +71,8 @@ const bridge: CoverseDesktopBridge = {
 
   handoffSession: (id, input) => invoke<UiSession>(IPC_CHANNELS.handoffSession, id, input),
 
+  materializeSession: (id) => invoke<UiSession>(IPC_CHANNELS.materializeSession, id),
+
   getBundle: (bundleId) => invoke<BundleDetailResponse>(IPC_CHANNELS.getBundle, bundleId),
 
   abortSession: (id) => invoke<{ aborted: boolean }>(IPC_CHANNELS.runAbort, id),

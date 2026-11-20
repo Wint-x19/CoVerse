@@ -34,6 +34,7 @@ export function HandoffDialog({
   const [to, setTo] = React.useState("");
   const [model, setModel] = React.useState("");
   const [cwd, setCwd] = React.useState("");
+  const [materialize, setMaterialize] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<SessionDiagnostic | null>(null);
 
@@ -41,6 +42,7 @@ export function HandoffDialog({
     if (!open || !session) return;
     setError(null);
     setModel("");
+    setMaterialize(true);
     setCwd(session.cwd);
     const enabledExport = adapters.filter((a) => a.enabled && a.capabilities.export);
     const availableOther = drivers.find(
@@ -52,7 +54,8 @@ export function HandoffDialog({
 
   if (!session) return null;
 
-  const targetModels = drivers.find((d) => d.id === to)?.models ?? [];
+  const targetDriver = drivers.find((d) => d.id === to);
+  const targetModels = targetDriver?.models ?? [];
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -64,6 +67,7 @@ export function HandoffDialog({
         to,
         ...(model.trim() ? { model: model.trim() } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
+        materialize,
       });
       onHandedOff(created);
       onOpenChange(false);
@@ -112,13 +116,14 @@ export function HandoffDialog({
                     return (
                       <SelectItem key={adapter.id} value={adapter.id}>
                         <span className="flex items-center gap-2">
+                          <AgentGlyph agent={adapter.id} className="h-3.5 w-3.5" />
+                          <span>{agentLabel(adapter.id)}</span>
                           <span
                             className={cn(
                               "h-1.5 w-1.5 rounded-full",
                               driver?.available ? "bg-[#3ecf8e]" : "bg-[var(--status-muted)]",
                             )}
                           />
-                          <span>{agentLabel(adapter.id)}</span>
                         </span>
                       </SelectItem>
                     );
@@ -158,6 +163,18 @@ export function HandoffDialog({
             onChange={setModel}
             testId="handoff-model-picker"
           />
+
+          {targetDriver?.available && (
+            <label className="flex items-center justify-between rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-2 text-[12px] text-[var(--text-secondary)] cursor-pointer select-none">
+              <span>{t.syncToTarget}</span>
+              <input
+                type="checkbox"
+                checked={materialize}
+                onChange={(e) => setMaterialize(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[#5e6ad2] cursor-pointer"
+              />
+            </label>
+          )}
 
           {error && (
             <div

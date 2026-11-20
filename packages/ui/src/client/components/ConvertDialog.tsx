@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertCircle, ArrowRight, FileText, FolderOpen, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, FileText, FolderOpen, Link2, Loader2 } from "lucide-react";
 import type { SessionDiagnostic } from "@coverse/core";
 import type {
   AdapterSummary,
@@ -23,6 +23,7 @@ export interface PendingImportSource {
   items: PickedFile[];
   paths?: string[];
   files?: UploadedFilePayload[];
+  originalCwd?: string;
 }
 
 interface ConvertDialogProps {
@@ -34,6 +35,13 @@ interface ConvertDialogProps {
   t: I18nMessages;
   onOpenChange: (open: boolean) => void;
   onConverted: (session: UiSession) => void;
+}
+
+function samePathLoose(a: string, b: string): boolean {
+  const norm = (s: string) => s.trim().replace(/[\\/]+$/, "").replace(/\\/g, "/");
+  const na = norm(a);
+  const nb = norm(b);
+  return api.platform === "win32" ? na.toLowerCase() === nb.toLowerCase() : na === nb;
 }
 
 export function ConvertDialog({
@@ -52,6 +60,7 @@ export function ConvertDialog({
   const [to, setTo] = React.useState("");
   const [model, setModel] = React.useState("");
   const [cwd, setCwd] = React.useState(defaultCwd);
+  const [materialize, setMaterialize] = React.useState(true);
   const [converting, setConverting] = React.useState(false);
   const [error, setError] = React.useState<SessionDiagnostic | null>(null);
 
@@ -63,7 +72,8 @@ export function ConvertDialog({
     setError(null);
     setFrom("auto");
     setModel("");
-    setCwd(defaultCwd);
+    setMaterialize(true);
+    setCwd(source.originalCwd || defaultCwd);
 
     api
       .inspectSource({
@@ -75,17 +85,22 @@ export function ConvertDialog({
         setInspectResult(result);
         const detected = result.detected;
         if (detected) setFrom(detected);
-        if (result.preview?.cwd) setCwd(result.preview.cwd);
 
-        const enabledExportAdapters = adapters.filter((a) => a.enabled && a.capabilities.export);
-        const availableOther = drivers.find(
-          (d) => d.available && d.id !== detected && enabledExportAdapters.some((a) => a.id === d.id),
-        );
-        const anyOther = enabledExportAdapters.find((a) => a.id !== detected);
-        const firstAvailable = drivers.find(
-          (d) => d.available && enabledExportAdapters.some((a) => a.id === d.id),
-        );
-        setTo(availableOther?.id ?? anyOther?.id ?? firstAvailable?.id ?? enabledExportAdapters[0]?.id ?? "");
+        // Default to original project directory whenever available
+        if (result.preview?.cwd) setCwd(result.preview.cwd);
+        else if (source.originalCwd) setCwd(source.originalCwd);
+        else setCwd(defaultCwd);
+
+        // Default target to same agent (no forced conversion; user may switch to any other agent)
+        const enabledExport = adapters.filter((a) => a.enabled && a.capabilities.export);
+        if (detected && enabledExport.some((a) => a.id === detected)) {
+          setTo(detected);
+        } else {
+          const firstAvailable = drivers.find(
+            (d) => d.available && enabledExport.some((a) => a.id === d.id),
+          );
+          setTo(firstAvailable?.id ?? enabledExport[0]?.id ?? "");
+        }
       })
       .catch((err) => {
         if (!active) return;
@@ -104,7 +119,20 @@ export function ConvertDialog({
     };
   }, [open, source, defaultCwd, drivers, adapters]);
 
-  const targetModels = drivers.find((d) => d.id === to)?.models ?? [];
+  const effectiveSource = from === "auto" ? inspectResult?.detected ?? null : from;
+  const targetDriver = drivers.find((d) => d.id === to);
+  const targetModels = targetDriver?.models ?? [];
+
+  const originalCwd = inspectResult?.preview?.cwd;
+  const pathUnchanged = originalCwd
+    ? samePathLoose(cwd, originalCwd)
+    : !inspectResult?.preview?.sourceCwd;
+  const isReferenceImport = Boolean(
+    effectiveSource &&
+      to === effectiveSource &&
+      inspectResult?.preview?.canReference &&
+      pathUnchanged,
+  );
 
   const handleConvert = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -119,6 +147,7 @@ export function ConvertDialog({
         ...(source.files ? { files: source.files } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
         ...(model.trim() ? { model: model.trim() } : {}),
+        materialize: isReferenceImport ? false : materialize,
       });
       onConverted(session);
       onOpenChange(false);
@@ -137,7 +166,7 @@ export function ConvertDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="convert-dialog" className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{t.convertSession}</DialogTitle>
+          <DialogTitle>{isReferenceImport ? t.importSession : t.convertSession}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleConvert} className="mt-4 flex flex-col gap-4">
@@ -176,7 +205,7 @@ export function ConvertDialog({
                         return (
                           <SelectItem key={adapter.id} value={adapter.id}>
                             <span className="flex items-center gap-2">
-                              <AgentGlyph agent={adapter.id} className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                              <AgentGlyph agent={adapter.id} className="h-3.5 w-3.5" />
                               <span>{agentLabel(adapter.id)}</span>
                               {match && match.confidence >= 0.9 && (
                                 <span className="font-mono text-[10.5px] text-[#3ecf8e]">
@@ -210,13 +239,14 @@ export function ConvertDialog({
                         return (
                           <SelectItem key={adapter.id} value={adapter.id}>
                             <span className="flex items-center gap-2">
+                              <AgentGlyph agent={adapter.id} className="h-3.5 w-3.5" />
+                              <span>{agentLabel(adapter.id)}</span>
                               <span
                                 className={cn(
                                   "h-1.5 w-1.5 rounded-full",
                                   driver?.available ? "bg-[#3ecf8e]" : "bg-[var(--status-muted)]",
                                 )}
                               />
-                              <span>{agentLabel(adapter.id)}</span>
                             </span>
                           </SelectItem>
                         );
@@ -228,11 +258,18 @@ export function ConvertDialog({
               {inspectResult?.preview && (
                 <div
                   data-testid="convert-preview"
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-2 font-mono text-[11.5px] text-[var(--text-secondary)]"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-2 font-mono text-[11.5px] text-[var(--text-secondary)]"
                 >
-                  <span className="text-[var(--text-primary)]">{inspectResult.preview.agentFormatVersion}</span>
-                  <span>{t.turns(inspectResult.preview.turns)}</span>
-                  {inspectResult.preview.model && <span>{inspectResult.preview.model}</span>}
+                  <span className="flex items-center gap-2">
+                    <span className="text-[var(--text-primary)]">{inspectResult.preview.agentFormatVersion}</span>
+                    <span>{t.turns(inspectResult.preview.turns)}</span>
+                  </span>
+                  {isReferenceImport && (
+                    <span className="inline-flex items-center gap-1 text-[#3ecf8e]" data-testid="reference-indicator">
+                      <Link2 className="h-3 w-3" />
+                      <span>{t.referenceMode}</span>
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -280,6 +317,19 @@ export function ConvertDialog({
                   onChange={setModel}
                   testId="convert-model-picker"
                 />
+
+                {!isReferenceImport && targetDriver?.available && (
+                  <label className="flex items-center justify-between rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-2 text-[12px] text-[var(--text-secondary)] cursor-pointer select-none">
+                    <span>{t.syncToTarget}</span>
+                    <input
+                      type="checkbox"
+                      checked={materialize}
+                      onChange={(e) => setMaterialize(e.target.checked)}
+                      data-testid="convert-materialize-checkbox"
+                      className="h-3.5 w-3.5 accent-[#5e6ad2] cursor-pointer"
+                    />
+                  </label>
+                )}
               </div>
             </>
           )}
@@ -309,7 +359,13 @@ export function ConvertDialog({
               data-testid="convert-submit-btn"
             >
               {converting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>{t.convert}</span>
+              <span>
+                {converting && !isReferenceImport && materialize
+                  ? t.syncing
+                  : isReferenceImport
+                    ? t.importReference
+                    : t.convert}
+              </span>
             </Button>
           </div>
         </form>

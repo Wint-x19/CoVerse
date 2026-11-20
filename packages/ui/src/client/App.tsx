@@ -214,6 +214,7 @@ export function App() {
     setPendingSource({
       items: [{ path: ref.path, name: ref.title, size: ref.size }],
       paths: [ref.path],
+      ...(ref.cwd ? { originalCwd: ref.cwd } : {}),
     });
     setConvertOpen(true);
   }, []);
@@ -304,7 +305,7 @@ export function App() {
     upsertLocalSession(session);
     setSettingsOpen(false);
     setActiveSessionId(session.id);
-    setInspectorOpen(true);
+    setInspectorOpen(Boolean(session.handoff));
     setBannerError(null);
   };
 
@@ -605,6 +606,7 @@ export function App() {
                 session={activeSession}
                 t={t}
                 onClose={() => setInspectorOpen(false)}
+                onSessionUpdated={upsertLocalSession}
               />
             </div>
           </div>

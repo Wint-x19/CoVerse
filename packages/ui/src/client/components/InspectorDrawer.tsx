@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, Loader2, RefreshCw, X } from "lucide-react";
 import type { LossItem } from "@coverse/core";
 import type { BundleDetailResponse, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
@@ -14,6 +14,14 @@ interface InspectorDrawerProps {
   session: UiSession | null;
   t: I18nMessages;
   onClose: () => void;
+  onSessionUpdated: (session: UiSession) => void;
+}
+
+function nativeResumeCommand(agent: string, sessionId: string): string {
+  if (agent === "codex") return `codex resume ${sessionId}`;
+  if (agent === "claude-code") return `claude --resume ${sessionId}`;
+  if (agent === "antigravity") return `agy --conversation ${sessionId}`;
+  return sessionId;
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
@@ -87,11 +95,14 @@ function LedgerSection({
   );
 }
 
-export function InspectorDrawer({ open, session, t, onClose }: InspectorDrawerProps) {
+export function InspectorDrawer({ open, session, t, onClose, onSessionUpdated }: InspectorDrawerProps) {
   const [bundleDetail, setBundleDetail] = React.useState<BundleDetailResponse | null>(null);
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncError, setSyncError] = React.useState<string | null>(null);
   const bundleId = session?.handoff?.bundleId;
 
   React.useEffect(() => {
+    setSyncError(null);
     if (!open || !bundleId) {
       setBundleDetail(null);
       return;
@@ -113,11 +124,28 @@ export function InspectorDrawer({ open, session, t, onClose }: InspectorDrawerPr
   if (!open || !session) return null;
 
   const handoff = session.handoff;
+  const reference = session.reference;
+  const nativeCmd = session.targetSessionId
+    ? nativeResumeCommand(session.agent, session.targetSessionId)
+    : null;
   const cliCommand = handoff
     ? `coverse run --agent ${handoff.to} --bundle ${JSON.stringify(handoff.bundlePath)} --cwd ${JSON.stringify(session.cwd)} --prompt "..."`
     : session.targetSessionId
       ? `coverse run --agent ${session.agent} --session ${session.targetSessionId} --cwd ${JSON.stringify(session.cwd)} --prompt "..."`
       : null;
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      const updated = await api.materializeSession(session.id);
+      onSessionUpdated(updated);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <aside
@@ -147,10 +175,48 @@ export function InspectorDrawer({ open, session, t, onClose }: InspectorDrawerPr
             </span>
           </div>
         )}
+        {reference && (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[var(--text-tertiary)]">mode</span>
+              <span className="text-[#3ecf8e]">reference</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[var(--text-tertiary)]">source</span>
+              <span className="truncate text-[var(--text-secondary)]" title={reference.sourcePath}>
+                {reference.sourcePath}
+              </span>
+            </div>
+          </>
+        )}
         {handoff && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-[var(--text-tertiary)]">mode</span>
-            <span className="text-[var(--text-primary)]">injection-bundle</span>
+            <span className={handoff.materialized ? "text-[#3ecf8e]" : "text-[var(--text-primary)]"}>
+              {handoff.materialized ? `injection · ${t.synced}` : "injection-bundle"}
+            </span>
+          </div>
+        )}
+
+        {handoff && session.bundlePending && (
+          <div className="pt-1 flex flex-col gap-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              disabled={syncing}
+              onClick={() => void handleSync()}
+              data-testid="inspector-sync-btn"
+              className="w-full"
+            >
+              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              <span>{syncing ? t.syncing : t.syncNow}</span>
+            </Button>
+            {(syncError || handoff.materializationError) && (
+              <div className="text-[10.5px] text-[#e5484d] break-words">
+                {syncError ?? handoff.materializationError?.message}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -212,6 +278,18 @@ export function InspectorDrawer({ open, session, t, onClose }: InspectorDrawerPr
                   ))}
                 </div>
 
+                {nativeCmd && (
+                  <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2.5">
+                    <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mb-1">
+                      <span className="font-mono">{t.nativeCli}</span>
+                      <CopyButton value={nativeCmd} label="Copy native resume command" />
+                    </div>
+                    <pre className="whitespace-pre-wrap break-all font-mono text-[10.5px] text-[var(--text-primary)]">
+                      {nativeCmd}
+                    </pre>
+                  </div>
+                )}
+
                 {cliCommand && (
                   <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2.5">
                     <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mb-1">
@@ -228,7 +306,18 @@ export function InspectorDrawer({ open, session, t, onClose }: InspectorDrawerPr
           </TabsContent>
         </Tabs>
       ) : (
-        <div className="p-3">
+        <div className="flex flex-col gap-2.5 p-3">
+          {nativeCmd && (
+            <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2.5">
+              <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mb-1">
+                <span className="font-mono">{t.nativeCli}</span>
+                <CopyButton value={nativeCmd} label="Copy native resume command" />
+              </div>
+              <pre className="whitespace-pre-wrap break-all font-mono text-[10.5px] text-[var(--text-primary)]">
+                {nativeCmd}
+              </pre>
+            </div>
+          )}
           {cliCommand && (
             <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2.5">
               <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mb-1">

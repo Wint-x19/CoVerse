@@ -95,8 +95,11 @@ export const api = {
 
   handoffSession: (
     id: string,
-    input: { to: string; model?: string; cwd?: string; title?: string },
+    input: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean },
   ): Promise<UiSession> => call(`/sessions/${id}/handoff`, (b) => b.handoffSession(id, input)),
+
+  materializeSession: (id: string): Promise<UiSession> =>
+    call(`/sessions/${id}/materialize`, (b) => b.materializeSession(id)),
 
   getBundle: (bundleId: string): Promise<BundleDetailResponse> =>
     call(`/bundles/${bundleId}`, (b) => b.getBundle(bundleId)),
