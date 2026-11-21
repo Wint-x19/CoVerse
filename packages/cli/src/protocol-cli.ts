@@ -1,3 +1,4 @@
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { open, rename, unlink, stat, realpath, type FileHandle } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -16,10 +17,10 @@ export const defaultIO: CliIO = {
   stderr: text => { process.stderr.write(text + "\n"); },
 };
 const encoder = new TextEncoder();
-const json = (value: unknown) => encoder.encode(JSON.stringify(value, null, 2) + "\n");
+const json = (value: unknown) => encoder.encode(stringifyWireJson(value, null, 2) + "\n");
 interface Arguments { from: string; to: string; kind: "request" | "response" | "stream"; input: string; output: string; report?: string; options: ConversionOptions }
 function parse(args: readonly string[]): Arguments {
-  const flags = new Set(["--allow-role-merge", "--reasoning-as-text"]);
+  const flags = new Set(["--allow-role-merge", "--allow-message-merge", "--allow-finish-approximation", "--reasoning-as-text"]);
   const values = new Set(["--from", "--to", "--kind", "--input", "--output", "--report", "--policy", "--target-model", "--max-output-tokens", "--candidate-index", "--omit"]);
   const found = new Map<string, string>(); const omit: string[] = [];
   const fail = (message: string): never => { throw new ProtocolError("CLI_ARGUMENT", "/arguments", message); };
@@ -40,7 +41,7 @@ function parse(args: readonly string[]): Arguments {
   const policy = found.get("--policy") ?? "strict"; if (policy !== "strict" && policy !== "allow-loss") fail("Invalid --policy");
   const report = found.get("--report"); if (report === "-") fail("--report must be a file so stdout remains protocol-only");
   if (policy === "allow-loss" && !report) fail("--policy allow-loss requires --report");
-  if (policy === "strict" && (omit.length || found.has("--allow-role-merge") || found.has("--reasoning-as-text") || found.has("--candidate-index"))) fail("Explicit degradation options require --policy allow-loss");
+  if (policy === "strict" && (omit.length || [...flags].some(flag => found.has(flag)) || found.has("--candidate-index"))) fail("Explicit degradation options require --policy allow-loss");
   const numeric = (key: string, minimum: number): number | undefined => {
     const value = found.get(key); if (value === undefined) return;
     if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < minimum) fail(`Invalid integer for ${key}`); return Number(value);
@@ -48,9 +49,12 @@ function parse(args: readonly string[]): Arguments {
   const maxOutputTokens = numeric("--max-output-tokens", 1); const candidateIndex = numeric("--candidate-index", 0);
   if (kind !== "request" && (maxOutputTokens !== undefined || found.has("--allow-role-merge"))) fail("Output budget and role merge apply only to requests");
   if (kind === "request" && candidateIndex !== undefined) fail("Candidate selection applies only to responses and streams");
+  if (kind === "request" && (found.has("--allow-message-merge") || found.has("--allow-finish-approximation"))) fail("Message merge and finish approximation apply only to responses and streams");
   return { from, to, kind: kind as Arguments["kind"], input: found.get("--input") ?? "-", output: found.get("--output") ?? "-", ...(report ? { report } : {}), options: {
     policy: policy as "strict" | "allow-loss", ...(found.has("--target-model") ? { targetModel: found.get("--target-model")! } : {}),
     ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}), ...(candidateIndex !== undefined ? { candidateIndex } : {}),
+    ...(found.has("--allow-message-merge") ? { allowMessageMerge: true } : {}),
+    ...(found.has("--allow-finish-approximation") ? { allowFinishApproximation: true } : {}),
     ...(found.has("--allow-role-merge") ? { allowRoleMerge: true } : {}), ...(found.has("--reasoning-as-text") ? { reasoningAsText: true } : {}), ...(omit.length ? { omit } : {}),
   } };
 }
@@ -101,7 +105,7 @@ export async function runProtocolCli(args: readonly string[], io: CliIO = defaul
       const decoder = new TextDecoder("utf-8", { fatal: true }); let text = "";
       try { for await (const bytes of input) text += decoder.decode(bytes, { stream: true }); text += decoder.decode(); }
       catch (error) { if (error instanceof TypeError) throw new ProtocolError("INVALID_INPUT", "/input", "Invalid UTF-8 input"); throw error; }
-      let value: unknown; try { value = JSON.parse(text); } catch { throw new ProtocolError("INVALID_INPUT", "/input", "Input must be valid JSON"); }
+      let value: unknown; try { value = parseWireJson(text); } catch { throw new ProtocolError("INVALID_INPUT", "/input", "Input must be valid JSON"); }
       const conversion = (parsed.kind === "request" ? convertRequest : convertResponse)({ from: parsed.from, to: parsed.to, input: value, options });
       report = { ledger: conversion.ledger, preserved: conversion.preserved };
       if (parsed.output !== "-") output = await AtomicFile.create(parsed.output);
@@ -113,10 +117,10 @@ export async function runProtocolCli(args: readonly string[], io: CliIO = defaul
     const protocol = error instanceof ProtocolError ? error : undefined;
     if (protocol && (protocol.report.preserved.length || Object.values(protocol.report.ledger).some(v => v.length))) report = protocol.report;
     const detail = { code: protocol?.code ?? "IO_ERROR", path: protocol?.path ?? "/", message: error instanceof Error ? error.message : "Conversion failed" };
-    io.stderr(JSON.stringify(detail));
+    io.stderr(stringifyWireJson(detail));
     if (safeReport && parsed?.report) {
       try { await writeReport(parsed.report, { status: "failed", from: parsed.from, to: parsed.to, kind: parsed.kind, error: detail, ...report }); }
-      catch (reportError) { io.stderr(JSON.stringify({ code: "IO_ERROR", message: `Cannot write report: ${String(reportError)}` })); return 1; }
+      catch (reportError) { io.stderr(stringifyWireJson({ code: "IO_ERROR", message: `Cannot write report: ${String(reportError)}` })); return 1; }
     }
     if (!protocol || protocol.code === "IO_ERROR") return 1;
     if (["CLI_ARGUMENT", "UNKNOWN_PROTOCOL"].includes(protocol.code) || parsed?.kind !== "stream" && ["INVALID_INPUT", "INVALID_ARGUMENTS", "INVALID_TOOL_LINK"].includes(protocol.code)) return 2;

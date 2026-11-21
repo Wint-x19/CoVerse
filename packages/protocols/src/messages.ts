@@ -1,3 +1,4 @@
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import type { ContentBlock, JsonValue, Turn } from "@coverse/core";
 import { ConversionContext, type ProtocolId } from "./contracts.js";
 import { array, boolean, fields, jsonArguments, literal, nonempty, object, string, type Obj } from "./validation.js";
@@ -33,7 +34,7 @@ export function decodeContent(value: unknown, protocol: ProtocolId, c: Conversio
     }
     if (protocol === "anthropic-messages" && b.type === "tool_use") {
       fields(b, ["type", "id", "name", "input"], c, path); object(b.input, c, path + "/input");
-      return [call(b.id, b.name, JSON.stringify(b.input), c, path)];
+      return [call(b.id, b.name, stringifyWireJson(b.input), c, path)];
     }
     if (protocol === "anthropic-messages" && b.type === "tool_result") {
       fields(b, ["type", "tool_use_id", "content", "is_error"], c, path);
@@ -136,9 +137,9 @@ export function encodeBlock(b: ContentBlock, protocol: ProtocolId, c: Conversion
 }
 export function argumentsText(b: Extract<ContentBlock, { type: "tool_call" }>): string {
   if (b.argumentsText !== undefined) {
-    try { if (JSON.stringify(JSON.parse(b.argumentsText)) === JSON.stringify(b.arguments)) return b.argumentsText; } catch { /* Edited invalid original is never replayed. */ }
+    try { if (stringifyWireJson(parseWireJson(b.argumentsText)) === stringifyWireJson(b.arguments)) return b.argumentsText; } catch { /* Edited invalid original is never replayed. */ }
   }
-  return JSON.stringify(b.arguments);
+  return stringifyWireJson(b.arguments);
 }
 export function encodeMessages(messages: readonly Turn[], protocol: ProtocolId, c: ConversionContext): Obj {
   const output: JsonValue[] = []; const system: JsonValue[] = []; let sawConversation = false;

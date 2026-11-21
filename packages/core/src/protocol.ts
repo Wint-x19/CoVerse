@@ -26,7 +26,13 @@ export interface ProtocolResponse {
   id: string;
   model: string;
   createdAt?: number;
-  candidates: { index: number; content: ContentBlock[]; finish: string }[];
+  candidates: {
+    index: number;
+    content: ContentBlock[];
+    finish: string;
+    /** Block counts retain ordered Responses output-item boundaries, including empty messages. */
+    outputItems?: { kind: "message" | "reasoning" | "function_call"; length: number }[];
+  }[];
   usage: ProtocolUsage;
 }
 /** Semantic events; wire metadata is retained separately by the codec context. */

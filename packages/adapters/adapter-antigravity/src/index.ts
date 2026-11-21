@@ -1,3 +1,4 @@
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { createRequire } from "node:module";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
@@ -33,7 +34,7 @@ async function open(files: FileSet) {
     if (tables.length !== Object.keys(columns).length || tables.some(t => !Object.hasOwn(columns, t))) throw new SessionError("UNSUPPORTED_VERSION", file.path, "Unverified Antigravity database schema");
     for (const [table, expected] of Object.entries(columns)) {
       const actual = rows(db, `PRAGMA table_info('${table}')`).map(r => String(r.name));
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new SessionError("UNSUPPORTED_VERSION", `${file.path}/${table}`, "Unverified database column layout");
+      if (stringifyWireJson(actual) !== stringifyWireJson(expected)) throw new SessionError("UNSUPPORTED_VERSION", `${file.path}/${table}`, "Unverified database column layout");
     }
     if (rows(db, "PRAGMA quick_check")[0]?.quick_check !== "ok") throw new SessionError("INVALID_INPUT", file.path, "SQLite integrity check failed");
     return { file, db };
@@ -56,7 +57,7 @@ function callBlock(value: JsonValue, at: string): Extract<ContentBlock, { type: 
   if (populated(call.invalid_json_str) || populated(call.invalid_json_err)) throw new SessionError("INVALID_INPUT", at, "Native tool arguments are marked invalid");
   const text = requireString(call.arguments_json, at);
   let args: JsonValue;
-  try { args = JSON.parse(text) as JsonValue; } catch { throw new SessionError("INVALID_INPUT", at, "Invalid tool argument JSON"); }
+  try { args = parseWireJson(text) as JsonValue; } catch { throw new SessionError("INVALID_INPUT", at, "Invalid tool argument JSON"); }
   return { type: "tool_call", id: requireString(call.id, at), name: requireString(call.name, at), arguments: args, argumentsText: text };
 }
 const adapter: SessionAdapter = {
@@ -102,7 +103,7 @@ const adapter: SessionAdapter = {
         let role: Turn["role"] = "system", kind: NonNullable<Turn["origin"]>["kind"] = "message";
         const recordCall = (value: JsonValue, inPlanner: boolean) => {
           const block = callBlock(value, at), old = calls.get(block.id);
-          if (old && (inPlanner || JSON.stringify(old) !== JSON.stringify(block))) throw new SessionError("INVALID_INPUT", at, "Conflicting or duplicate native tool call");
+          if (old && (inPlanner || stringifyWireJson(old) !== stringifyWireJson(block))) throw new SessionError("INVALID_INPUT", at, "Conflicting or duplicate native tool call");
           if (!old) { calls.set(block.id, block); content.push(block); }
           if (isRecord(value)) opaqueFields(content, value, ["function_call_parts"]);
           return block.id;
@@ -134,7 +135,7 @@ const adapter: SessionAdapter = {
             if (isRecord(generic.result)) {
               const result = generic.result;
               content.push({ type: "tool_result", callId, content: typeof result.result === "string" ? result.result : "", isError: step.status === 7 });
-              if (Array.isArray(result.metadata) || Array.isArray(result.data)) content.push({ type: "text", text: `Native tool result metadata:\n${JSON.stringify({ metadata: result.metadata, data: result.data }, null, 2)}` });
+              if (Array.isArray(result.metadata) || Array.isArray(result.data)) content.push({ type: "text", text: `Native tool result metadata:\n${stringifyWireJson({ metadata: result.metadata, data: result.data }, null, 2)}` });
               if (typeof result.full_output_uri === "string" && result.full_output_uri) {
                 const name = decodeURIComponent(result.full_output_uri.split(/[\\/]/).at(-1)!);
                 const candidates = files.filter(f => f.path === result.full_output_uri || f.path.split("/").at(-1) === name);
@@ -149,18 +150,32 @@ const adapter: SessionAdapter = {
           case 101: {
             const system = object(step.system_message, at);
             if (typeof system.message === "string") content.push({ type: "text", text: system.message });
-            if (system.metadata) content.push({ type: "text", text: `Historical system metadata:\n${JSON.stringify(system.metadata)}` });
+            if (system.metadata) content.push({ type: "text", text: `Historical system metadata:\n${stringifyWireJson(system.metadata)}` });
             opaqueFields(content, system, ["agent_message", "media"]); break;
           }
-          case 17: content.push({ type: "text", text: `Historical error:\n${JSON.stringify(object(step.error_message, at), null, 2)}` }); break;
+          case 17: content.push({ type: "text", text: `Historical error:\n${stringifyWireJson(object(step.error_message, at), null, 2)}` }); break;
           case 23: {
             kind = "compaction"; const checkpoint = object(step.checkpoint, at);
-            content.push({ type: "text", text: `Historical checkpoint (preceding records retained):\n${JSON.stringify(checkpoint, null, 2)}` });
-            opaqueFields(content, checkpoint, ["edited_file_map", "artifact_snapshots", "trajectory_file_diffs", "subagent_snapshots", "running_task_snapshots", "accumulated_sections", "captured_user_requests", "captured_parent_messages"]); break;
+            const opaqueKeys = ["edited_file_map", "artifact_snapshots", "trajectory_file_diffs", "subagent_snapshots", "running_task_snapshots", "accumulated_sections", "captured_user_requests", "captured_parent_messages"];
+            const readable = Object.fromEntries(Object.entries(checkpoint).filter(([key]) => !opaqueKeys.includes(key)));
+            content.push({ type: "text", text: `Historical checkpoint:\n${stringifyWireJson(readable, null, 2)}` });
+            const indices = checkpoint.included_step_indices;
+            if (step.status === 3 && Array.isArray(indices) && indices.length) {
+              const covered = new Set(indices);
+              const previous = session.continuation;
+              const priorBoundary = previous ? session.turns.findIndex(t => t.id === previous.boundaryId) : -1;
+              const priorIds = new Set(previous?.retainedIds);
+              const retainedIds = session.turns.filter((t, i) => (i > priorBoundary || priorIds.has(t.id)) && !covered.has(t.origin!.record)).map(t => t.id);
+              const boundaryId = `${session.meta.id}:${row.idx}`;
+              session.continuation = { boundaryId, retainedIds: [...retainedIds, boundaryId], replacement: [] };
+            } else if (step.status === 3) {
+              ledger.approximated.push({ code: "UNVERIFIED_CHECKPOINT_COVERAGE", path: at, reason: "Checkpoint lacks an explicit covered-step list; existing history was retained" });
+            }
+            opaqueFields(content, checkpoint, opaqueKeys); break;
           }
           default: throw new SessionError("UNSUPPORTED_VERSION", at, "Unverified Antigravity step type");
         }
-        if (step.error) content.push({ type: "text", text: `Historical step error:\n${JSON.stringify(step.error)}` });
+        if (step.error) content.push({ type: "text", text: `Historical step error:\n${stringifyWireJson(step.error)}` });
         session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step, origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind } });
       }
       validateToolLinks(session.turns);

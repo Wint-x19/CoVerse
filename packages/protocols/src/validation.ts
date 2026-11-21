@@ -1,3 +1,4 @@
+import { parseWireJson } from "@coverse/core";
 import type { JsonValue, Turn } from "@coverse/core";
 import { ConversionContext } from "./contracts.js";
 export type Obj = { [key: string]: JsonValue };
@@ -36,7 +37,7 @@ export function literal(value: unknown, allowed: readonly JsonValue[], c: Conver
 export function jsonArguments(value: unknown, c: ConversionContext, path: string): { arguments: JsonValue; argumentsText: string } {
   const text = string(value, c, path);
   let parsed: unknown;
-  try { parsed = JSON.parse(text); } catch { return c.fail("INVALID_ARGUMENTS", path, "Tool arguments must be complete JSON"); }
+  try { parsed = parseWireJson(text); } catch { return c.fail("INVALID_ARGUMENTS", path, "Tool arguments must be complete JSON"); }
   object(parsed, c, path);
   return { arguments: parsed as JsonValue, argumentsText: text };
 }

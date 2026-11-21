@@ -1,3 +1,4 @@
+import { stringifyWireJson } from "@coverse/core";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "transcript-sdk-0_3_326";
@@ -62,7 +63,7 @@ const adapter: SessionAdapter = {
       const id = e.value.uuid;
       if (typeof id !== "string") continue;
       const old = nodes.get(id);
-      if (old && JSON.stringify(old.value) !== JSON.stringify(e.value)) throw new SessionError("INVALID_INPUT", `${e.artifact}:${e.line}`, "Conflicting duplicate transcript UUID");
+      if (old && stringifyWireJson(old.value) !== stringifyWireJson(e.value)) throw new SessionError("INVALID_INPUT", `${e.artifact}:${e.line}`, "Conflicting duplicate transcript UUID");
       if (old) continue;
       nodes.set(id, e);
       if (typeof e.value.parentUuid === "string") children.set(e.value.parentUuid, [...(children.get(e.value.parentUuid) ?? []), id]);
@@ -98,12 +99,20 @@ const adapter: SessionAdapter = {
           (r.type === "ai-title" && r.sessionId === session.meta.id && typeof r.aiTitle === "string" &&
             Object.keys(r).every(key => ["type", "sessionId", "aiTitle"].includes(key)))) {
         if (r.subtype === "compact_boundary" || r.type === "summary") origin.kind = "compaction";
-        turn = { id, role: "system", content: [{ type: "text", text: `Historical ${String(r.type)} record:\n${JSON.stringify(r, null, 2)}` }], raw: r, origin };
+        turn = { id, role: "system", content: [{ type: "text", text: `Historical ${String(r.type)} record:\n${stringifyWireJson(r, null, 2)}` }], raw: r, origin };
         ledger.downgraded.push({ code: "NATIVE_CONTEXT_AS_HISTORY", path: at, reason: "Native context, progress and compaction data are labeled history, not target runtime state" });
       } else if (!["file-history-snapshot", "queue-operation", "last-prompt", "custom-title", "tag", "agent-name", "agent-color", "agent-setting", "pr-link"].includes(String(r.type))) {
         turn = { id, role: "system", content: [{ type: "opaque", source: "claude-code:record", value: r }], raw: r, origin };
       }
-      if (turn) { session.turns.push(turn); byId.set(id, turn); }
+      if (turn) {
+        session.turns.push(turn); byId.set(id, turn);
+        if (r.isCompactSummary === true && origin.branchId === "main") {
+          const boundary = chain.map(parent => nodes.get(parent)?.value).find(row => row?.subtype === "compact_boundary");
+          const segment = boundary && isRecord(boundary.compactMetadata) ? boundary.compactMetadata.preservedSegment : undefined;
+          if (segment != null) throw new SessionError("UNINTERPRETED_CONTENT", at, "Partial compaction includes a preserved segment whose order has not been verified");
+          session.continuation = { boundaryId: id, retainedIds: [id], replacement: [] };
+        }
+      }
     }
     // A tool result may refer to a shared ancestor of a fork, but not to a sibling branch.
     for (const turn of session.turns) {

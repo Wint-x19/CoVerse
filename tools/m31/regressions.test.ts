@@ -28,8 +28,13 @@ it("keeps skill invocation and MCP schema errors as quoted data with distinct ar
   expect(imported.session.turns[0]?.content[0]).toMatchObject({type:"tool_call",arguments:"dispatch-check v1"});
   const result=await p.export(imported.session,{ledger:imported.ledger});
   const {context}=verifyInjectionBundle(result.artifacts,"codex");
-  for(const word of ["ARCHIVE-81","mcp__green__lookup","wrong-version","ticket","m31://green/receipt","isError"]) expect(context).toContain(word);
-  expect(result.ledger.downgraded.filter(i=>i.code==="TOOL_AS_HISTORY")).toHaveLength(4);
+  const archived = Buffer.from(result.artifacts.find(f => f.path === "session.json")!.bytes).toString();
+  for(const word of ["ARCHIVE-81","mcp__green__lookup","wrong-version","ticket","m31://green/receipt","isError"]) {
+    expect(archived).toContain(word);
+    expect(context).not.toContain(word);
+  }
+  expect(context).toContain("Historical checkpoint");
+  expect(imported.ledger.approximated[0]?.code).toBe("SUMMARY_ONLY_WINDOW");
 });
 it("exports a 2.1.121 generated conversation title as historical metadata", async () => {
   const p=plugins.get("claude-code");

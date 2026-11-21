@@ -1,3 +1,4 @@
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import type { JsonValue, ProtocolEvent } from "@coverse/core";
 import { ConversionContext, type ProtocolId } from "./contracts.js";
 import { decodeResponse, decodeUsage, finishFrom } from "./responses.js";
@@ -8,6 +9,7 @@ import { StreamState } from "./stream-state.js";
 export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: ProtocolId, c: ConversionContext): AsyncGenerator<ProtocolEvent> {
   const state = new StreamState(c);
   const chatTools = new Map<number, number>(); let chatText: number | undefined;
+  let messageCount = 0;
   const items = new Map<number, { id: string; type: string; blocks: Map<number, number>; done: boolean }>();
   const textDone = new Set<number>(); const partDone = new Set<number>(); let nextBlock = 0; let sequence = -1;
   const emit = function*(events: ProtocolEvent[]) { for (const e of events) { state.accept(e); yield e; } };
@@ -16,7 +18,7 @@ export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: Protoc
       if (id !== "chat-completions") c.fail("INVALID_EVENT_ORDER", "/stream", "Unexpected DONE marker");
       yield* emit([{ type: "end" }]); continue;
     }
-    let parsed: unknown; try { parsed = JSON.parse(frame.data); } catch { c.fail("INVALID_SSE", "/stream", "Event data must be valid JSON"); }
+    let parsed: unknown; try { parsed = parseWireJson(frame.data); } catch { c.fail("INVALID_SSE", "/stream", "Event data must be valid JSON"); }
     const o = object(parsed, c, "/stream");
     if (state.ended) c.fail("INVALID_EVENT_ORDER", "/stream", "Event after terminal event");
     if (o.error !== undefined || o.type === "error" || o.type === "response.failed") { c.preserve("/stream/error", o, "Upstream error"); c.fail("UPSTREAM_ERROR", "/stream", "Upstream reported an error"); }
@@ -146,6 +148,8 @@ export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: Protoc
           events.push({ type: "block_start", index: block, kind: "tool_call", id: nonempty(item.call_id, c, "/stream/item/call_id"), name: nonempty(item.name, c, "/stream/item/name") });
           const text = string(item.arguments, c, "/stream/item/arguments"); if (text) events.push({ type: "delta", index: block, text });
         } else if (item.type === "message") {
+          if (++messageCount > 1 && c.target !== "responses") c.loss("downgraded", "MESSAGE_BOUNDARIES_MERGED",
+            `/output/${index}`, "Separate assistant messages share one target response message", c.options.allowMessageMerge);
           fields(item, ["type", "id", "role", "content", "status"], c, "/stream/item"); literal(item.role, ["assistant"], c, "/stream/item/role");
           if (array(item.content, c, "/stream/item/content").length) c.fail("INVALID_EVENT_ORDER", "/stream/item/content", "Streamed message must begin empty");
         } else if (item.type === "reasoning") {
@@ -163,9 +167,9 @@ export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: Protoc
         if (r.id !== state.id || r.model !== state.model) c.fail("INVALID_EVENT_ORDER", "/stream", "Final response identity mismatch");
         const raw = object(o.response, c, "/stream/response"); literal(raw.status, [type === "response.completed" ? "completed" : "incomplete"], c, "/stream/response/status");
         const final = r.candidates[0]!;
-        const actual = [...state.blocks.values()].map(b => b.kind === "tool_call" ? { type: "tool_call", id: b.id, name: b.name, arguments: JSON.parse(b.text) } : b.kind === "reasoning" ? { type: "reasoning", text: b.text, encrypted: b.opaque?.value ?? null } : { type: "text", text: b.text });
+        const actual = [...state.blocks.values()].map(b => b.kind === "tool_call" ? { type: "tool_call", id: b.id, name: b.name, arguments: parseWireJson(b.text) } : b.kind === "reasoning" ? { type: "reasoning", text: b.text, encrypted: b.opaque?.value ?? null } : { type: "text", text: b.text });
         const expected = final.content.map(b => b.type === "tool_call" ? { type: "tool_call", id: b.id, name: b.name, arguments: b.arguments } : b.type === "opaque" ? { type: "reasoning", text: ((b.value as Obj).summary as Obj[]).map(s => s.text).join(""), encrypted: (b.value as Obj).encrypted_content ?? null } : b);
-        if (JSON.stringify(actual) !== JSON.stringify(expected)) c.fail("INVALID_EVENT_ORDER", "/stream/response/output", "Final output disagrees with streamed content");
+        if (stringifyWireJson(actual) !== stringifyWireJson(expected)) c.fail("INVALID_EVENT_ORDER", "/stream/response/output", "Final output disagrees with streamed content");
         events.push({ type: "usage", usage: r.usage }, { type: "finish", reason: final.finish }, { type: "end" });
       } else {
         const index = number(o.output_index, c, "/stream/output_index"); const item = items.get(index);

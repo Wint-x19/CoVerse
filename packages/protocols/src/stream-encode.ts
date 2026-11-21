@@ -1,3 +1,4 @@
+import { parseWireJson } from "@coverse/core";
 import type { JsonValue, ProtocolEvent, ProtocolResponse } from "@coverse/core";
 import { ConversionContext, type ProtocolId } from "./contracts.js";
 import { encodeResponse, encodeUsage, finishTo } from "./responses.js";
@@ -11,7 +12,7 @@ export async function* encodeStream(input: AsyncIterable<ProtocolEvent>, id: Pro
   let sawTools = false;
   const event = (type: string, body: Obj = {}) => sse({ type, ...(id === "responses" ? { sequence_number: sequence++ } : {}), ...body }, type);
   const chat = (delta: Obj, finish: JsonValue = null, usage?: Obj) => sse({ id: state.id, object: "chat.completion.chunk", created: 0, model: c.options.targetModel ?? state.model, choices: usage ? [] : [{ index: 0, delta, finish_reason: finish }], ...(usage ? { usage } : {}) });
-  const response = (): ProtocolResponse => ({ schemaVersion: "1.0", id: state.id, model: c.options.targetModel ?? state.model, candidates: [{ index: 0, content: [...state.blocks.values()].map(b => b.kind === "tool_call" ? { type: "tool_call", id: b.id!, name: b.name!, arguments: JSON.parse(b.text) as JsonValue, argumentsText: b.text } : b.kind === "reasoning" ? { type: "opaque", source: id, value: item(b, true) } : { type: "text", text: b.text }), finish: state.reason }], usage: state.usage });
+  const response = (): ProtocolResponse => ({ schemaVersion: "1.0", id: state.id, model: c.options.targetModel ?? state.model, candidates: [{ index: 0, content: [...state.blocks.values()].map(b => b.kind === "tool_call" ? { type: "tool_call", id: b.id!, name: b.name!, arguments: parseWireJson(b.text) as JsonValue, argumentsText: b.text } : b.kind === "reasoning" ? { type: "opaque", source: id, value: item(b, true) } : { type: "text", text: b.text }), finish: state.reason }], usage: state.usage });
   const item = (b: BlockState, done: boolean): Obj => b.kind === "tool_call" ? { type: "function_call", id: `item_${wireIndexes.get(b.index)}`, call_id: b.id!, name: b.name!, arguments: done ? b.text : "", status: done ? "completed" : "in_progress" } : b.kind === "reasoning" ? { type: "reasoning", id: `item_${wireIndexes.get(b.index)}`, summary: done ? [{ type: "summary_text", text: b.text }] : [], ...(done && b.opaque ? { encrypted_content: b.opaque.value } : {}) } : { type: "message", id: `item_${wireIndexes.get(b.index)}`, role: "assistant", status: done ? "completed" : "in_progress", content: done ? [{ type: "output_text", text: b.text, annotations: [] }] : [] };
   for await (const e of input) {
     if (c.options.signal?.aborted) c.fail("CANCELLED", "/stream", "Conversion cancelled");

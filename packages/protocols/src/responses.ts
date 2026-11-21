@@ -39,10 +39,16 @@ export function encodeUsage(u: ProtocolUsage, id: ProtocolId, c: ConversionConte
   return o;
 }
 export function finishFrom(value: unknown, id: ProtocolId, c: ConversionContext, p: string): string {
-  const mappings: Record<string, string> = id === "anthropic-messages" ? { end_turn: "stop", max_tokens: "length", tool_use: "tool_calls", stop_sequence: "stop_sequence", refusal: "refusal" } : { stop: "stop", length: "length", tool_calls: "tool_calls", content_filter: "refusal" };
+  const mappings: Record<string, string> = id === "anthropic-messages" ? { end_turn: "stop", max_tokens: "length", tool_use: "tool_calls", stop_sequence: "stop_sequence", refusal: "refusal" } : { stop: "stop", length: "length", tool_calls: "tool_calls", content_filter: "content_filter" };
   const v = string(value, c, p); if (!mappings[v]) c.fail("UNSUPPORTED_CAPABILITY", p, `Unverified finish reason: ${v}`); return mappings[v]!;
 }
 export function finishTo(value: string, id: ProtocolId, c: ConversionContext): string {
+  if (value === "content_filter" || value === "refusal") {
+    const targetReason = id === "anthropic-messages" ? "refusal" : "content_filter";
+    if (value !== targetReason) c.loss("approximated", "FINISH_REASON_APPROXIMATED", "/finish",
+      `Source ${value} is represented as ${targetReason}`, c.options.allowFinishApproximation);
+    return targetReason;
+  }
   const map: Record<string, string> = id === "anthropic-messages" ? { stop: "end_turn", length: "max_tokens", tool_calls: "tool_use", stop_sequence: "stop_sequence", refusal: "refusal" } : { stop: "stop", length: "length", tool_calls: "tool_calls", refusal: "content_filter" };
   if (!map[value]) c.fail("UNSUPPORTED_CAPABILITY", "/finish", `Finish reason cannot be represented: ${value}`); return map[value]!;
 }
@@ -71,20 +77,23 @@ export function decodeResponse(input: unknown, id: ProtocolId, c: ConversionCont
     if (o.error != null) c.fail("UPSTREAM_ERROR", "/error", "Source response failed");
     literal(o.status, ["completed", "incomplete"], c, "/status");
     let finish = "stop";
-    if (o.status === "incomplete") { const d = object(o.incomplete_details, c, "/incomplete_details"); fields(d, ["reason"], c, "/incomplete_details"); literal(d.reason, ["max_output_tokens", "content_filter"], c, "/incomplete_details/reason"); finish = d.reason === "max_output_tokens" ? "length" : "refusal"; }
+    if (o.status === "incomplete") { const d = object(o.incomplete_details, c, "/incomplete_details"); fields(d, ["reason"], c, "/incomplete_details"); literal(d.reason, ["max_output_tokens", "content_filter"], c, "/incomplete_details/reason"); finish = d.reason === "max_output_tokens" ? "length" : "content_filter"; }
     else if (o.incomplete_details != null) c.fail("INVALID_INPUT", "/incomplete_details", "Completed response has incomplete details");
     const content: ContentBlock[] = [];
+    const outputItems: NonNullable<ProtocolResponse["candidates"][number]["outputItems"]> = [];
     array(o.output, c, "/output").forEach((v, i) => {
       const p = `/output/${i}`; const item = object(v, c, p);
+      const start = content.length;
       if (item.type === "reasoning") content.push(...decodeReasoning(item, c, p));
       else {
         if (!["message", "function_call"].includes(String(item.type))) { c.unsupported(p, v, "Unverified output item"); return; }
         if (item.type === "message") literal(item.role, ["assistant"], c, p + "/role");
         content.push(...decodeMessages({ input: [item] }, id, c, [p]).flatMap(m => m.content));
       }
+      outputItems.push({ kind: item.type as "message" | "function_call" | "reasoning", length: content.length - start });
     });
     if (finish === "stop" && content.some(b => b.type === "tool_call")) finish = "tool_calls";
-    r.candidates = [{ index: 0, content, finish }];
+    r.candidates = [{ index: 0, content, finish, outputItems }];
   }
   for (const candidate of r.candidates) {
     if (candidate.content.some(b => b.type === "tool_result")) c.fail("INVALID_INPUT", "/content", "Assistant responses cannot contain user tool results");
@@ -102,6 +111,10 @@ export function encodeResponse(r: ProtocolResponse, id: ProtocolId, c: Conversio
     c.loss("dropped", "CANDIDATE_SELECTION", "/candidates", "Only the explicitly selected candidate is emitted", true); candidates = [selected];
   }
   const usage = encodeUsage(r.usage, id, c); const model = c.options.targetModel ?? r.model;
+  for (const candidate of candidates) {
+    if (id !== "responses" && (candidate.outputItems?.filter(i => i.kind === "message").length ?? 0) > 1)
+      c.loss("downgraded", "MESSAGE_BOUNDARIES_MERGED", "/output", "Separate assistant messages share one target response message", c.options.allowMessageMerge);
+  }
   // Zero is an explicit unavailable timestamp sentinel, never wall-clock fabrication.
   if (r.createdAt === undefined && id !== "anthropic-messages") c.preserve("/created", 0, "Generated wire timestamp sentinel: source did not report creation time");
   if (id === "chat-completions") return { id: r.id, object: "chat.completion", created: r.createdAt ?? 0, model, choices: candidates.map(v => {
@@ -115,12 +128,24 @@ export function encodeResponse(r: ProtocolResponse, id: ProtocolId, c: Conversio
     const m = encodeMessages([{ id: "output", role: "assistant", content: v.content }], id, c).messages as Obj[];
     return { id: r.id, type: "message", role: "assistant", model, content: m[0]!.content!, stop_reason: finishTo(v.finish, id, c), stop_sequence: null, usage };
   }
-  const output = encodeMessages([{ id: "output", role: "assistant", content: v.content }], id, c).input as Obj[];
+  let groups = [v.content];
+  if (v.outputItems) {
+    let offset = 0;
+    groups = v.outputItems.map(item => {
+      if (!Number.isSafeInteger(item.length) || item.length < 0) c.fail("INVALID_INPUT", "/output", "Invalid output item boundary");
+      const blocks = v.content.slice(offset, offset + item.length);
+      offset += item.length;
+      return blocks;
+    });
+    if (offset !== v.content.length) c.fail("INVALID_INPUT", "/output", "Edited blocks no longer match the output item boundaries");
+  }
+  const output = encodeMessages(groups.map((content, i) => ({ id: `output_${i}`, role: "assistant", content })), id, c).input as Obj[];
   output.forEach((item, i) => {
     if (item.id === undefined) item.id = `item_${i}`;
     if (item.type === "message" || item.type === "function_call") item.status = "completed";
     if (item.type === "message") for (const b of item.content as Obj[]) if (b.type === "output_text") b.annotations = [];
   });
-  if (!["stop", "tool_calls", "length", "refusal"].includes(v.finish)) c.fail("UNSUPPORTED_CAPABILITY", "/finish", "Unsupported Responses finish reason");
-  return { id: r.id, object: "response", created_at: r.createdAt ?? 0, model, status: ["length", "refusal"].includes(v.finish) ? "incomplete" : "completed", output, error: null, incomplete_details: v.finish === "length" ? { reason: "max_output_tokens" } : v.finish === "refusal" ? { reason: "content_filter" } : null, ...(Object.keys(usage).length ? { usage } : {}) };
+  const finish = finishTo(v.finish, id, c);
+  const incomplete = finish === "length" || finish === "content_filter";
+  return { id: r.id, object: "response", created_at: r.createdAt ?? 0, model, status: incomplete ? "incomplete" : "completed", output, error: null, incomplete_details: incomplete ? { reason: finish === "length" ? "max_output_tokens" : "content_filter" } : null, ...(Object.keys(usage).length ? { usage } : {}) };
 }

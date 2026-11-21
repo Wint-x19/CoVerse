@@ -6,6 +6,8 @@ export interface ConversionOptions {
   targetModel?: string;
   maxOutputTokens?: number;
   allowRoleMerge?: boolean;
+  allowMessageMerge?: boolean;
+  allowFinishApproximation?: boolean;
   reasoningAsText?: boolean;
   candidateIndex?: number;
   /** Exact diagnostic pointers (source or IR); no wildcard or blanket dropping. */

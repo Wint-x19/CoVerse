@@ -29,6 +29,17 @@ it("rejects unverified writers, corrupt input and broken tool associations", () 
   expect(() => adapter.import([{ path: "rollout.jsonl", bytes: new TextEncoder().encode('{"x":') }])).toThrow("Invalid JSON");
   expect(() => adapter.import(encode([header, response({ type: "function_call_output", call_id: "orphan", output: "x" })]))).toThrow("no preceding call");
 });
+it("exports only the replacement window and subsequent turns for target continuation", async () => {
+  const msg = (text: string) => ({ type: "message", role: "user", content: [{ type: "input_text", text }] });
+  const rows = [header, response(msg("archived-before")), { type: "compacted", payload: {
+    message: "archived-summary", replacement_history: [msg("retained-first"), msg("retained-second")] } }, response(msg("later-message"))];
+  const imported = await adapter.import(encode(rows));
+  const result = await adapter.export(imported.session);
+  const read = (name: string) => new TextDecoder().decode(result.artifacts.find(f => f.path === name)!.bytes);
+  expect(read("context.md")).toMatch(/retained-first[\s\S]*retained-second[\s\S]*later-message/);
+  expect(read("context.md")).not.toMatch(/archived-before|archived-summary/);
+  expect(read("session.json")).toContain("archived-before");
+});
 it("archives unknown semantics but refuses a falsely complete export", async () => {
   for (const value of [{ type: "future", data: "keep" }, { type: "reasoning", summary: [], encrypted_content: "synthetic-ciphertext" }]) {
     const r = await adapter.import(encode([header, response(value)]));

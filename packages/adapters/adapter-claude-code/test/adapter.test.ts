@@ -40,3 +40,15 @@ it("includes legacy summary records in the transcript with a compaction label", 
   expect(r.session.turns.at(-1)!.origin!.kind).toBe("compaction");
   expect(JSON.stringify(r.session.turns.at(-1)!.content)).toContain("Keep this historical summary");
 });
+it("uses the compact summary and subsequent messages for target continuation", async () => {
+  const rows = await fixture();
+  const user = rows[0];
+  rows.push({ ...user, uuid: "summary", parentUuid: rows.at(-1).uuid, isCompactSummary: true, message: { role: "user", content: "latest summary" } });
+  rows.push({ ...user, uuid: "next", parentUuid: "summary", message: { role: "user", content: "next question" } });
+  const r = await adapter.import(input(rows));
+  const result = await adapter.export(r.session);
+  const context = new TextDecoder().decode(result.artifacts.find(f => f.path === "context.md")!.bytes);
+  expect(context).toMatch(/latest summary[\s\S]*next question/);
+  expect(context).not.toContain("Historical tool call");
+  expect(r.session.turns).toHaveLength(6);
+});

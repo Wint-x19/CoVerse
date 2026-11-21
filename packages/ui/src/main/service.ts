@@ -1,3 +1,4 @@
+import { parseWireJson } from "@coverse/core";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -982,15 +983,17 @@ export class UiService {
     const inheritedDiagnostics: SessionDiagnostic[] = [];
     let sourceArtifacts: FileSet = [];
     let loadedPriorTurns = false;
+    let continuation: CSR["continuation"];
 
     if (sourceSession.handoff) {
       try {
         const prevFiles = await this.store.loadBundleFiles(sourceSession.handoff.bundleId);
         const sessionBytes = prevFiles.find((f) => f.path === "session.json")?.bytes;
         if (sessionBytes) {
-          const prevCsr = JSON.parse(new TextDecoder().decode(sessionBytes)) as CSR;
+          const prevCsr = parseWireJson(new TextDecoder().decode(sessionBytes)) as unknown as CSR;
           if (Array.isArray(prevCsr.turns)) {
             for (const turn of prevCsr.turns) turns.push(turn);
+            continuation = prevCsr.continuation;
             loadedPriorTurns = true;
           }
         }
@@ -1053,6 +1056,7 @@ export class UiService {
         createdAt: sourceSession.createdAt,
       },
       turns,
+      ...(continuation ? { continuation } : {}),
       xExtensions: {
         "x-coverse-desktop": {
           sourceUiSessionId: sourceSession.id,

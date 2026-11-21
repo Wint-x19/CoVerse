@@ -1,3 +1,4 @@
+import { stringifyWireJson } from "@coverse/core";
 import { ConversionContext } from "./contracts.js";
 
 export interface SseFrame { event: string; data: string }
@@ -31,7 +32,7 @@ export async function* readSse(input: AsyncIterable<Uint8Array>, c: ConversionCo
       try { chunk = next.done ? decoder.decode() : decoder.decode(next.value, { stream: true }); }
       catch { c.fail("INVALID_SSE", "/stream", "Invalid UTF-8 stream"); }
       if (chunk.length) {
-        let start = skipLF && chunk[0] === "\n" ? 1 : 0;
+        let start: number = skipLF && chunk[0] === "\n" ? 1 : 0;
         skipLF = false;
         const endings = /\r\n|[\r\n]/g;
         endings.lastIndex = start;
@@ -55,5 +56,5 @@ export async function* readSse(input: AsyncIterable<Uint8Array>, c: ConversionCo
 }
 const encoder = new TextEncoder();
 export function sse(data: unknown, event?: string): Uint8Array {
-  return encoder.encode(`${event ? `event: ${event}\n` : ""}data: ${typeof data === "string" ? data : JSON.stringify(data)}\n\n`);
+  return encoder.encode(`${event ? `event: ${event}\n` : ""}data: ${typeof data === "string" ? data : stringifyWireJson(data)}\n\n`);
 }

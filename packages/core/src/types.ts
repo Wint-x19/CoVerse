@@ -1,5 +1,5 @@
 /** CoVerse IR v1. Protocol wire formats belong to codecs, not core. */
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue = null | boolean | number | bigint | string | JsonValue[] | { [key: string]: JsonValue };
 
 /** Paths are portable relative paths; contents may be binary or compressed. */
 export interface Artifact {
@@ -49,6 +49,8 @@ export interface CSR {
     vcs?: { root: string; branch?: string; commit?: string };
   };
   turns: Turn[];
+  /** At the boundary the source replaced earlier history. Later turns remain live. */
+  continuation?: { boundaryId: string; retainedIds: string[]; replacement: Turn[] };
   xExtensions: Record<string, JsonValue>;
   raw?: JsonValue;
   /** Retain exact bytes as well as parsed records when the source needs them. */

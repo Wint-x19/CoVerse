@@ -1,3 +1,4 @@
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { decompress } from "fzstd";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
@@ -49,8 +50,9 @@ const adapter: SessionAdapter = {
       const key = `${String(p.role)}\0${p.content.map(b => (b as Record<string, JsonValue>).text).join("")}`;
       mirrors.set(key, (mirrors.get(key) ?? 0) + 1);
     }
+    let destination = session.turns;
     const add = (role: Turn["role"], content: ContentBlock[], raw: JsonValue, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
-      session.turns.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact: file.path, record: line, ...(kind ? { kind } : {}) } });
+      destination.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact: file.path, record: line, ...(kind ? { kind } : {}) } });
     };
     if (isRecord(meta.base_instructions) && typeof meta.base_instructions.text === "string") add("system", [{ type: "text", text: meta.base_instructions.text }], meta.base_instructions, 1);
     const item = (p: Record<string, JsonValue>, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
@@ -63,7 +65,7 @@ const adapter: SessionAdapter = {
           const input = p.type === "function_call" ? p.arguments : p.input;
           if (typeof input !== "string") throw new SessionError("INVALID_INPUT", path, "Tool input must be a string");
           let args: JsonValue = input;
-          if (p.type === "function_call") { try { args = JSON.parse(input) as JsonValue; } catch { throw new SessionError("INVALID_INPUT", path, "Function arguments are not valid JSON"); } }
+          if (p.type === "function_call") { try { args = parseWireJson(input) as JsonValue; } catch { throw new SessionError("INVALID_INPUT", path, "Function arguments are not valid JSON"); } }
           add("assistant", [{ type: "tool_call", id: requireString(p.call_id, path), name: requireString(p.name, path), arguments: args, argumentsText: input }], p, line, kind); break;
         }
         case "function_call_output": case "custom_tool_call_output":
@@ -77,7 +79,7 @@ const adapter: SessionAdapter = {
           add("assistant", blocks, p, line, kind); break;
         }
         case "additional_tools":
-          add("system", [{ type: "text", text: `Historical tool definitions:\n${JSON.stringify(p.tools, null, 2)}` }], p, line, kind);
+          add("system", [{ type: "text", text: `Historical tool definitions:\n${stringifyWireJson(p.tools, null, 2)}` }], p, line, kind);
           ledger.downgraded.push({ code: "TOOL_DEFINITIONS_AS_HISTORY", path, reason: "Source tool definitions are historical data, not executable target tools" }); break;
         default: add("assistant", [{ type: "opaque", source: "codex:response_item", value: p }], p, line, kind);
       }
@@ -90,15 +92,27 @@ const adapter: SessionAdapter = {
         case "response_item": item(p, line); break;
         case "turn_context":
           if (typeof p.model === "string") session.meta.model = p.model;
-          add("system", [{ type: "text", text: `Historical turn settings:\n${JSON.stringify(p, null, 2)}` }], p, line); break;
-        case "compacted":
-          if (typeof p.message === "string") add("system", [{ type: "text", text: p.message }], p, line, "compaction");
-          if (Array.isArray(p.replacement_history)) {
-            add("system", [{ type: "text", text: `Historical compaction replacement snapshot:\n${JSON.stringify(p.replacement_history, null, 2)}` }], p, line, "compaction");
-            ledger.downgraded.push({ code: "COMPACTION_SNAPSHOT", path: `${file.path}:${line}`, reason: "Replacement snapshot is labeled separately; original history remains intact" });
-          }
+          add("system", [{ type: "text", text: `Historical turn settings:\n${stringifyWireJson(p, null, 2)}` }], p, line); break;
+        case "compacted": {
           if (typeof p.message !== "string" && !Array.isArray(p.replacement_history)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Empty compaction record");
+          add("system", [{ type: "text", text: typeof p.message === "string" ? p.message : "Source compaction boundary" }], p, line, "compaction");
+          const boundary = session.turns.at(-1)!;
+          const retainedIds = session.turns.filter(t => t.origin?.record === 1 && t.role === "system").map(t => t.id);
+          const replacement: Turn[] = [];
+          if (Array.isArray(p.replacement_history)) {
+            destination = replacement;
+            for (const native of p.replacement_history) {
+              if (!isRecord(native)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Invalid replacement history item");
+              item(native, line, "compaction");
+            }
+            destination = session.turns;
+          } else {
+            retainedIds.push(boundary.id);
+            ledger.approximated.push({ code: "SUMMARY_ONLY_WINDOW", path: `${file.path}:${line}`, reason: "Only the readable compaction summary was available; additional retained items could not be verified" });
+          }
+          session.continuation = { boundaryId: boundary.id, retainedIds, replacement };
           break;
+        }
         case "event_msg":
           if (p.type === "user_message" || p.type === "agent_message") {
             const role = p.type === "user_message" ? "user" : "assistant";
@@ -113,13 +127,13 @@ const adapter: SessionAdapter = {
             if (typeof text !== "string") throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Malformed reasoning event");
             add("assistant", [{ type: "reasoning", text }], p, line);
           } else if (typeof p.type === "string" && /^(?:mcp_tool_call|exec_command|patch_apply)_(?:begin|end|output_delta)$/.test(p.type)) {
-            add("system", [{ type: "text", text: `Historical tool event:\n${JSON.stringify(p)}` }], p, line);
+            add("system", [{ type: "text", text: `Historical tool event:\n${stringifyWireJson(p)}` }], p, line);
             ledger.downgraded.push({ code: "TOOL_EVENT_AS_HISTORY", path: `${file.path}:${line}`, reason: "Native tool telemetry is quoted as recorded, without inferring a new executable call" });
-          } else if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${JSON.stringify(p)}` }], p, line, "reverted");
+          } else if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${stringifyWireJson(p)}` }], p, line, "reverted");
           else if (!operationalEvents.has(String(p.type))) add("system", [{ type: "opaque", source: "codex:event", value: p }], p, line);
           break;
         case "world_state": case "retained_context":
-          add("system", [{ type: "text", text: `Historical ${String(r.type)}:\n${JSON.stringify(p, null, 2)}` }], p, line);
+          add("system", [{ type: "text", text: `Historical ${String(r.type)}:\n${stringifyWireJson(p, null, 2)}` }], p, line);
           ledger.downgraded.push({ code: "NATIVE_STATE_AS_HISTORY", path: `${file.path}:${line}`, reason: "Native context is preserved as labeled data, not applied to the target runtime" }); break;
         case "token_usage_record": break;
         default: add("system", [{ type: "opaque", source: "codex:record", value: r }], r, line);

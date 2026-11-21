@@ -60,7 +60,10 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
   }
   for (const name of names) if (name.startsWith("source/") && !archived.has(name)) invalid(name, "Unreferenced source artifact");
   const attachments = new Set<string>();
-  for (const turn of session.turns) {
+  const replacement = session.continuation;
+  if (replacement !== undefined && (!isRecord(replacement) || !Array.isArray(replacement.replacement))) invalid("session.json", "Invalid continuation window");
+  const snapshotTurns = isRecord(replacement) && Array.isArray(replacement.replacement) ? replacement.replacement : [];
+  for (const turn of [...session.turns, ...snapshotTurns]) {
     if (!isRecord(turn) || !Array.isArray(turn.content)) invalid("session.json", "Invalid turn content");
     for (const block of turn.content) {
       if (isRecord(block) && block.type === "attachment") {

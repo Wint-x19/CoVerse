@@ -1,3 +1,4 @@
+import { stringifyWireJson } from "@coverse/core";
 import type { JsonValue, ProtocolRequest, ProtocolResponse, ProtocolEvent } from "@coverse/core";
 import { ConversionContext, ProtocolError, ProtocolRegistry, type ConversionOptions, type ConversionResult, type Decoded, type ConversionReport } from "./contracts.js";
 import { createCodec } from "./codec.js";
@@ -14,7 +15,7 @@ export function decodeProtocol(kind: "request" | "response", args: ConvertInput)
   const codec = registry.get(args.from);
   c.preserve("", args.input as JsonValue, "Original source payload retained for audit; never blindly forwarded");
   const value = kind === "request" ? codec.decodeRequest(args.input, c) : codec.decodeResponse(args.input, c);
-  return { value, source: args.from, original: structuredClone(args.input) as JsonValue, snapshot: JSON.stringify(value), report: c.report } as Decoded<ProtocolRequest> | Decoded<ProtocolResponse>;
+  return { value, source: args.from, original: structuredClone(args.input) as JsonValue, snapshot: stringifyWireJson(value), report: c.report } as Decoded<ProtocolRequest> | Decoded<ProtocolResponse>;
 }
 export function encodeProtocol(kind: "request", decoded: Decoded<ProtocolRequest>, to: string, options?: ConversionOptions, registry?: ProtocolRegistry): ConversionResult<JsonValue>;
 export function encodeProtocol(kind: "response", decoded: Decoded<ProtocolResponse>, to: string, options?: ConversionOptions, registry?: ProtocolRegistry): ConversionResult<JsonValue>;
@@ -24,7 +25,7 @@ export function encodeProtocol(kind: "request" | "response", decoded: Decoded<Pr
   if (options.policy !== "allow-loss" && Object.values(c.report.ledger).some(items => items.length)) c.fail("LOSS_NOT_ALLOWED", "/", "Decoded input already contains losses; strict export cannot erase that history");
   const codec = registry.get(to);
   const encoded = kind === "request" ? codec.encodeRequest(decoded.value as ProtocolRequest, c) : codec.encodeResponse(decoded.value as ProtocolResponse, c);
-  const unchanged = decoded.source === to && decoded.snapshot === JSON.stringify(decoded.value) && options.targetModel === undefined && options.maxOutputTokens === undefined && options.candidateIndex === undefined && Object.values(c.report.ledger).every(v => v.length === 0);
+  const unchanged = decoded.source === to && decoded.snapshot === stringifyWireJson(decoded.value) && options.targetModel === undefined && options.maxOutputTokens === undefined && options.candidateIndex === undefined && Object.values(c.report.ledger).every(v => v.length === 0);
   return { data: unchanged ? structuredClone(decoded.original) : encoded, ...c.report };
 }
 function convertOnce(kind: "request" | "response", args: ConvertInput): ConversionResult<JsonValue> {

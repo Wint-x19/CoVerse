@@ -41,6 +41,17 @@ it("refuses unknown fields unless the exact field is explicitly omitted", () => 
 it("does not replay unknown fields even on the same protocol", () => {
   expect(() => convertRequest({ from: "responses", to: "responses", input: { ...requests.responses, future: true } })).toThrow();
 });
+it("preserves nested integer tool identifiers through Anthropic JSON bytes and back", () => {
+  const original = '{"items":[{"id":9007199254740993,"negative":-9007199254740993}],"label":"9007199254740993"}';
+  const input = { model: "m", max_output_tokens: 30, input: [
+    { type: "function_call", name: "lookup", call_id: "c", arguments: original },
+    { type: "function_call_output", call_id: "c", output: "found" },
+  ] };
+  const wire = stringifyWireJson(convertRequest({ from: "responses", to: "anthropic-messages", input }).data);
+  expect(wire).toContain('"id":9007199254740993');
+  const back = convertRequest({ from: "anthropic-messages", to: "responses", input: parseWireJson(wire) });
+  expect(back.data).toHaveProperty("input.0.arguments", original);
+});
 it("keeps the editable and one-shot conversion results and reports equivalent", () => {
   const args = { from: "responses", to: "chat-completions", input: { ...requests.responses, extra: "archived" },
     options: { policy: "allow-loss" as const, omit: ["/extra"] } };
@@ -143,6 +154,23 @@ it("normalizes cache counts without inventing or silently dropping counters", ()
   expect(convertResponse({ from: "chat-completions", to: "anthropic-messages", input: converted.data }).data).toHaveProperty("usage.input_tokens", 3);
   expect(() => convertResponse({ from: "anthropic-messages", to: "responses", input: { ...input, usage: { ...input.usage, cache_creation_input_tokens: 1 } } })).toThrowError(expect.objectContaining({ code: "LOSS_NOT_ALLOWED" }));
 });
+it("preserves Responses message boundaries across editable re-encoding and audits merging", () => {
+  const output = ["first", "second"].map(text => ({ type: "message", role: "assistant", content: [{ type: "output_text", text }] }));
+  const input = { ...responses.responses, output };
+  const decoded = decodeProtocol("response", { from: "responses", to: "responses", input });
+  decoded.value.candidates[0]!.content[0] = { type: "text", text: "edited" };
+  expect(encodeProtocol("response", decoded, "responses").data).toHaveProperty("output.1.content.0.text", "second");
+  expect(() => encodeProtocol("response", decoded, "chat-completions")).toThrowError(expect.objectContaining({ code: "LOSS_NOT_ALLOWED" }));
+  expect(encodeProtocol("response", decoded, "chat-completions", { policy: "allow-loss", allowMessageMerge: true }).ledger.downgraded[0]?.code).toBe("MESSAGE_BOUNDARIES_MERGED");
+});
+it("requires a reported approximation for a refusal mapped to a content filter", () => {
+  const input = { ...responses["anthropic-messages"], stop_reason: "refusal" };
+  for (const to of ["responses", "chat-completions"]) {
+    const args = { from: "anthropic-messages", to, input };
+    expect(() => convertResponse(args)).toThrowError(expect.objectContaining({ code: "LOSS_NOT_ALLOWED" }));
+    expect(convertResponse({ ...args, options: { policy: "allow-loss", allowFinishApproximation: true } }).ledger.approximated[0]?.code).toBe("FINISH_REASON_APPROXIMATED");
+  }
+});
 it.each(ids)("maps incomplete/tool response lifecycle to %s", to => {
   const incomplete = convertResponse({ from: "responses", to, input: { ...responses.responses, status: "incomplete", incomplete_details: { reason: "max_output_tokens" } } });
   expect(decodeProtocol("response", { from: to, to, input: incomplete.data }).value.candidates[0]?.finish).toBe("length");
@@ -151,3 +179,4 @@ it.each(ids)("maps incomplete/tool response lifecycle to %s", to => {
   expect(result.candidates[0]?.finish).toBe("tool_calls");
   expect(result.candidates[0]?.content[0]).toMatchObject({ type: "tool_call", id: "c", name: "lookup", arguments: { x: 1 } });
 });
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
