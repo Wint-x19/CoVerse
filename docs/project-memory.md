@@ -38,6 +38,10 @@
 
 ## 已验证经验
 
+### 导入目录可以独立于会话正文刷新
+
+2026-11-22 桌面端按 Agent 在用户数据目录保存标题、项目路径和文件标识等列表元数据。打开导入窗口时先读缓存，再根据路径、大小、修改时间和 SQLite 活跃状态刷新，Codex 的原生标题索引单独核对。实际导入仍从磁盘读取稳定快照。实测两种新增的 Codex 桌面 writer，相关格式约定见[适配器说明](../packages/adapters/adapter-codex/README.md)。
+
 ### 目标 Agent 可以独立接续已迁移的压缩窗口
 
 2026-11-21 使用合成会话验证 Codex→Claude Code、Claude Code→Codex、Codex→Antigravity。首轮从源压缩窗口读取随机回执，第二轮直接调用目标 CLI 按同一会话 ID 取回回执。另核对了包内上下文排除仅供归档的旧消息。Antigravity 默认配置首次建会话返回空 ID，显式选用 `claude-sonnet-4-6` 后完成两轮。各项结论限于这三条实测路线。

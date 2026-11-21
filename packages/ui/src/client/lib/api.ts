@@ -68,8 +68,8 @@ export const api = {
   updateSettings: (patch: Partial<AppSettings>): Promise<AppSettings> =>
     unwrap("/settings", (b) => b.updateSettings(patch)),
 
-  listLocalSessions: (agent?: string): Promise<LocalSessionRef[]> =>
-    unwrap("/sessions/local", (b) => b.listLocalSessions(agent)),
+  listLocalSessions: (agent?: string, cachedOnly = false): Promise<LocalSessionRef[]> =>
+    unwrap("/sessions/local", (b) => b.listLocalSessions(agent, cachedOnly)),
 
   listSessions: (): Promise<UiSession[]> => unwrap("/sessions", (b) => b.listSessions()),
 

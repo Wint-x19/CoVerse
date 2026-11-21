@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { SessionError, type FileSet } from "@coverse/core";
-import type { AppSettings, UiSession } from "../shared/types.js";
+import type { AppSettings, LocalSessionRef, UiSession } from "../shared/types.js";
 
 const SAFE_ID = /^[a-zA-Z0-9_-]{4,64}$/;
 
@@ -67,6 +67,34 @@ export class UiStore {
     const result = this.writeQueue.then(fn, fn);
     this.writeQueue = result.then(() => undefined, () => undefined);
     return result;
+  }
+
+  private catalogPath(agent: string): string {
+    this.assertSafeId(agent, "/agent");
+    return path.join(this.dataDir, `local-catalog-v1-${agent}.json`);
+  }
+
+  async readLocalCatalog(agent: string, root?: string): Promise<LocalSessionRef[]> {
+    try {
+      const catalog = JSON.parse(await fs.readFile(this.catalogPath(agent), "utf8"));
+      if (catalog?.root !== (root ?? null) || !Array.isArray(catalog.sessions)) return [];
+      const rows: unknown[] = catalog.sessions;
+      return rows.filter((value): value is LocalSessionRef => {
+        const row = value as Partial<LocalSessionRef> | null;
+        return !!row && row.agent === agent && typeof row.id === "string" && typeof row.title === "string" &&
+        typeof row.path === "string" && typeof row.updatedAt === "string" && typeof row.size === "number" &&
+        (row.cwd === undefined || typeof row.cwd === "string") && (row.active === undefined || typeof row.active === "boolean");
+      });
+    } catch (error) {
+      if (error instanceof SyntaxError || (error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }
+
+  async saveLocalCatalog(agent: string, rows: LocalSessionRef[], root?: string): Promise<void> {
+    const summaries = rows.map(({ id, title, path, cwd, size, updatedAt, active }) =>
+      ({ id, agent, title, path, cwd, size, updatedAt, active }));
+    await this.writeJsonAtomic(this.catalogPath(agent), { root: root ?? null, sessions: summaries });
   }
 
   async getSettings(): Promise<AppSettings> {

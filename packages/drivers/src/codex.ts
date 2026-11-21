@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { driverError, object, string, targetFailure, usage, type DriverPlugin, type LocalSessionRef, type ModelOption } from "./driver.js";
+import { driverError, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
 
 function codexHome(): string {
   return process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(os.homedir(), ".codex");
@@ -66,7 +66,7 @@ async function readFirstLine(filePath: string): Promise<string | null> {
   }
 }
 
-async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
+async function listCodexLocalSessions(limit = 60, cache?: LocalSessionCache): Promise<LocalSessionRef[]> {
   const home = codexHome();
   const sessionsRoot = path.join(home, "sessions");
 
@@ -90,7 +90,7 @@ async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
   async function walk(dir: string, depth: number): Promise<void> {
     if (depth > 4) return;
     let entries;
-    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch (error) { ignoreMissingEntry(error); return; }
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -99,7 +99,7 @@ async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
         try {
           const info = await fs.stat(fullPath);
           files.push({ fullPath, name: entry.name, mtimeMs: info.mtimeMs, size: info.size });
-        } catch { /* ignore disappearing file */ }
+        } catch (error) { ignoreMissingEntry(error); }
       }
     }
   }
@@ -110,9 +110,11 @@ async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
   const refs: LocalSessionRef[] = [];
   for (const file of files.slice(0, limit)) {
     const uuidMatch = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(file.name);
-    let id = uuidMatch?.[1] ?? file.name;
-    let cwd: string | undefined;
-    if (file.name.endsWith(".jsonl")) {
+    const updatedAt = new Date(file.mtimeMs).toISOString();
+    const previous = unchangedSession(cache, file.fullPath, file.size, updatedAt);
+    let id = previous?.id ?? uuidMatch?.[1] ?? file.name;
+    let cwd = previous?.cwd;
+    if (!previous && file.name.endsWith(".jsonl")) {
       const firstLine = await readFirstLine(file.fullPath);
       if (firstLine) {
         try {
@@ -124,14 +126,14 @@ async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
         } catch { /* header truncated or non-JSON */ }
       }
     }
-    const title = indexTitles.get(id) ?? (cwd ? path.basename(cwd) : file.name.replace(/\.jsonl(?:\.zst)?$/, ""));
+    const title = indexTitles.get(id) ?? (cwd && file.name.endsWith(".jsonl") ? path.basename(cwd) : file.name.replace(/\.jsonl(?:\.zst)?$/, ""));
     refs.push({
       id,
       agent: "codex",
       title,
       path: file.fullPath,
       ...(cwd ? { cwd } : {}),
-      updatedAt: new Date(file.mtimeMs).toISOString(),
+      updatedAt,
       size: file.size,
     });
   }
@@ -179,5 +181,6 @@ export const codex: DriverPlugin = {
     }
   },
   listModels: listCodexModels,
+  localSessionsRoot: codexHome,
   listLocalSessions: listCodexLocalSessions,
 };

@@ -58,7 +58,7 @@ const bridge: CoverseDesktopBridge = {
 
   updateSettings: (patch) => invoke<AppSettings>(IPC_CHANNELS.updateSettings, patch),
 
-  listLocalSessions: (agent) => invoke<LocalSessionRef[]>(IPC_CHANNELS.listLocalSessions, agent),
+  listLocalSessions: (agent, cachedOnly) => invoke<LocalSessionRef[]>(IPC_CHANNELS.listLocalSessions, agent, cachedOnly),
 
   listSessions: () => invoke<UiSession[]>(IPC_CHANNELS.listSessions),
 

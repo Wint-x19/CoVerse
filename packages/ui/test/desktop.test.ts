@@ -153,6 +153,59 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("restores only catalog metadata after restart and reconciles changed, renamed and deleted sessions", async () => {
+    const home = await makeTempDir("coverse-incremental-");
+    vi.stubEnv("CODEX_HOME", home);
+    const dir = path.join(home, "sessions");
+    await fs.mkdir(dir);
+    const dataDir = path.join(home, "store");
+    const header = (id: string, cwd: string) => JSON.stringify({
+      type: "session_meta", payload: { id, cwd, base_instructions: { text: "private-body-marker" } },
+    });
+    const original = path.join(dir, "rollout-one.jsonl");
+    const compressed = path.join(dir, "rollout-archive.jsonl.zst");
+    await fs.writeFile(original, header("one", home));
+    await fs.copyFile(path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl.zst"), compressed);
+    const drivers = createDriverRegistry();
+    const adapters = createAdapterRegistry();
+    const codex = adapters.get("codex");
+    const readMetadata = vi.fn(codex.readProjectDirectory!);
+    const originalReader = codex.readProjectDirectory!;
+    codex.readProjectDirectory = readMetadata;
+    const scan = vi.spyOn(drivers.get("codex"), "listLocalSessions");
+    try {
+      const first = new UiService(adapters, drivers, new UiStore(dataDir), home);
+      const [initial, concurrent] = await Promise.all([first.listLocalSessions("codex"), first.listLocalSessions("codex")]);
+      expect(initial).toEqual(concurrent);
+      expect(scan).toHaveBeenCalledTimes(1);
+      expect(readMetadata).toHaveBeenCalledTimes(1);
+      expect(await fs.readFile(path.join(dataDir, "local-catalog-v1-codex.json"), "utf8")).not.toContain("private-body-marker");
+
+      const reopened = new UiService(adapters, drivers, new UiStore(dataDir), home);
+      await fs.writeFile(path.join(home, "session_index.jsonl"), JSON.stringify({ id: "one", thread_name: "Renamed" }));
+      expect(await reopened.listLocalSessions("codex", true)).toEqual(initial);
+      expect(scan).toHaveBeenCalledTimes(1);
+      expect((await reopened.listLocalSessions("codex")).find(item => item.id === "one")?.title).toBe("Renamed");
+      expect(readMetadata).toHaveBeenCalledTimes(1);
+      const moved = path.join(home, "changed-project");
+      await fs.writeFile(original, header("one", moved));
+      await fs.writeFile(path.join(dir, "rollout-two.jsonl"), header("two", home));
+      await fs.unlink(compressed);
+      const updated = await reopened.listLocalSessions("codex");
+      expect(updated.map(item => item.id).sort()).toEqual(["one", "two"]);
+      expect(updated.find(item => item.id === "one")?.cwd).toBe(moved);
+      expect(await reopened.listLocalSessions("codex", true)).toEqual(updated);
+      scan.mockRejectedValueOnce(new Error("Catalog unavailable"));
+      await expect(reopened.listLocalSessions("codex")).rejects.toThrow("Catalog unavailable");
+      expect(await reopened.listLocalSessions("codex", true)).toEqual(updated);
+      vi.stubEnv("CODEX_HOME", path.join(home, "other-profile"));
+      expect(await reopened.listLocalSessions("codex", true)).toEqual([]);
+    } finally {
+      codex.readProjectDirectory = originalReader;
+      scan.mockRestore();
+    }
+  });
+
   it("groups all configured native sessions by full project path, including archives and long headers", async () => {
     const home = await makeTempDir("coverse-catalog-");
     vi.stubEnv("CODEX_HOME", home);

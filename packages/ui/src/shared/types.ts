@@ -232,7 +232,7 @@ export interface CoverseDesktopBridge {
   capabilities(refresh?: boolean): Promise<IpcEnvelope<CapabilitiesResponse>>;
   getSettings(): Promise<IpcEnvelope<AppSettings>>;
   updateSettings(patch: Partial<AppSettings>): Promise<IpcEnvelope<AppSettings>>;
-  listLocalSessions(agent?: string): Promise<IpcEnvelope<LocalSessionRef[]>>;
+  listLocalSessions(agent?: string, cachedOnly?: boolean): Promise<IpcEnvelope<LocalSessionRef[]>>;
   listSessions(): Promise<IpcEnvelope<UiSession[]>>;
   getSession(id: string): Promise<IpcEnvelope<UiSession>>;
   createSession(input: { agent: string; model?: string; cwd?: string; title?: string }): Promise<IpcEnvelope<UiSession>>;

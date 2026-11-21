@@ -37,6 +37,18 @@ export interface LocalSessionRef {
 }
 
 export type WireRecord = Record<string, JsonValue>;
+export type LocalSessionCache = ReadonlyMap<string, LocalSessionRef>;
+
+export function unchangedSession(cache: LocalSessionCache | undefined, file: string, size: number, updatedAt: string) {
+  const previous = cache?.get(file);
+  return previous?.size === size && previous.updatedAt === updatedAt ? previous : undefined;
+}
+
+/** A disappearing entry is a normal scan result. Other I/O failures must preserve the last catalog. */
+export function ignoreMissingEntry(error: unknown): void {
+  if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
+}
+
 export interface DriverPlugin {
   id: string;
   command: string;
@@ -46,7 +58,8 @@ export interface DriverPlugin {
   invocation(options: RunOptions): { args: string[]; input: string };
   decoder(): (record: WireRecord) => DriverEvent[];
   listModels?(executable: Executable | null): Promise<ModelOption[]>;
-  listLocalSessions?(limit?: number): Promise<LocalSessionRef[]>;
+  localSessionsRoot?(): string;
+  listLocalSessions?(limit?: number, cache?: LocalSessionCache): Promise<LocalSessionRef[]>;
 }
 const sessionUuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -129,13 +142,8 @@ export class AgentDriver {
     }
   }
 
-  async listLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
-    if (!this.plugin.listLocalSessions) return [];
-    try {
-      return await this.plugin.listLocalSessions(limit);
-    } catch {
-      return [];
-    }
+  async listLocalSessions(limit = 60, cache?: LocalSessionCache): Promise<LocalSessionRef[]> {
+    return this.plugin.listLocalSessions?.(limit, cache) ?? [];
   }
 
   async *run(options: RunOptions): AsyncGenerator<DriverEvent> {

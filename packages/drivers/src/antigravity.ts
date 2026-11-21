@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import {
   driverError,
   finalText,
+  ignoreMissingEntry,
   object,
   string,
   targetFailure,
@@ -45,7 +46,7 @@ async function listAntigravityModels(executable: Executable | null): Promise<Mod
 async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
   const root = path.join(os.homedir(), ".gemini", "antigravity", "conversations");
   let entries;
-  try { entries = await fs.readdir(root, { withFileTypes: true }); } catch { return []; }
+  try { entries = await fs.readdir(root, { withFileTypes: true }); } catch (error) { ignoreMissingEntry(error); return []; }
 
   const dbs: { fullPath: string; name: string; mtimeMs: number; size: number }[] = [];
   for (const entry of entries) {
@@ -54,7 +55,7 @@ async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef
     try {
       const info = await fs.stat(fullPath);
       dbs.push({ fullPath, name: entry.name, mtimeMs: info.mtimeMs, size: info.size });
-    } catch { /* ignore */ }
+    } catch (error) { ignoreMissingEntry(error); }
   }
 
   dbs.sort((a, b) => b.mtimeMs - a.mtimeMs);
@@ -65,7 +66,7 @@ async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef
     try {
       const wal = await fs.stat(db.fullPath + "-wal");
       if (wal.size > 0) active = true;
-    } catch { /* no wal */ }
+    } catch (error) { ignoreMissingEntry(error); }
     refs.push({
       id,
       agent: "antigravity",

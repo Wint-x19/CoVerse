@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { isRecord } from "@coverse/core";
-import { finalText, object, string, targetFailure, usage, type DriverEvent, type DriverPlugin, type LocalSessionRef, type ModelOption } from "./driver.js";
+import { finalText, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, type DriverEvent, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
 
 function claudeHome(): string {
   return process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : path.join(os.homedir(), ".claude");
@@ -91,17 +91,17 @@ async function inspectClaudeSessionHead(filePath: string): Promise<{ cwd?: strin
   }
 }
 
-async function listClaudeLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
+async function listClaudeLocalSessions(limit = 60, cache?: LocalSessionCache): Promise<LocalSessionRef[]> {
   const projectsRoot = path.join(claudeHome(), "projects");
   const files: { fullPath: string; name: string; projectDir: string; mtimeMs: number; size: number }[] = [];
 
   let projects;
-  try { projects = await fs.readdir(projectsRoot, { withFileTypes: true }); } catch { return []; }
+  try { projects = await fs.readdir(projectsRoot, { withFileTypes: true }); } catch (error) { ignoreMissingEntry(error); return []; }
   for (const project of projects) {
     if (!project.isDirectory()) continue;
     const projectPath = path.join(projectsRoot, project.name);
     let entries;
-    try { entries = await fs.readdir(projectPath, { withFileTypes: true }); } catch { continue; }
+    try { entries = await fs.readdir(projectPath, { withFileTypes: true }); } catch (error) { ignoreMissingEntry(error); continue; }
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
       const fullPath = path.join(projectPath, entry.name);
@@ -109,7 +109,7 @@ async function listClaudeLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
         const info = await fs.stat(fullPath);
         if (info.size === 0) continue;
         files.push({ fullPath, name: entry.name, projectDir: project.name, mtimeMs: info.mtimeMs, size: info.size });
-      } catch { /* ignore */ }
+      } catch (error) { ignoreMissingEntry(error); }
     }
   }
 
@@ -117,14 +117,15 @@ async function listClaudeLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
   const refs: LocalSessionRef[] = [];
   for (const file of files.slice(0, limit)) {
     const id = file.name.replace(/\.jsonl$/, "");
-    const meta = await inspectClaudeSessionHead(file.fullPath);
+    const updatedAt = new Date(file.mtimeMs).toISOString();
+    const meta = unchangedSession(cache, file.fullPath, file.size, updatedAt) ?? await inspectClaudeSessionHead(file.fullPath);
     refs.push({
       id,
       agent: "claude-code",
       title: meta.title || (meta.cwd ? path.basename(meta.cwd) : id.slice(0, 12)),
       path: file.fullPath,
       ...(meta.cwd ? { cwd: meta.cwd } : {}),
-      updatedAt: new Date(file.mtimeMs).toISOString(),
+      updatedAt,
       size: file.size,
     });
   }
@@ -185,5 +186,6 @@ export const claude: DriverPlugin = {
     };
   },
   listModels: listClaudeModels,
+  localSessionsRoot: claudeHome,
   listLocalSessions: listClaudeLocalSessions,
 };

@@ -19,7 +19,7 @@ import {
   type SessionDiagnostic,
   type Turn,
 } from "@coverse/core";
-import { createDriverRegistry, type DriverRegistry, type Executable } from "@coverse/drivers";
+import { createDriverRegistry, unchangedSession, type AgentDriver, type DriverRegistry, type Executable } from "@coverse/drivers";
 import type {
   AppSettings,
   BundleDetailResponse,
@@ -383,6 +383,7 @@ export function toDiagnostic(error: unknown, fallbackPath = "/ipc"): SessionDiag
 export class UiService {
   private readonly activeRuns = new Map<string, AbortController>();
   private readonly modelCache = new Map<string, ModelOption[]>();
+  private readonly catalogScans = new Map<string, Promise<LocalSessionRef[]>>();
   private readonly customDriversInjected: boolean;
   private drivers: DriverRegistry;
 
@@ -473,30 +474,51 @@ export class UiService {
     return { adapters, drivers, defaultCwd: this.defaultCwd };
   }
 
-  async listLocalSessions(agent?: string): Promise<LocalSessionRef[]> {
-    const registry = await this.ensureDriversConfigured();
+  async listLocalSessions(agent?: string, cachedOnly = false): Promise<LocalSessionRef[]> {
     const { disabledAdapters } = await this.store.getSettings();
-    const enabled = new Set(this.adapters.list().filter(adapter =>
-      adapter.capabilities.import && !disabledAdapters.includes(adapter.id),
-    ).map(adapter => adapter.id));
-    const targets = agent ? [registry.get(agent)] : registry.list();
-    const batches = await Promise.all(targets.filter(driver => enabled.has(driver.id)).map(async driver => {
-      const adapter = this.adapters.get(driver.id);
-      const sessions = await driver.listLocalSessions(Infinity);
-      for (const session of sessions) {
-        let cwd = session.cwd;
-        if (!cwd && !session.active && adapter.readProjectDirectory) {
-          try {
-            cwd = await adapter.readProjectDirectory(await loadPathsAsFileSet([session.path]));
-          } catch {
-            // Keep unstable or unrecognized records selectable for individual inspection.
-          }
-        }
-        if (cwd) session.cwd = projectDirectory(cwd) ?? cwd;
-      }
-      return sessions;
-    }));
+    const enabled = this.adapters.list().filter(adapter =>
+      adapter.capabilities.import && !disabledAdapters.includes(adapter.id) && (!agent || adapter.id === agent),
+    ).map(adapter => adapter.id);
+    const targets = this.drivers.list().filter(driver => enabled.includes(driver.id));
+    const batches = await Promise.all(targets.map(driver => cachedOnly
+      ? this.store.readLocalCatalog(driver.id, driver.plugin.localSessionsRoot?.())
+      : this.refreshCatalog(driver)));
     return batches.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  private refreshCatalog(driver: AgentDriver): Promise<LocalSessionRef[]> {
+    const running = this.catalogScans.get(driver.id);
+    if (running) return running;
+    const scan = this.scanCatalog(driver).finally(() => this.catalogScans.delete(driver.id));
+    this.catalogScans.set(driver.id, scan);
+    return scan;
+  }
+
+  private async scanCatalog(driver: AgentDriver): Promise<LocalSessionRef[]> {
+    const adapter = this.adapters.get(driver.id);
+    const root = driver.plugin.localSessionsRoot?.();
+    const previous = await this.store.readLocalCatalog(driver.id, root);
+    const cache = new Map(previous.map(item => [item.path, item]));
+    const sessions = await driver.listLocalSessions(Infinity, cache);
+    let changed = previous.length !== sessions.length;
+    for (const session of sessions) {
+      const cached = unchangedSession(cache, session.path, session.size, session.updatedAt);
+      let cwd = session.cwd;
+      if (cached && cached.active === session.active) {
+        cwd ??= cached.cwd;
+      } else if (!cwd && !session.active && adapter.readProjectDirectory) {
+        try {
+          cwd = await adapter.readProjectDirectory(await loadPathsAsFileSet([session.path]));
+        } catch {
+          // Keep unstable or unrecognized records selectable for individual inspection.
+        }
+      }
+      if (cwd) session.cwd = projectDirectory(cwd) ?? cwd;
+      if (!cached || cached.id !== session.id || cached.title !== session.title ||
+          cached.cwd !== session.cwd || cached.active !== session.active) changed = true;
+    }
+    if (changed) await this.store.saveLocalCatalog(driver.id, sessions, root);
+    return sessions;
   }
 
   listSessions(): Promise<UiSession[]> {

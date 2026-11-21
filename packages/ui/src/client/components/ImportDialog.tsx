@@ -40,15 +40,35 @@ export function ImportDialog({
   const [issues, setIssues] = React.useState<string[]>([]);
   const generation = React.useRef(0);
 
-  const load = React.useCallback(async () => {
+  const adaptersRef = React.useRef(adapters);
+  adaptersRef.current = adapters;
+
+  const load = React.useCallback(async (showCached = false) => {
     const current = ++generation.current;
     setLoading(true);
+    setIssues([]);
     try {
-      const list = await api.listLocalSessions();
-      if (generation.current !== current) return;
-      setSessions(list);
-      const keys = new Set(list.map(sessionKey));
-      setSelected(previous => new Set([...previous].filter(key => keys.has(key))));
+      if (showCached) {
+        const cached = await api.listLocalSessions(undefined, true);
+        if (generation.current !== current) return;
+        setSessions(cached);
+      }
+      const enabled = adaptersRef.current.filter(a => a.enabled && a.capabilities.import).map(a => a.id);
+      // Capabilities may still be probing executables when the dialog first opens.
+      const targets = adaptersRef.current.length ? enabled : [undefined];
+      await Promise.all(targets.map(async agent => {
+        try {
+          const list = await api.listLocalSessions(agent);
+          if (generation.current !== current) return;
+          setSessions(previous => [...previous.filter(row => agent && row.agent !== agent), ...list]
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+          const keys = new Set(list.map(sessionKey));
+          setSelected(previous => new Set([...previous].filter(key =>
+            (agent && !key.startsWith(agent + ":")) || keys.has(key))));
+        } catch (error) {
+          if (generation.current === current) setIssues(previous => [...previous, String(error)]);
+        }
+      }));
     } catch (error) {
       if (generation.current === current) setIssues([String(error)]);
     } finally {
@@ -63,8 +83,7 @@ export function ImportDialog({
     setSelected(new Set());
     setTarget("");
     setIssues([]);
-    setSessions([]);
-    void load();
+    void load(true);
     return () => { generation.current++; };
   }, [open, load]);
 
@@ -137,7 +156,7 @@ export function ImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!progress) onOpenChange(next); }}>
-      <DialogContent hideClose={Boolean(progress)} data-testid="import-dialog" className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden p-0">
+      <DialogContent hideClose={Boolean(progress)} data-testid="import-dialog" className="flex h-[min(84vh,800px)] w-[94vw] max-w-[960px] flex-col overflow-hidden p-0">
         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3 pr-10">
           <DialogHeader className="p-0 pr-0">
             <DialogTitle>{t.importSession}</DialogTitle>
@@ -186,8 +205,8 @@ export function ImportDialog({
         </div>
 
         {/* Discovered local sessions list */}
-        <div className="max-h-[380px] overflow-y-auto p-2" data-testid="local-sessions-list">
-          {loading ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-2" data-testid="local-sessions-list" aria-busy={loading}>
+          {loading && sessions.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-12 text-[12.5px] text-[var(--text-secondary)]">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               <span>{t.loading}</span>
@@ -257,7 +276,7 @@ export function ImportDialog({
                 <option key={a.id} value={a.id}>{agentLabel(a.id)}</option>)}
             </select>
           </label>
-          <Button disabled={!selected.size || loading || Boolean(progress)} onClick={() => void importSelected()}>
+          <Button disabled={!selected.size || Boolean(progress)} onClick={() => void importSelected()}>
             {progress || t.importSelected(selected.size)}
           </Button>
         </footer>

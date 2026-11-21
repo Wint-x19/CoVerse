@@ -86,9 +86,9 @@ export function registerIpcHandlers(
     }),
   );
 
-  ipc.handle(IPC_CHANNELS.listLocalSessions, (_event, agent) =>
+  ipc.handle(IPC_CHANNELS.listLocalSessions, (_event, agent, cachedOnly) =>
     wrap("/sessions/local", () =>
-      service.listLocalSessions(typeof agent === "string" && agent ? agent : undefined),
+      service.listLocalSessions(typeof agent === "string" && agent ? agent : undefined, cachedOnly === true),
     ),
   );
 
