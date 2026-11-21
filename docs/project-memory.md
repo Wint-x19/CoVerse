@@ -32,6 +32,14 @@
 
 ## 已验证经验
 
+### 底层协议的空损耗账本不能证明跨协议语义等价
+
+2026-11-21 使用合成输入调用 `convertRequest` 和 `convertResponse` 复核了三种默认严格模式仍会成功、三类账本均为空的情形：
+
+- Responses 的函数参数字符串 `{"order":9007199254740993}` 转成 Anthropic 的 `tool_use.input` 时变成 `9007199254740992`。原始参数文本在源报告中可查，目标对象使用 JavaScript 数值。[参数解码](../packages/protocols/src/validation.ts) · [工具消息编码](../packages/protocols/src/messages.ts)
+- Responses 完整响应中两条独立的助手消息转成 Chat Completions 的同一条助手消息。两段文字与顺序保留，源消息边界只在原始报告中可查。[响应解码与编码](../packages/protocols/src/responses.ts)
+- Anthropic 的结束原因 `refusal` 转成 Chat Completions 的 `content_filter`。依赖结束原因区分模型拒答和内容过滤的调用方，会得到不同分类。[结束原因映射](../packages/protocols/src/responses.ts)
+
 ### 会话压缩记录与推理密文需按原生类型辨认
 
 - Codex rollout 的 `compacted` 可带文本 `message` 和替换历史 `replacement_history`。OpenAI Responses 服务端也能返回加密 `compaction` 项，其中可含后续任务所需的上下文和工具定义。处理推理密文时应检查原生记录类型，避免把这个项作为推理删除。[Codex 适配器](../packages/adapters/adapter-codex/src/index.ts) · [OpenAI Compaction](https://developers.openai.com/api/docs/guides/compaction)
