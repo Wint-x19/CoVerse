@@ -29,6 +29,19 @@ it("rejects unverified writers, corrupt input and broken tool associations", () 
   expect(() => adapter.import([{ path: "rollout.jsonl", bytes: new TextEncoder().encode('{"x":') }])).toThrow("Invalid JSON");
   expect(() => adapter.import(encode([header, response({ type: "function_call_output", call_id: "orphan", output: "x" })]))).toThrow("no preceding call");
 });
+it("imports the observed desktop writers and preserves injected page context separately from tool results", async () => {
+  for (const cli_version of ["0.167.0-alpha.4.1", "0.171.0-alpha.13"]) {
+    const rows = [{ ...header, payload: { ...header.payload, cli_version } }, ...sample.slice(1)];
+    const result = await adapter.import(encode(rows));
+    expect(result.session.turns.some(turn => turn.role === "user")).toBe(true);
+  }
+  const current = { ...header, payload: { ...header.payload, cli_version: "0.171.0-alpha.13" } };
+  const page = { type: "function_call_output", namespace: "agent", name: "codex_apps_open_page", output: "Sample page" };
+  const result = await adapter.import(encode([current, response(page)]));
+  expect(result.session.turns.at(-1)?.content[0]).toMatchObject({ type: "text", text: expect.stringContaining(page.output) });
+  expect(result.ledger.downgraded.at(-1)?.code).toBe("PAGE_CONTEXT_AS_HISTORY");
+  expect(() => adapter.import(encode([current, response({ ...page, name: "unrecognized" })]))).toThrow();
+});
 it("exports only the replacement window and subsequent turns for target continuation", async () => {
   const msg = (text: string) => ({ type: "message", role: "user", content: [{ type: "input_text", text }] });
   const rows = [header, response(msg("archived-before")), { type: "compacted", payload: {

@@ -3,7 +3,7 @@ import { decompress, Decompress } from "fzstd";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
-const verifiedWriters = new Set(["0.169.0-alpha.11.1", "0.169.1"]);
+const verifiedWriters = new Set(["0.167.0-alpha.4.1", "0.169.0-alpha.11.1", "0.169.1", "0.171.0-alpha.13"]);
 const operationalEvents = new Set(["task_started", "task_complete", "task_aborted", "turn_aborted", "token_count", "thread_settings_applied", "item_started", "item_completed", "agent_message_delta", "agent_reasoning_delta", "exec_command_begin", "exec_command_end", "exec_command_output_delta", "mcp_tool_call_begin", "mcp_tool_call_end", "patch_apply_begin", "patch_apply_end", "user_message", "agent_message", "agent_reasoning", "agent_reasoning_raw_content", "context_compacted", "session_configured"]);
 function load(files: FileSet) {
   const logs = files.filter(f => /\.jsonl(?:\.zst)?$/.test(f.path));
@@ -16,7 +16,7 @@ function load(files: FileSet) {
   const records = parseJsonLines(bytes, file.path);
   const head = records[0]!.value;
   if (head.type !== "session_meta" || !isRecord(head.payload)) throw new SessionError("UNSUPPORTED_FORMAT", file.path, "Expected Codex session_meta header");
-  if (!verifiedWriters.has(String(head.payload.cli_version))) throw new SessionError("UNSUPPORTED_VERSION", `${file.path}:1`, "Codex writer version has not been verified against this format baseline");
+  if (!verifiedWriters.has(String(head.payload.cli_version))) throw new SessionError("UNSUPPORTED_VERSION", `${file.path}:1`, `Codex writer ${String(head.payload.cli_version)} has not been verified against this format baseline`);
   return { file, records, meta: head.payload };
 }
 function messageBlocks(value: JsonValue | undefined, path: string): ContentBlock[] {
@@ -88,6 +88,14 @@ const adapter: SessionAdapter = {
         }
         case "function_call_output": case "custom_tool_call_output":
           if (p.output === undefined) throw new SessionError("INVALID_INPUT", path, "Missing tool output");
+          // Desktop supplies page context without a preceding assistant tool call.
+          if (meta.cli_version === "0.171.0-alpha.13" && p.type === "function_call_output" && p.call_id === undefined &&
+              p.namespace === "agent" && typeof p.name === "string" && /^(?:codex_apps_open_page|codex_apps_selected_page_part_1_of_1)$/.test(p.name) &&
+              typeof p.output === "string") {
+            add("system", [{ type: "text", text: `Historical Codex page context (${p.name}):\n${p.output}` }], p, line, kind);
+            ledger.downgraded.push({ code: "PAGE_CONTEXT_AS_HISTORY", path, reason: "Desktop page context is preserved as historical text" });
+            break;
+          }
           add("tool", [{ type: "tool_result", callId: requireString(p.call_id, path), content: p.output }], p, line, kind); break;
         case "reasoning": {
           const blocks: ContentBlock[] = messageBlocks(p.summary ?? [], path).map(b => b.type === "text" ? { type: "reasoning", text: b.text } : b);
