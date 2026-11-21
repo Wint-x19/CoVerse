@@ -78,6 +78,9 @@ const adapter: SessionAdapter = {
           if (p.encrypted_content) blocks.push({ type: "opaque", source: "codex:encrypted-reasoning", value: { encrypted: true } });
           add("assistant", blocks, p, line, kind); break;
         }
+        case "compaction":
+          add("system", [{ type: "opaque", source: "codex:compaction", value: p, requiredForContinuation: true }], p, line, kind);
+          break;
         case "additional_tools":
           add("system", [{ type: "text", text: `Historical tool definitions:\n${stringifyWireJson(p.tools, null, 2)}` }], p, line, kind);
           ledger.downgraded.push({ code: "TOOL_DEFINITIONS_AS_HISTORY", path, reason: "Source tool definitions are historical data, not executable target tools" }); break;
@@ -101,9 +104,16 @@ const adapter: SessionAdapter = {
           const replacement: Turn[] = [];
           if (Array.isArray(p.replacement_history)) {
             destination = replacement;
+            const opaqueCount = p.replacement_history.filter(entry => isRecord(entry) && entry.type === "compaction").length;
             for (const native of p.replacement_history) {
               if (!isRecord(native)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Invalid replacement history item");
-              item(native, line, "compaction");
+              if (native.type === "compaction" && opaqueCount === 1 && typeof p.message === "string" && p.message.trim()) {
+                add("system", [{ type: "text", text: p.message }], native, line, "compaction");
+                ledger.approximated.push({ code: "COMPACTION_AS_SOURCE_SUMMARY", path: `${file.path}:${line}`,
+                  reason: "A readable source summary represents the opaque compaction item in the target context" });
+              } else {
+                item(native, line, "compaction");
+              }
             }
             destination = session.turns;
           } else {

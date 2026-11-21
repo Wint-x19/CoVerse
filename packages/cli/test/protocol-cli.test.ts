@@ -23,6 +23,12 @@ it("converts stdin to clean JSON stdout", async () => {
   const t = transport(request); expect(await runCli(command, () => {}, t.io)).toBe(0);
   expect(JSON.parse(t.text())).toHaveProperty("messages.0.content.0.text", "hello"); expect(t.errors).toEqual([]);
 });
+it("writes exact integer identifiers from structured tool inputs to quoted arguments", async () => {
+  const source = '{"model":"m","max_tokens":32,"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"c","name":"f","input":{"id":9007199254740993}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"c","content":"ok"}]}]}';
+  const t = transport(source);
+  expect(await runCli(["convert-protocol", "--kind", "request", "--from", "anthropic-messages", "--to", "responses"], () => {}, t.io)).toBe(0);
+  expect(JSON.parse(t.text()).input[0].arguments).toBe('{"id":9007199254740993}');
+});
 it("writes output and a separate provenance report", async () => {
   const source = path.join(sandbox, "in.json"); const output = path.join(sandbox, "out.json"); const report = path.join(sandbox, "report.json");
   await writeFile(source, request); const t = transport("");

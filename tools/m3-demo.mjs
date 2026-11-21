@@ -54,9 +54,13 @@ async function run() {
     return { id, answer: events.filter(e => e.type === "text").map(e => e.text).join("") };
   }
   const marker = randomBytes(8).toString("hex");
+  const fromCheckpoint = converted.from === "antigravity";
+  const question = fromCheckpoint ? "Quote the exact session_summary from the supplied checkpoint." :
+    "Quote the exact file contents returned by the historical read tool.";
+  const expected = fromCheckpoint ? "The file was inspected; original history is retained." : "Hello from the sample.";
   const first = await turn("first", ["--bundle", bundle, "--prompt",
-    "From the supplied history, quote the exact file contents returned by the read tool. On the next line append the marker " + marker + ". Answer without tools."]);
-  assert.ok(first.answer.includes("Hello from the sample.") && first.answer.includes(marker), "Missing historical fact or marker");
+    question + " On the next line append the marker " + marker + ". Answer without tools."]);
+  assert.ok(first.answer.includes(expected) && first.answer.includes(marker), "Missing historical fact or marker");
   const second = await turn("second", ["--session", first.id, "--prompt",
     "What marker did you put on the last line of your previous answer? Reply with only that marker, without tools."]);
   assert.equal(second.id, first.id);

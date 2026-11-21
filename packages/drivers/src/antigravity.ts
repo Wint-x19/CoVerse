@@ -81,6 +81,7 @@ async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef
 
 export const antigravity: DriverPlugin = {
   id: "antigravity", command: "agy", verifiedVersions: ["1.5.11"],
+  resumeArgs: id => ["--conversation", id],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["--input-format", "stream-json", "--output-format", "stream-json", "--disable-slash-commands"];
     if (model) args.push("--model", model);

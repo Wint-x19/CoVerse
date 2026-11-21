@@ -20,7 +20,10 @@ function parse(args: readonly string[]) {
   }
   if (values.has("--bundle") && values.has("--session")) argument("Choose either --bundle or --session");
   return {
-    agent: values.get("--agent") ?? argument("--agent is required"), prompt: values.get("--prompt") ?? argument("--prompt is required"),
+    agent: values.get("--agent") ?? argument("--agent is required"),
+    prompt: values.get("--prompt") ?? (values.has("--bundle")
+      ? "Acknowledge the transferred context briefly and wait for the next user request. Do not call tools."
+      : argument("--prompt is required")),
     model: values.get("--model"), session: values.get("--session"), bundle: values.get("--bundle"), cwd: values.get("--cwd"), json: values.has("--json"),
   };
 }
@@ -72,7 +75,11 @@ export async function runAgentCli(args: readonly string[], drivers: DriverRegist
     for await (const event of driver.run({ prompt, cwd, ...(options.model && { model: options.model }),
       ...(options.session && { session: options.session }), ...(attachmentDirectory && { attachmentDirectory }), ...(io.signal && { signal: io.signal }) })) {
       if (event.type === "session") sessionId = event.id;
-      if (options.json) await write(JSON.stringify(event) + "\n");
+      if (event.type === "done" && options.bundle && sessionId && driver.plugin.resumeArgs) {
+        const resumeInTarget = { cwd, command: driver.plugin.command, args: driver.plugin.resumeArgs(sessionId) };
+        if (options.json) await write(JSON.stringify({ ...event, resumeInTarget }) + "\n");
+        else io.stderr(JSON.stringify({ resumeInTarget }));
+      } else if (options.json) await write(JSON.stringify(event) + "\n");
       else if (event.type === "text" && event.text) { await write(event.text); endsWithNewline = event.text.endsWith("\n"); }
       else if (event.type === "session") io.stderr(JSON.stringify(event));
     }

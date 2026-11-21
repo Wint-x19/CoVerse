@@ -31,7 +31,7 @@ export interface ProtocolResponse {
     content: ContentBlock[];
     finish: string;
     /** Block counts retain ordered Responses output-item boundaries, including empty messages. */
-    outputItems?: { kind: "message" | "reasoning" | "function_call"; length: number }[];
+    outputItems?: { kind: "message" | "reasoning" | "function_call" | "compaction"; length: number }[];
   }[];
   usage: ProtocolUsage;
 }

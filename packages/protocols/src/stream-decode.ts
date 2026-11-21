@@ -3,20 +3,25 @@ import type { JsonValue, ProtocolEvent } from "@coverse/core";
 import { ConversionContext, type ProtocolId } from "./contracts.js";
 import { decodeResponse, decodeUsage, finishFrom } from "./responses.js";
 import { array, fields, literal, nonempty, number, object, string, type Obj } from "./validation.js";
-import { readSse } from "./sse.js";
+import { readSse, sse, type SseFrame } from "./sse.js";
 import { StreamState } from "./stream-state.js";
 
-export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: ProtocolId, c: ConversionContext): AsyncGenerator<ProtocolEvent> {
+export function decodeStream(input: AsyncIterable<Uint8Array>, id: ProtocolId, c: ConversionContext): AsyncGenerator<ProtocolEvent>;
+export function decodeStream(input: AsyncIterable<Uint8Array>, id: "responses", c: ConversionContext, replay: true): AsyncGenerator<Uint8Array>;
+export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: ProtocolId, c: ConversionContext, replay = false): AsyncGenerator<ProtocolEvent | Uint8Array> {
   const state = new StreamState(c);
   const chatTools = new Map<number, number>(); let chatText: number | undefined;
   let messageCount = 0;
   const items = new Map<number, { id: string; type: string; blocks: Map<number, number>; done: boolean }>();
   const textDone = new Set<number>(); const partDone = new Set<number>(); let nextBlock = 0; let sequence = -1;
-  const emit = function*(events: ProtocolEvent[]) { for (const e of events) { state.accept(e); yield e; } };
+  function* emit(events: ProtocolEvent[], frame: SseFrame) {
+    for (const e of events) { state.accept(e); if (!replay) yield e; }
+    if (replay) yield sse(frame.data.replaceAll("\n", "\ndata: "), frame.event === "message" ? undefined : frame.event);
+  }
   for await (const frame of readSse(input, c)) {
     if (frame.data === "[DONE]") {
       if (id !== "chat-completions") c.fail("INVALID_EVENT_ORDER", "/stream", "Unexpected DONE marker");
-      yield* emit([{ type: "end" }]); continue;
+      yield* emit([{ type: "end" }], frame); continue;
     }
     let parsed: unknown; try { parsed = parseWireJson(frame.data); } catch { c.fail("INVALID_SSE", "/stream", "Event data must be valid JSON"); }
     const o = object(parsed, c, "/stream");
@@ -167,6 +172,12 @@ export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: Protoc
         if (r.id !== state.id || r.model !== state.model) c.fail("INVALID_EVENT_ORDER", "/stream", "Final response identity mismatch");
         const raw = object(o.response, c, "/stream/response"); literal(raw.status, [type === "response.completed" ? "completed" : "incomplete"], c, "/stream/response/status");
         const final = r.candidates[0]!;
+        const finalItems = array(raw.output, c, "/stream/response/output");
+        if (finalItems.length !== items.size || finalItems.some((v, i) => {
+          const item = items.get(i), wire = object(v, c, `/stream/response/output/${i}`);
+          return !item || item.id !== wire.id || item.type !== wire.type ||
+            (item.type === "message" && item.blocks.size !== array(wire.content, c, "/stream/response/output/content").length);
+        })) c.fail("INVALID_EVENT_ORDER", "/stream/response/output", "Final output item boundaries disagree with the stream");
         const actual = [...state.blocks.values()].map(b => b.kind === "tool_call" ? { type: "tool_call", id: b.id, name: b.name, arguments: parseWireJson(b.text) } : b.kind === "reasoning" ? { type: "reasoning", text: b.text, encrypted: b.opaque?.value ?? null } : { type: "text", text: b.text });
         const expected = final.content.map(b => b.type === "tool_call" ? { type: "tool_call", id: b.id, name: b.name, arguments: b.arguments } : b.type === "opaque" ? { type: "reasoning", text: ((b.value as Obj).summary as Obj[]).map(s => s.text).join(""), encrypted: (b.value as Obj).encrypted_content ?? null } : b);
         if (stringifyWireJson(actual) !== stringifyWireJson(expected)) c.fail("INVALID_EVENT_ORDER", "/stream/response/output", "Final output disagrees with streamed content");
@@ -196,7 +207,7 @@ export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: Protoc
             if (summary.text !== state.blocks.get(block)!.text) c.fail("INVALID_EVENT_ORDER", "/stream/item/summary", "Reasoning summary mismatch");
             if (done.encrypted_content !== undefined) events.push({ type: "reasoning_state", index: block, source: id, value: string(done.encrypted_content, c, "/stream/item/encrypted_content") });
             events.push({ type: "block_end", index: block }); item.done = true;
-            yield* emit(events); continue;
+            yield* emit(events, frame); continue;
           }
           const decoded = decodeResponse({ id: state.id, model: state.model, status: "completed", output: [done] }, id, c).candidates[0]!.content;
           const actual = [...item.blocks.values()].map(i => state.blocks.get(i)!);
@@ -227,7 +238,7 @@ export async function* decodeStream(input: AsyncIterable<Uint8Array>, id: Protoc
         }
       }
     }
-    yield* emit(events);
+    yield* emit(events, frame);
   }
   state.ensureEnd();
 }

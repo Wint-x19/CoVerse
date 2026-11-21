@@ -159,17 +159,23 @@ const adapter: SessionAdapter = {
             const opaqueKeys = ["edited_file_map", "artifact_snapshots", "trajectory_file_diffs", "subagent_snapshots", "running_task_snapshots", "accumulated_sections", "captured_user_requests", "captured_parent_messages"];
             const readable = Object.fromEntries(Object.entries(checkpoint).filter(([key]) => !opaqueKeys.includes(key)));
             content.push({ type: "text", text: `Historical checkpoint:\n${stringifyWireJson(readable, null, 2)}` });
-            const indices = checkpoint.included_step_indices;
-            if (step.status === 3 && Array.isArray(indices) && indices.length) {
-              const covered = new Set(indices);
+            if (step.status === 3) {
+              const covered = new Set(Array.isArray(checkpoint.included_step_indices) ? checkpoint.included_step_indices : []);
+              const start = checkpoint.included_step_index_start, end = checkpoint.included_step_index_end;
+              const range = covered.size === 0 && typeof start === "number" && typeof end === "number" && start <= end && end < Number(row.idx);
+              const knownCoverage = range || covered.size > 0;
               const previous = session.continuation;
               const priorBoundary = previous ? session.turns.findIndex(t => t.id === previous.boundaryId) : -1;
               const priorIds = new Set(previous?.retainedIds);
-              const retainedIds = session.turns.filter((t, i) => (i > priorBoundary || priorIds.has(t.id)) && !covered.has(t.origin!.record)).map(t => t.id);
+              const retainedIds = session.turns.filter((t, i) => {
+                const index = t.origin!.record;
+                return knownCoverage && (i > priorBoundary || priorIds.has(t.id)) && !covered.has(index) &&
+                  !(range && index >= start && index <= end);
+              }).map(t => t.id);
               const boundaryId = `${session.meta.id}:${row.idx}`;
               session.continuation = { boundaryId, retainedIds: [...retainedIds, boundaryId], replacement: [] };
-            } else if (step.status === 3) {
-              ledger.approximated.push({ code: "UNVERIFIED_CHECKPOINT_COVERAGE", path: at, reason: "Checkpoint lacks an explicit covered-step list; existing history was retained" });
+              if (!knownCoverage) ledger.approximated.push({ code: "UNVERIFIED_CHECKPOINT_COVERAGE", path: at,
+                reason: "Only the checkpoint and later steps are forwarded; earlier retained steps could not be verified" });
             }
             opaqueFields(content, checkpoint, opaqueKeys); break;
           }

@@ -41,6 +41,8 @@ export interface DriverPlugin {
   id: string;
   command: string;
   verifiedVersions: readonly string[];
+  /** Interactive target CLI arguments for an already materialized native session. */
+  resumeArgs?(id: string): string[];
   invocation(options: RunOptions): { args: string[]; input: string };
   decoder(): (record: WireRecord) => DriverEvent[];
   listModels?(executable: Executable | null): Promise<ModelOption[]>;

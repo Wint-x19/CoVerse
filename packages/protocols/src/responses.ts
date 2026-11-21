@@ -86,11 +86,11 @@ export function decodeResponse(input: unknown, id: ProtocolId, c: ConversionCont
       const start = content.length;
       if (item.type === "reasoning") content.push(...decodeReasoning(item, c, p));
       else {
-        if (!["message", "function_call"].includes(String(item.type))) { c.unsupported(p, v, "Unverified output item"); return; }
+        if (!["message", "function_call", "compaction"].includes(String(item.type))) { c.unsupported(p, v, "Unverified output item"); return; }
         if (item.type === "message") literal(item.role, ["assistant"], c, p + "/role");
         content.push(...decodeMessages({ input: [item] }, id, c, [p]).flatMap(m => m.content));
       }
-      outputItems.push({ kind: item.type as "message" | "function_call" | "reasoning", length: content.length - start });
+      outputItems.push({ kind: item.type as typeof outputItems[number]["kind"], length: content.length - start });
     });
     if (finish === "stop" && content.some(b => b.type === "tool_call")) finish = "tool_calls";
     r.candidates = [{ index: 0, content, finish, outputItems }];

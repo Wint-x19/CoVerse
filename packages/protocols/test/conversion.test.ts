@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { convertRequest, convertResponse, createProtocolRegistry, decodeProtocol, encodeProtocol, type ProtocolId } from "../src/index.js";
 
 const ids: ProtocolId[] = ["responses", "chat-completions", "anthropic-messages"];
@@ -57,6 +58,12 @@ it("keeps the editable and one-shot conversion results and reports equivalent", 
     options: { policy: "allow-loss" as const, omit: ["/extra"] } };
   const edited = decodeProtocol("request", args);
   expect(convertRequest(args)).toEqual(encodeProtocol("request", edited, args.to, args.options));
+});
+it("retains a Responses compaction item on its native wire and diagnoses a foreign target", () => {
+  const item = { type: "compaction", id: "cmp", encrypted_content: "synthetic-opaque-window" };
+  const input = { model: "m", input: [item, { role: "user", content: "continue" }] };
+  expect(convertRequest({ from: "responses", to: "responses", input }).data).toEqual(input);
+  expect(() => convertRequest({ from: "responses", to: "chat-completions", input })).toThrowError(expect.objectContaining({ code: "UNPORTABLE_COMPACTION" }));
 });
 it("does not replay stale originals after editing IR", () => {
   const decoded = decodeProtocol("request", { from: "responses", to: "responses", input: requests.responses });
@@ -179,4 +186,3 @@ it.each(ids)("maps incomplete/tool response lifecycle to %s", to => {
   expect(result.candidates[0]?.finish).toBe("tool_calls");
   expect(result.candidates[0]?.content[0]).toMatchObject({ type: "tool_call", id: "c", name: "lookup", arguments: { x: 1 } });
 });
-import { parseWireJson, stringifyWireJson } from "@coverse/core";

@@ -137,6 +137,7 @@ async function listClaudeLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
 
 export const claude: DriverPlugin = {
   id: "claude-code", command: "claude", verifiedVersions: ["2.1.121 (Claude Code)"],
+  resumeArgs: id => ["--resume", id],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["--print", "--verbose", "--output-format", "stream-json", "--include-partial-messages", "--disable-slash-commands"];
     if (model) args.push("--model", model);

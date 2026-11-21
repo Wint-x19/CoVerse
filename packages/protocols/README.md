@@ -52,10 +52,16 @@ const outcome = await stream.completion;
 
 默认 `policy: "strict"`。不可表示的语义导致 ProtocolError，包含 code、path、report。allow-loss 本身不启用全部降级，仍需逐项选择：
 
+- `allowMessageMerge: true`：允许将独立助手消息合并到一条目标响应，记录原消息边界降级。
+- `allowFinishApproximation: true`：允许在缺少对应结束原因时映射拒答和内容过滤，记录近似。
 - `allowRoleMerge: true`：合并指令角色/位置，记入 downgraded。
 - `reasoningAsText: true`：摘要/可见 thinking 转成正文，签名和加密状态只保留在报告，记入 downgraded。
 - `candidateIndex: n`：选择指定候选，其他候选或流片段保留在报告，记入 dropped。
 - `omit: ["/具体路径"]`：允许省略诊断指向的字段，记入 dropped。路径可能指向源 JSON 或明确标出的 IR 字段，不接受通配符。
+
+调用方从原始 JSON 字节进入时，应使用导出的 `parseWireJson` 和 `stringifyWireJson`。超出 JavaScript 安全整数范围的普通整数在内存中用 bigint 表示，写出为 JSON 数字。已被调用方提前舍入的 Number 无法恢复；无法精确表示的小数会报错。
+
+原生 Responses 非流式请求和响应可携带已识别的 `compaction` 项；跨协议无法读取该压缩状态时返回 `UNPORTABLE_COMPACTION`。同协议严格模式下的 Responses SSE 逐帧校验并保留来源 item 与消息边界。
 
 完整 JSON 转换报告保留源 payload，含原始内容，应与源文件同等保护。流只保留需审计的元数据、丢弃片段和不透明状态，不重复归档所有文本增量。工具不执行、历史不自动补齐、状态 ID 不解析成隐藏会话。
 

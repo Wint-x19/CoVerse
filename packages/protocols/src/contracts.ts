@@ -47,6 +47,7 @@ export interface ProtocolCodec {
   encodeResponse(input: ProtocolResponse, context: ConversionContext): JsonValue;
   decodeStream(input: AsyncIterable<Uint8Array>, context: ConversionContext): AsyncIterable<ProtocolEvent>;
   encodeStream(input: AsyncIterable<ProtocolEvent>, context: ConversionContext): AsyncIterable<Uint8Array>;
+  replayStream?(input: AsyncIterable<Uint8Array>, context: ConversionContext): AsyncIterable<Uint8Array>;
 }
 export class ProtocolRegistry {
   private readonly codecs = new Map<string, ProtocolCodec>();

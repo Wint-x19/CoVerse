@@ -19,7 +19,7 @@ node tools/m3-demo.mjs antigravity
 node tools/m3-demo.mjs claude-code
 ```
 
-首轮要求从历史工具结果引用 `Hello from the sample.` 并追加随机标记。第二轮只问上轮的标记，验收同时检查会话 ID、答案和成功终态。命令输出的证据目录包含版本清单、引导包与 LossLedger、两轮 JSONL、失败诊断或成功的 `result.json`。三条路线均有 0 项丢弃与 0 项近似。
+首轮要求引用有效窗口里的工具结果或检查点摘要，并追加随机标记。第二轮只问上轮的标记，验收同时检查会话 ID、答案和成功终态。命令输出的证据目录包含版本清单、引导包与 LossLedger、两轮 JSONL、失败诊断或成功的 `result.json`。Antigravity 样本检查点未声明覆盖范围，本次转换会记录近似项。
 
 ### 运行契约
 

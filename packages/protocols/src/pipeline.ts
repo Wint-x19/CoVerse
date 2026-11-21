@@ -70,7 +70,13 @@ export function convertStream(args: Omit<ConvertInput, "input"> & { input: Async
           else yield e;
         }
       }
-      yield* target.encodeStream(bridge(source.decodeStream(args.input, c)), c); complete = true;
+      if (source === target && source.replayStream && c.options.policy !== "allow-loss" &&
+          c.options.targetModel === undefined && c.options.candidateIndex === undefined) {
+        yield* source.replayStream(args.input, c);
+      } else {
+        yield* target.encodeStream(bridge(source.decodeStream(args.input, c)), c);
+      }
+      complete = true;
     } catch (error) {
       failure = error instanceof ProtocolError ? error : new ProtocolError("STREAM_ERROR", "/stream", error instanceof Error ? error.message : "Stream failed", c.report);
       throw failure;

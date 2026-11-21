@@ -29,6 +29,11 @@ const responseText = [
   { type: "response.completed", response: { ...responseBase, status: "completed", output: [outputItem], usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 } } },
 ].map(v => frame(v, v.type)).join("");
 const samples = { responses: responseText, "chat-completions": chatText, "anthropic-messages": anthText };
+it("preserves the originating output item ID in validated native Responses streams", async () => {
+  const out = await collect(convertStream({ from: "responses", to: "responses", input: chunks(responseText, 3) }).data);
+  expect(out).toContain('"item_id":"msg1"');
+  expect(out).not.toContain('"item_0"');
+});
 async function semantics(text: string, id: ProtocolId): Promise<ProtocolEvent[]> {
   const events: ProtocolEvent[] = [];
   for await (const e of createProtocolRegistry().get(id).decodeStream(chunks(text), new ConversionContext(id, id))) events.push(e);

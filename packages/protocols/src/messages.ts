@@ -69,6 +69,11 @@ export function decodeMessages(body: Obj, protocol: ProtocolId, c: ConversionCon
         add("tool", [{ type: "tool_result", callId: nonempty(o.call_id, c, p + "/call_id"), content: string(o.output, c, p + "/output") }]);
       } else if (o.type === "reasoning") {
         add("assistant", decodeReasoning(o, c, p));
+      } else if (o.type === "compaction") {
+        fields(o, ["type", "id", "encrypted_content"], c, p);
+        if (o.id !== undefined) nonempty(o.id, c, p + "/id");
+        nonempty(o.encrypted_content, c, p + "/encrypted_content");
+        add("assistant", [{ type: "opaque", source: "responses", value: o }]);
       } else {
         fields(o, ["type", "role", "content", "id", "status"], c, p); wireMetadata(o, c, p);
         if (o.type !== undefined) literal(o.type, ["message"], c, p + "/type");
@@ -150,6 +155,9 @@ export function encodeMessages(messages: readonly Turn[], protocol: ProtocolId, 
       if (b.type !== "opaque" || b.source === protocol) return [b];
       const q = `${p}/content/${j}`; const raw = object(b.value, c, q);
       if (b.source === "responses" && raw.type === "reasoning") return decodeReasoning(raw, c, q);
+      if (b.source === "responses" && raw.type === "compaction") {
+        return c.fail("UNPORTABLE_COMPACTION", q, "Target cannot read this Responses compaction item. A source-provided readable window is required");
+      }
       if (b.source === "anthropic-messages" && raw.type === "thinking") return decodeContent([raw], "anthropic-messages", c, q);
       return c.fail("UNSUPPORTED_CAPABILITY", q, "Opaque state is not portable to the selected target");
     }) };

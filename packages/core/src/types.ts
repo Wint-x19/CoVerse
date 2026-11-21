@@ -25,7 +25,7 @@ export type ContentBlock =
   | { type: "tool_result"; callId: string; content: JsonValue; isError?: boolean }
   | { type: "attachment"; path: string; mediaType: string }
   | { type: "image"; url: string; detail?: string }
-  | { type: "opaque"; source: string; value: JsonValue }
+  | { type: "opaque"; source: string; value: JsonValue; requiredForContinuation?: boolean }
   | { type: "unknown"; raw: JsonValue };
 
 export interface Turn {

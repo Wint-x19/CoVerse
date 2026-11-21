@@ -47,6 +47,20 @@ it("archives unknown semantics but refuses a falsely complete export", async () 
   }
 });
 it("rejects invalid compressed records", () => expect(() => adapter.import([{ path: "rollout.jsonl.zst", bytes: new Uint8Array([1, 2]) }])).toThrow("Zstandard"));
+it("keeps an unreadable active compaction distinct from optional opaque history", async () => {
+  const r = await adapter.import(encode([header, { type: "compacted", payload: { replacement_history: [
+    { type: "compaction", encrypted_content: "opaque-window" },
+  ] } }]));
+  expect(() => adapter.export(r.session, { lossPolicy: { omitOpaque: true } })).toThrowError(expect.objectContaining({ code: "UNPORTABLE_COMPACTION" }));
+  const readable = await adapter.import(encode([header, { type: "compacted", payload: {
+    message: "source supplied summary", replacement_history: [{ type: "compaction", encrypted_content: "opaque-window" }],
+  } }]));
+  const out = await adapter.export(readable.session, { ledger: readable.ledger });
+  const context = new TextDecoder().decode(out.artifacts.find(f => f.path === "context.md")!.bytes);
+  expect(context).toContain("source supplied summary");
+  expect(context).not.toContain("opaque-window");
+  expect(readable.ledger.approximated[0]?.code).toBe("COMPACTION_AS_SOURCE_SUMMARY");
+});
 it("keeps event-only messages and additional identical requests", async () => {
   const event = { type: "event_msg", payload: { type: "user_message", message: "Read the sample." } };
   const r = await adapter.import(encode([...sample, event, { type: "event_msg", payload: { type: "agent_message", message: "An event-only answer" } }]));

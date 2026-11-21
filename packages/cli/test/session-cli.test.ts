@@ -27,7 +27,9 @@ it.each(Object.keys(fixtures).flatMap(from => Object.keys(fixtures).map(to => [f
   const manifest = JSON.parse(await fs.readFile(path.join(output, "manifest.json"), "utf8"));
   for (const file of manifest.files) expect(sha256Bytes(await fs.readFile(path.join(output, file.path)))).toBe(file.sha256);
   expect(await fs.readFile(path.join(output, "source", path.basename(inputFor(from))))).toEqual(await fs.readFile(inputFor(from)));
-  expect(await fs.readFile(path.join(output, "context.md"), "utf8")).toContain("greeting");
+  const active = await fs.readFile(path.join(output, "context.md"), "utf8");
+  expect(active).toContain(from === "antigravity" ? "The file was inspected" : "greeting");
+  expect(await fs.readFile(path.join(output, "session.json"), "utf8")).toContain("greeting");
   expect((await fs.readdir(sandbox)).filter(n => n.startsWith(".coverse"))).toEqual([]);
 });
 it("auto detects native formats, including compressed Codex", async () => {

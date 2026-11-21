@@ -36,6 +36,8 @@ for (const [source, fixture] of Object.entries(fixtures)) {
       expect(first.status, JSON.stringify(first.err)).toBe(0);
       const events = first.out.trim().split("\n").map(s => JSON.parse(s));
       expect(events.map(e => e.type)).toEqual(["bundle", "session", "text", "usage", "done"]);
+      expect(events.at(-1).resumeInTarget).toEqual({ cwd, command: target === "antigravity" ? "agy" : target === "claude-code" ? "claude" : "codex",
+        args: [target === "antigravity" ? "--conversation" : target === "claude-code" ? "--resume" : "resume", events[1].id] });
       const report = JSON.parse(await readFile(events[0].report, "utf8"));
       expect(events[0].losses).toEqual(Object.fromEntries(Object.entries(report.ledger).map(([k, items]) => [k, (items as unknown[]).length])));
       const firstInput = await received();
@@ -62,6 +64,13 @@ it("rejects corrupt bundles, incompatible cwd, and target mismatch before spawni
   await writeFile(path.join(bundle, "context.md"), "damaged");
   expect((await cli([...args, "--cwd", cwd])).err.join("")).toContain("checksum");
   await expect(received()).rejects.toThrow();
+});
+it("materializes a target-native conversation without requiring a new user task", async () => {
+  const bundle = await convert(fixtures.codex, "claude-code");
+  const result = await cli(["run", "--agent", "claude-code", "--cwd", cwd, "--bundle", bundle, "--json"]);
+  expect(result.status).toBe(0);
+  const events = result.out.trim().split("\n").map(line => JSON.parse(line));
+  expect(events.at(-1).resumeInTarget.args).toEqual(["--resume", events.find(e => e.type === "session").id]);
 });
 it("restores a native file URI workspace and resolves an attachment outside that workspace", async () => {
   const bundle = path.join(cwd, "archive"), workspace = path.join(cwd, "original space");

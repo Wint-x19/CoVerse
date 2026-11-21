@@ -143,6 +143,7 @@ async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
 
 export const codex: DriverPlugin = {
   id: "codex",
+  resumeArgs: id => ["resume", id],
   command: "codex",
   verifiedVersions: ["codex-cli 0.169.0-alpha.11.1"],
   invocation({ model, session, prompt, attachmentDirectory }) {

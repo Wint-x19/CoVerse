@@ -1,4 +1,4 @@
-import { ConversionContext, type ProtocolCodec, type ProtocolId } from "./contracts.js";
+import type { ConversionContext, ProtocolCodec, ProtocolId } from "./contracts.js";
 import { decodeRequest, encodeRequest } from "./requests.js";
 import { decodeResponse, encodeResponse } from "./responses.js";
 import { decodeStream } from "./stream-decode.js";
@@ -12,5 +12,6 @@ export function createCodec(id: ProtocolId): ProtocolCodec {
     decodeResponse: (v, c) => decodeResponse(v, id, c), encodeResponse: (v, c) => encodeResponse(v, id, c),
     decodeStream: (input, context) => decodeStream(input, id, context),
     encodeStream: (input, context) => encodeStream(input, id, context),
+    ...(id === "responses" ? { replayStream: (input: AsyncIterable<Uint8Array>, context: ConversionContext) => decodeStream(input, id, context, true) } : {}),
   };
 }

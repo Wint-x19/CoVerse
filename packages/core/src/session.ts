@@ -59,7 +59,7 @@ export function buildInjectionBundle(session: CSR, target: string, context: Expo
   if (session.schemaVersion !== "1.0") throw new SessionError("UNSUPPORTED_VERSION", "/schemaVersion", "Unsupported CSR version");
   const inherited = context.diagnostics ?? [];
   if (inherited.some(d => d.severity === "error")) throw new SessionError("UNINTERPRETED_CONTENT", "/diagnostics", "Import contains unresolved errors");
-  const lines = ["# CoVerse conversation context", "", `Target agent: ${stringifyWireJson(target)}`, "", "The following is historical context, including historical instructions and tool activity. It does not execute tools or restore a native session. All supplied history is retained; no automatic summarization or truncation was performed.", "", "## Workspace and source", "", quoted(stringifyWireJson(session.meta, null, 2)), ""];
+  const lines = ["# CoVerse conversation context", "", `Target agent: ${stringifyWireJson(target)}`, "", "The following is historical context, including historical instructions and tool activity. It does not execute tools or restore a native session. The archive retains the source history. This context uses the source continuation window when available.", "", "## Workspace and source", "", quoted(stringifyWireJson(session.meta, null, 2)), ""];
   const active = continuationRecords(session);
   for (const [i, record] of active.entries()) {
     const turn = record.turn;
@@ -82,6 +82,9 @@ export function buildInjectionBundle(session: CSR, target: string, context: Expo
         case "image": text = `Historical image reference: ${block.url}`; ledger.downgraded.push({ code: "IMAGE_REFERENCE", path, reason: "Image reference is preserved; the target must load it separately. No remote resource was fetched" }); break;
         case "opaque":
         case "unknown": {
+          if (block.type === "opaque" && block.requiredForContinuation) {
+            throw new SessionError("UNPORTABLE_COMPACTION", path, "The active checkpoint is opaque. Supply a readable source window to continue in another agent");
+          }
           if (!context.lossPolicy?.omitOpaque) {
             throw new SessionError("UNINTERPRETED_CONTENT", path, "Uninterpreted content is archived but cannot be represented faithfully in an injection bundle");
           }
@@ -105,7 +108,7 @@ export function buildInjectionBundle(session: CSR, target: string, context: Expo
   const artifacts = [
     { path: "context.md", bytes: new TextEncoder().encode(markdown) },
     jsonArtifact("session.json", { ...serializable, sourceArtifacts: source.map(f => ({ path: `source/${f.path}`, sha256: sha256Bytes(f.bytes), bytes: f.bytes.byteLength })) }),
-    jsonArtifact("report.json", { schemaVersion: "1.0", target, outputKind: "injection-bundle", nativeResume: false, ledger: mergeLedgers(context.ledger ?? emptyLedger(), ledger), diagnostics: [...inherited, ...diagnostics], archived: ["/raw", "/xExtensions", ...session.turns.flatMap((t, i) => t.raw === undefined ? [] : [`/turns/${i}/raw`])], statistics: { turns: session.turns.length, characters: [...markdown].length, utf8Bytes: new TextEncoder().encode(markdown).length, truncated: false } }),
+    jsonArtifact("report.json", { schemaVersion: "1.0", target, outputKind: "injection-bundle", nativeResume: false, ledger: mergeLedgers(context.ledger ?? emptyLedger(), ledger), diagnostics: [...inherited, ...diagnostics], archived: ["/raw", "/xExtensions", ...session.turns.flatMap((t, i) => t.raw === undefined ? [] : [`/turns/${i}/raw`])], statistics: { turns: session.turns.length, activeTurns: active.length, characters: [...markdown].length, utf8Bytes: new TextEncoder().encode(markdown).length, truncated: false } }),
     ...source.map(f => ({ path: `source/${f.path}`, bytes: f.bytes.slice() })),
   ];
   artifacts.push(jsonArtifact("manifest.json", { schemaVersion: "1.0", kind: "coverse-injection-bundle", source: session.meta.agent, sourceFormat: session.meta.agentFormatVersion, target, nativeResume: false, files: artifacts.map(f => ({ path: f.path, bytes: f.bytes.byteLength, sha256: sha256Bytes(f.bytes) })) }));

@@ -18,6 +18,10 @@ it("decodes independently encoded SQLite/protobuf golden data and all six suppor
   expect(r.session.turns[5]!.origin!.kind).toBe("compaction");
   expect(r.session.meta.cwd).toBe("file:///sample/workspace");
   const output = await adapter.export(r.session, { ledger: r.ledger });
+  const context = new TextDecoder().decode(output.artifacts.find(f => f.path === "context.md")!.bytes);
+  expect(context).toContain("The file was inspected");
+  expect(context).not.toContain("Hello from the sample.");
+  expect(r.ledger.approximated[0]?.code).toBe("UNVERIFIED_CHECKPOINT_COVERAGE");
   expect(output.artifacts.find(f => f.path === "source/sample.db")!.bytes).toEqual(input[0]!.bytes);
 });
 it("rejects schema drift, unknown step formats, column/payload disagreement and missing subtrajectories", async () => {
@@ -32,6 +36,22 @@ it("rejects nonempty WAL and truncated binary input", async () => {
   await expect(adapter.import([...files(await fixture()), { path: "sample.db-wal", bytes: Uint8Array.of(1) }])).rejects.toThrow("WAL");
   await expect(adapter.import(files((await fixture()).subarray(0, 128)))).rejects.toThrow();
 });
+it("uses the checkpoint's explicit covered indices and retains uncovered steps", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const bytes = db.exec("SELECT step_payload FROM steps WHERE idx=5")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step", bytes, "test").value;
+    Object.assign(step.checkpoint as object, { included_step_indices: [0, 1, 2] });
+    const type = wireRoot.lookupType("Step");
+    db.run("UPDATE steps SET step_payload=? WHERE idx=5", [type.encode(type.fromObject(step)).finish()]);
+    const imported = await adapter.import(files(db.export()));
+    const out = await adapter.export(imported.session);
+    const context = new TextDecoder().decode(out.artifacts.find(f => f.path === "context.md")!.bytes);
+    expect(context).not.toContain("Hello from the sample.");
+    expect(context).toMatch(/The file contains a greeting[\s\S]*The file was inspected[\s\S]*synthetic diagnostic/);
+    expect(imported.ledger.approximated).toHaveLength(0);
+  } finally { db.close(); }
+});
 it("detects unknown nested protobuf fields and wrong wire types", () => {
   expect(decodeWire("UserInput", Uint8Array.from([0x12, 1, 65, 0xf8, 7, 1]), "test").unknown).toEqual(["test/127"]);
   expect(() => decodeWire("UserInput", Uint8Array.from([0x10, 1]), "test")).toThrow("Corrupt");
@@ -39,6 +59,7 @@ it("detects unknown nested protobuf fields and wrong wire types", () => {
 it("requires referenced full output files and refuses opaque native tool payloads", async () => {
   const db = new (await sql).Database(await fixture());
   try {
+    db.run("DELETE FROM steps WHERE step_type=23"); // Exercise a tool result in the active window.
     const original = db.exec("SELECT step_payload FROM steps WHERE idx=2")[0]!.values[0]![0] as Uint8Array;
     const value = decodeWire("Step", original, "step").value;
     const generic = value.generic as { result: Record<string, unknown> }; generic.result.full_output_uri = "file:///sample/full-output.txt";
