@@ -89,8 +89,8 @@ const adapter: SessionAdapter = {
         case "function_call_output": case "custom_tool_call_output":
           if (p.output === undefined) throw new SessionError("INVALID_INPUT", path, "Missing tool output");
           // Desktop supplies page context without a preceding assistant tool call.
-          if (meta.cli_version === "0.171.0-alpha.13" && p.type === "function_call_output" && p.call_id === undefined &&
-              p.namespace === "agent" && typeof p.name === "string" && /^(?:codex_apps_open_page|codex_apps_selected_page_part_1_of_1)$/.test(p.name) &&
+          if (p.type === "function_call_output" && p.call_id === undefined && p.namespace === "agent" &&
+              (p.name === "codex_apps_open_page" || p.name === "codex_apps_selected_page_part_1_of_1") &&
               typeof p.output === "string") {
             add("system", [{ type: "text", text: `Historical Codex page context (${p.name}):\n${p.output}` }], p, line, kind);
             ledger.downgraded.push({ code: "PAGE_CONTEXT_AS_HISTORY", path, reason: "Desktop page context is preserved as historical text" });

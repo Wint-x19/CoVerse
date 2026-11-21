@@ -35,12 +35,18 @@ it("imports the observed desktop writers and preserves injected page context sep
     const result = await adapter.import(encode(rows));
     expect(result.session.turns.some(turn => turn.role === "user")).toBe(true);
   }
-  const current = { ...header, payload: { ...header.payload, cli_version: "0.171.0-alpha.13" } };
   const page = { type: "function_call_output", namespace: "agent", name: "codex_apps_open_page", output: "Sample page" };
-  const result = await adapter.import(encode([current, response(page)]));
-  expect(result.session.turns.at(-1)?.content[0]).toMatchObject({ type: "text", text: expect.stringContaining(page.output) });
-  expect(result.ledger.downgraded.at(-1)?.code).toBe("PAGE_CONTEXT_AS_HISTORY");
-  expect(() => adapter.import(encode([current, response({ ...page, name: "unrecognized" })]))).toThrow();
+  const snapshot = { ...page, name: "codex_apps_selected_page_part_1_of_1", output: "Selected page contents" };
+  for (const cli_version of ["0.169.0-alpha.11.1", "0.171.0-alpha.13"]) {
+    const current = { ...header, payload: { ...header.payload, cli_version } };
+    const result = await adapter.import(encode([current, response(page), response(snapshot)]));
+    expect(result.session.turns.slice(-2).map(t => t.content[0])).toEqual([page, snapshot].map(p =>
+      ({ type: "text", text: `Historical Codex page context (${p.name}):\n${p.output}` })));
+    expect(result.ledger.downgraded.map(item => item.code)).toEqual(["PAGE_CONTEXT_AS_HISTORY", "PAGE_CONTEXT_AS_HISTORY"]);
+    for (const invalid of [{ ...page, name: "unrecognized" }, { ...page, namespace: "functions" }, { ...page, call_id: "" }]) {
+      expect(() => adapter.import(encode([current, response(invalid)]))).toThrow();
+    }
+  }
 });
 it("exports only the replacement window and subsequent turns for target continuation", async () => {
   const msg = (text: string) => ({ type: "message", role: "user", content: [{ type: "input_text", text }] });
