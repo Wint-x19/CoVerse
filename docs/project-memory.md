@@ -32,6 +32,12 @@
 
 ## 已验证经验
 
+### 一次性协议转换的快照开销与 SSE 分块
+
+2026-11-21 在 Windows x64、Node 20.19.5 用内存合成输入测量。Responses→Chat 请求包含 2,048 条交替角色的文本消息，每条约 1 KiB，输入 JSON 共 2,268,105 字节。两组复用同一注册表、交替运行，预热 5 次，各取 15 次中位数。现有 `convertRequest` 为 49.90 ms；在同一转换上下文中直接调用现有解码器和编码器、保留一次完整源载荷、跳过编辑与回放用的快照及额外复制，为 16.95 ms。该样本的目标数据和完整报告深比较相等。这个对照仍经过 IR，仅验证纯文本跨协议的一次性转换。编辑后的导出、同协议回放与失败报告需分别验证。[转换管线](../packages/protocols/src/pipeline.ts)
+
+同次环境下，一个含 128 KiB 文本增量的 Chat SSE 事件转 Responses，输入共 131,238 字节。预热 3 次，测量 11 次。按 64 KiB 或 256 B 切分相同字节时，消费整条输出流的中位数分别为 5.86 ms 和 47.99 ms。读取器在未遇到换行时会从头扫描累积缓冲区，分块还影响异步迭代次数。这组数据只描述长单行事件的分块敏感性，未测线上流量、内存峰值或各因素的独立耗时。[SSE 读取器](../packages/protocols/src/sse.ts)
+
 ### 在线网关能回放的摘要与可移植的上下文
 
 2026-11-21 核对上游源码。CC Switch 的 Codex 兼容路径可以把自生成的摘要以带前缀的 base64 包装，在下次请求还原为文字。CLIProxyAPI 的部分执行器将生成的摘要封装为自有加密格式；共享展开逻辑按调用路径移除或保留其他来源的压缩项。这些往返依赖已知来源，不能证明网关能恢复第三方原生密文中的事实。[CC Switch 压缩转换](https://github.com/farion1231/cc-switch/blob/908a83edaf7b2c55b961ff1a31523735a417b6e9/src-tauri/src/proxy/providers/codex_compaction.rs) · [CLIProxyAPI 压缩转换](https://github.com/router-for-me/CLIProxyAPI/blob/f5c5681a8361c9da53e93c60b6507816eee7468b/internal/runtime/executor/helps/antigravity_compaction.go#L135)
