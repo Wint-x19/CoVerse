@@ -4,7 +4,8 @@ export interface SseFrame { event: string; data: string }
 /** The input is bytes, not network frames: UTF-8 and CRLF may straddle chunks. */
 export async function* readSse(input: AsyncIterable<Uint8Array>, c: ConversionContext): AsyncGenerator<SseFrame> {
   const decoder = new TextDecoder("utf-8", { fatal: true }); const iterator = input[Symbol.asyncIterator]();
-  let buffer = ""; let event = "message"; let data: string[] = [];
+  let fragments: string[] = []; let skipLF = false;
+  let event = "message"; let data: string[] = [];
   const signal = c.options.signal;
   const line = (text: string): SseFrame | undefined => {
     if (text === "") { const frame = data.length ? { event, data: data.join("\n") } : undefined; event = "message"; data = []; return frame; }
@@ -20,24 +21,33 @@ export async function* readSse(input: AsyncIterable<Uint8Array>, c: ConversionCo
     for (;;) {
       if (signal?.aborted) c.fail("CANCELLED", "/stream", "Conversion cancelled");
       let remove = () => {};
-      const abort = new Promise<never>((_, reject) => {
-        if (!signal) return;
+      const abort = signal && new Promise<never>((_, reject) => {
         const handler = () => { try { c.fail("CANCELLED", "/stream", "Conversion cancelled"); } catch (e) { reject(e); } };
         signal.addEventListener("abort", handler, { once: true }); remove = () => signal.removeEventListener("abort", handler);
       });
       let next: IteratorResult<Uint8Array>;
-      try { next = await Promise.race([iterator.next(), abort]); } finally { remove(); }
-      try { buffer += next.done ? decoder.decode() : decoder.decode(next.value, { stream: true }); }
+      try { next = abort ? await Promise.race([iterator.next(), abort]) : await iterator.next(); } finally { remove(); }
+      let chunk: string;
+      try { chunk = next.done ? decoder.decode() : decoder.decode(next.value, { stream: true }); }
       catch { c.fail("INVALID_SSE", "/stream", "Invalid UTF-8 stream"); }
-      for (;;) {
-        const index = buffer.search(/[\r\n]/);
-        if (index < 0 || !next.done && buffer[index] === "\r" && index === buffer.length - 1) break;
-        const text = buffer.slice(0, index); const size = buffer[index] === "\r" && buffer[index + 1] === "\n" ? 2 : 1;
-        buffer = buffer.slice(index + size); const frame = line(text); if (frame) yield frame;
+      if (chunk.length) {
+        let start = skipLF && chunk[0] === "\n" ? 1 : 0;
+        skipLF = false;
+        const endings = /\r\n|[\r\n]/g;
+        endings.lastIndex = start;
+        for (let match; (match = endings.exec(chunk));) {
+          const tail = chunk.slice(start, match.index);
+          const frame = line(fragments.length ? fragments.join("") + tail : tail);
+          fragments = [];
+          start = endings.lastIndex;
+          skipLF = match[0] === "\r" && start === chunk.length;
+          if (frame) yield frame;
+        }
+        if (start < chunk.length) fragments.push(chunk.slice(start));
       }
       if (next.done) break;
     }
-    if (buffer.length || data.length || event !== "message") c.fail("TRUNCATED_STREAM", "/stream", "SSE ended inside an event");
+    if (fragments.length || data.length || event !== "message") c.fail("TRUNCATED_STREAM", "/stream", "SSE ended inside an event");
   } finally {
     if (signal?.aborted) void iterator.return?.().catch(() => {});
     else await iterator.return?.();

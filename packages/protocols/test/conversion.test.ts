@@ -41,6 +41,12 @@ it("refuses unknown fields unless the exact field is explicitly omitted", () => 
 it("does not replay unknown fields even on the same protocol", () => {
   expect(() => convertRequest({ from: "responses", to: "responses", input: { ...requests.responses, future: true } })).toThrow();
 });
+it("keeps the editable and one-shot conversion results and reports equivalent", () => {
+  const args = { from: "responses", to: "chat-completions", input: { ...requests.responses, extra: "archived" },
+    options: { policy: "allow-loss" as const, omit: ["/extra"] } };
+  const edited = decodeProtocol("request", args);
+  expect(convertRequest(args)).toEqual(encodeProtocol("request", edited, args.to, args.options));
+});
 it("does not replay stale originals after editing IR", () => {
   const decoded = decodeProtocol("request", { from: "responses", to: "responses", input: requests.responses });
   decoded.value.messages[0]!.content = [{ type: "text", text: "edited" }];

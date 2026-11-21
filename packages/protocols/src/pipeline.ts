@@ -27,8 +27,20 @@ export function encodeProtocol(kind: "request" | "response", decoded: Decoded<Pr
   const unchanged = decoded.source === to && decoded.snapshot === JSON.stringify(decoded.value) && options.targetModel === undefined && options.maxOutputTokens === undefined && options.candidateIndex === undefined && Object.values(c.report.ledger).every(v => v.length === 0);
   return { data: unchanged ? structuredClone(decoded.original) : encoded, ...c.report };
 }
-export function convertRequest(args: ConvertInput): ConversionResult<JsonValue> { return encodeProtocol("request", decodeProtocol("request", args), args.to, args.options, args.registry); }
-export function convertResponse(args: ConvertInput): ConversionResult<JsonValue> { return encodeProtocol("response", decodeProtocol("response", args), args.to, args.options, args.registry); }
+function convertOnce(kind: "request" | "response", args: ConvertInput): ConversionResult<JsonValue> {
+  const registry = args.registry ?? createProtocolRegistry();
+  const source = registry.get(args.from), target = registry.get(args.to);
+  const c = new ConversionContext(args.from, args.to, args.options);
+  c.preserve("", args.input as JsonValue, "Original source payload retained for audit; never blindly forwarded");
+  const encoded = kind === "request"
+    ? target.encodeRequest(source.decodeRequest(args.input, c), c)
+    : target.encodeResponse(source.decodeResponse(args.input, c), c);
+  const replay = args.from === args.to && c.options.targetModel === undefined && c.options.maxOutputTokens === undefined &&
+    c.options.candidateIndex === undefined && Object.values(c.report.ledger).every(items => !items.length);
+  return { data: replay ? structuredClone(args.input) as JsonValue : encoded, ...c.report };
+}
+export function convertRequest(args: ConvertInput): ConversionResult<JsonValue> { return convertOnce("request", args); }
+export function convertResponse(args: ConvertInput): ConversionResult<JsonValue> { return convertOnce("response", args); }
 
 export interface StreamConversion {
   data: AsyncIterable<Uint8Array>;
