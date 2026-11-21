@@ -87,6 +87,15 @@ export interface ExportContext {
 }
 export interface ExportResult { artifacts: FileSet; ledger: LossLedger; diagnostics?: SessionDiagnostic[] }
 
+export interface DesktopPublication {
+  cliSessionId: string;
+  transferId: string;
+  title: string;
+  cwd: string;
+  bundleDirectory: string;
+  loadArtifacts(): Promise<FileSet>;
+}
+
 /** All agent format knowledge lives in implementations outside core. */
 export interface SessionAdapter {
   readonly id: string;
@@ -96,6 +105,8 @@ export interface SessionAdapter {
   readonly capabilities: Readonly<AdapterCapabilities>;
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
+  /** Publish a separate, resumable snapshot when the desktop and CLI have separate native stores. */
+  publishDesktopSession?(input: DesktopPublication): Promise<string>;
   detect(input: FileSet): Detection | Promise<Detection>;
   import(input: FileSet): ImportResult | Promise<ImportResult>;
   export(session: CSR, context?: ExportContext): ExportResult | Promise<ExportResult>;

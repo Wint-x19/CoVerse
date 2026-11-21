@@ -366,6 +366,8 @@ export function ConvertDialog({
                     />
                   </label>
                 )}
+                  {!isReferenceImport && to === "antigravity" && materialize && targetDriver?.available &&
+                    <p className="text-xs text-[var(--text-secondary)]">{t.desktopHint}</p>}
               </div>
             </>
           )}

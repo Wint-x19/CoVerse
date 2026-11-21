@@ -82,7 +82,7 @@ function normalizePathValue(raw: string | undefined): string | undefined {
   if (value.startsWith("file:")) {
     try {
       const url = new URL(value);
-      const windows = Boolean(url.hostname && url.hostname !== "localhost") || /^\/[a-z]:\//i.test(url.pathname);
+      const windows = Boolean(url.hostname && url.hostname !== "localhost") || /^\/[a-z](?::|%3a)\//i.test(url.pathname);
       value = fileURLToPath(url, { windows });
     } catch {
       return undefined;
@@ -90,6 +90,8 @@ function normalizePathValue(raw: string | undefined): string | undefined {
   }
   if (/^\\\\\?\\UNC\\/i.test(value)) return "\\\\" + value.slice(8);
   if (/^\\\\\?\\[a-z]:\\/i.test(value)) return value.slice(4);
+  // Catalogs written by older builds decoded an escaped drive colon as a POSIX path.
+  if (process.platform === "win32" && /^\/[a-z]:\//i.test(value)) return value.slice(1);
   return value;
 }
 
@@ -384,6 +386,7 @@ export class UiService {
   private readonly activeRuns = new Map<string, AbortController>();
   private readonly modelCache = new Map<string, ModelOption[]>();
   private readonly catalogScans = new Map<string, Promise<LocalSessionRef[]>>();
+  private readonly registrations = new Map<string, Promise<UiSession>>();
   private readonly customDriversInjected: boolean;
   private drivers: DriverRegistry;
 
@@ -944,10 +947,17 @@ export class UiService {
    * and can be continued there as well as inside CoVerse.
    */
   async materializeSession(sessionId: string): Promise<UiSession> {
+    const inProgress = this.registrations.get(sessionId);
+    if (inProgress) return inProgress;
+    const registration = this.registerSession(sessionId).finally(() => this.registrations.delete(sessionId));
+    this.registrations.set(sessionId, registration);
+    return registration;
+  }
+
+  private async registerSession(sessionId: string): Promise<UiSession> {
     const session = await this.getSession(sessionId);
-    if (!session.handoff || !session.bundlePending) {
-      return session;
-    }
+    if (!session.handoff) return session;
+    if (!session.bundlePending) return this.publishDesktopCopy(session);
     const registry = await this.ensureDriversConfigured();
     const driver = registry.get(session.agent);
     const bundleFiles = await this.store.loadBundleFiles(session.handoff.bundleId);
@@ -983,7 +993,7 @@ export class UiService {
       throw new SessionError("DRIVER_FAILED", "/materialize", "Target agent did not return a session ID");
     }
 
-    return this.store.mutateSession(sessionId, (current) => {
+    const registered = await this.store.mutateSession(sessionId, (current) => {
       const nextHandoff = current.handoff
         ? (() => {
             const copy: HandoffMetadata = { ...current.handoff, materialized: true };
@@ -998,6 +1008,30 @@ export class UiService {
         ...(nextHandoff ? { handoff: nextHandoff } : {}),
         updatedAt: nowIso(),
       };
+    });
+    return this.publishDesktopCopy(registered);
+  }
+
+  private async publishDesktopCopy(session: UiSession): Promise<UiSession> {
+    const publish = this.adapters.get(session.agent).publishDesktopSession;
+    if (!publish || !session.handoff || !session.targetSessionId || session.handoff.desktopSessionId) return session;
+    const bundleId = session.handoff.bundleId;
+    let desktopSessionId: string | undefined;
+    let error: SessionDiagnostic | undefined;
+    try {
+      desktopSessionId = await publish({ cliSessionId: session.targetSessionId, transferId: session.id,
+        title: session.title, cwd: session.cwd, bundleDirectory: this.store.bundlePath(bundleId),
+        loadArtifacts: () => this.store.loadBundleFiles(bundleId) });
+    } catch (cause) {
+      error = toDiagnostic(cause, "/desktop");
+      if (error.code === session.handoff.desktopError?.code && error.message === session.handoff.desktopError.message) return session;
+    }
+    return this.store.mutateSession(session.id, current => {
+      const handoff = { ...current.handoff! };
+      if (desktopSessionId) handoff.desktopSessionId = desktopSessionId;
+      if (error) handoff.desktopError = error;
+      else delete handoff.desktopError;
+      return { ...current, handoff };
     });
   }
 
@@ -1041,13 +1075,27 @@ export class UiService {
     registry.get(target.id);
 
     const turns: Turn[] = [];
-    const inheritedLedger = emptyLedger();
+    let inheritedLedger = emptyLedger();
     const inheritedDiagnostics: SessionDiagnostic[] = [];
     let sourceArtifacts: FileSet = [];
     let loadedPriorTurns = false;
     let continuation: CSR["continuation"];
+    let referenced: CSR | undefined;
 
-    if (sourceSession.handoff) {
+    if (sourceSession.reference && sourceSession.messages.every(m => m.historical)) {
+      const files = await this.resolveInputFileSet({ paths: [sourceSession.reference.sourcePath] });
+      const imported = await this.adapters.get(sourceSession.agent).import(files);
+      if (imported.session.meta.id !== sourceSession.targetSessionId) {
+        throw new SessionError("INVALID_INPUT", "/handoff", "The source file now belongs to a different conversation.");
+      }
+      referenced = imported.session;
+      turns.push(...referenced.turns);
+      sourceArtifacts = referenced.sourceArtifacts ?? files;
+      continuation = referenced.continuation;
+      inheritedLedger = imported.ledger;
+      inheritedDiagnostics.push(...(imported.diagnostics ?? []));
+      loadedPriorTurns = true;
+    } else if (sourceSession.handoff) {
       try {
         const prevFiles = await this.store.loadBundleFiles(sourceSession.handoff.bundleId);
         const sessionBytes = prevFiles.find((f) => f.path === "session.json")?.bytes;
@@ -1107,7 +1155,7 @@ export class UiService {
       throw new SessionError("INVALID_INPUT", `/sessions/${sessionId}`, "Cannot hand off an empty session");
     }
 
-    const csr: CSR = {
+    const csr: CSR = referenced ?? {
       schemaVersion: "1.0",
       meta: {
         id: sourceSession.targetSessionId ?? sourceSession.id,
@@ -1144,7 +1192,7 @@ export class UiService {
       artifacts: exported.artifacts,
       target,
       from: sourceSession.agent,
-      fromFormat: "coverse-desktop-1.0",
+      fromFormat: csr.meta.agentFormatVersion,
       sourceCwd: sourceSession.cwd,
       ...(options.cwd ? { requestedCwd: options.cwd } : {}),
       ...(options.model ? { model: options.model } : {}),

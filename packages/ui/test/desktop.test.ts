@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SessionError, type SessionAdapter } from "@coverse/core";
 import { AgentDriver, createDriverRegistry, DriverRegistry, type DriverPlugin } from "@coverse/drivers";
 import { pathToFileURL } from "node:url";
 import { groupByProject } from "../src/client/lib/projects.js";
@@ -249,7 +250,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
     const request = { from: "codex", to: "claude-code", paths: [source], cwd: root, useSourceProject: true };
     for (const project of ["first", "second", "moved"]) {
       const cwd = path.join(root, project);
-      header.payload.cwd = pathToFileURL(cwd).href;
+      header.payload.cwd = pathToFileURL(cwd).href.replace(/^file:\/\/\/([a-z]):/i, "file:///$1%3A");
       await fs.writeFile(source, [JSON.stringify(header), ...lines.slice(1)].join("\n"));
       if (project === "moved") {
         await expect(service.convertSource(request)).rejects.toThrow("Directory does not exist");
@@ -264,6 +265,32 @@ describe("CoVerse M4 desktop IPC & service", () => {
     }
     expect(await store.listSessions()).toHaveLength(2);
     expect(await fs.readdir(store.bundlesDir)).toHaveLength(2);
+  });
+
+  it("retries desktop publication after restart without registering or billing a second CLI session", async () => {
+    const root = await makeTempDir("coverse-desktop-retry-");
+    const adapters = createAdapterRegistry(), drivers = createFakeDrivers();
+    const store = new UiStore(path.join(root, "state"));
+    const service = new UiService(adapters, drivers, store, root);
+    const invocation = vi.spyOn(drivers.get("antigravity").plugin, "invocation");
+    const adapter = adapters.get("antigravity") as SessionAdapter & Required<Pick<SessionAdapter, "publishDesktopSession">>;
+    const publish = vi.spyOn(adapter, "publishDesktopSession")
+      .mockRejectedValueOnce(new SessionError("DESKTOP_OPEN", "/desktop", "Close desktop"))
+      .mockResolvedValue("desktop-id");
+    try {
+      const source = path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl");
+      const result = await service.convertSource({ from: "codex", to: "antigravity", paths: [source], cwd: root });
+      expect(result.handoff?.desktopError?.code).toBe("DESKTOP_OPEN");
+      const reopened = new UiService(adapters, drivers, store, root);
+      const [first, second] = await Promise.all([reopened.materializeSession(result.id), reopened.materializeSession(result.id)]);
+      expect(first.handoff?.desktopSessionId).toBe("desktop-id");
+      expect(first.handoff?.desktopError).toBeUndefined();
+      expect(first.targetSessionId).toBe(result.targetSessionId);
+      expect(second).toEqual(first);
+      await reopened.materializeSession(result.id);
+      expect(publish).toHaveBeenCalledTimes(2);
+      expect(invocation).toHaveBeenCalledTimes(1);
+    } finally { publish.mockRestore(); invocation.mockRestore(); }
   });
 
   it("keeps references to the same native ID in separate project folders", async () => {

@@ -131,7 +131,10 @@ export function ImportDialog({
         });
         onImported(session);
         select([item], false);
-        if (session.bundlePending) {
+        if (session.handoff?.desktopError) {
+          const error = session.handoff.desktopError;
+          messages.push(label + " · " + (error.code === "DESKTOP_OPEN" ? t.closeDesktop : error.message));
+        } else if (session.bundlePending) {
           messages.push([label, t.pendingSync, session.handoff?.materializationError?.message].filter(Boolean).join(" · "));
         }
       } catch (error) {
@@ -276,6 +279,7 @@ export function ImportDialog({
                 <option key={a.id} value={a.id}>{agentLabel(a.id)}</option>)}
             </select>
           </label>
+          {target === "antigravity" && <span className="flex-1 text-xs text-[var(--text-secondary)]">{t.desktopHint}</span>}
           <Button disabled={!selected.size || Boolean(progress)} onClick={() => void importSelected()}>
             {progress || t.importSelected(selected.size)}
           </Button>

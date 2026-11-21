@@ -193,11 +193,22 @@ export function InspectorDrawer({ open, session, t, onClose, onSessionUpdated }:
           <div className="flex items-center justify-between gap-2">
             <span className="text-[var(--text-tertiary)]">mode</span>
             <span className={handoff.materialized ? "text-[#3ecf8e]" : "text-[var(--text-primary)]"}>
-              {handoff.materialized ? `injection · ${t.synced}` : "injection-bundle"}
+              {handoff.materialized ? `CLI · ${t.synced}` : "injection-bundle"}
             </span>
           </div>
         )}
 
+        {handoff && session.agent === "antigravity" && session.targetSessionId && (
+          <div className="space-y-1 border-t border-[var(--border-subtle)] pt-2">
+            <div>{t.desktopCopy}</div>
+            {handoff.desktopSessionId && <div className="flex items-center gap-1"><span className="truncate">{handoff.desktopSessionId}</span>
+              <CopyButton value={handoff.desktopSessionId} label="Copy desktop session ID" /></div>}
+            <p>{handoff.desktopError?.code === "DESKTOP_OPEN" ? t.closeDesktop :
+              handoff.desktopError?.message ?? (handoff.desktopSessionId ? t.desktopReady : t.desktopHint)}</p>
+            {!handoff.desktopSessionId && <Button variant="secondary" size="xs" disabled={syncing} onClick={() => void handleSync()}>{t.desktopSync}</Button>}
+            {syncError && <p role="alert">{syncError}</p>}
+          </div>
+        )}
         {handoff && session.bundlePending && (
           <div className="pt-1 flex flex-col gap-1.5">
             <Button

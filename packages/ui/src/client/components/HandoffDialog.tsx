@@ -176,6 +176,7 @@ export function HandoffDialog({
             </label>
           )}
 
+          {to === "antigravity" && materialize && targetDriver?.available && <p className="text-xs text-[var(--text-secondary)]">{t.desktopHint}</p>}
           {error && (
             <div
               role="alert"

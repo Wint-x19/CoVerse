@@ -21,6 +21,12 @@ message Result { string result = 1; repeated Pair metadata = 2; bytes step_rende
 message Generic { repeated Pair args = 1; Result result = 2; }
 message Step { int32 type = 1; int32 status = 4; Metadata metadata = 5; UserInput user_input = 19; Planner planner_response = 20; ErrorMessage error_message = 24; Checkpoint checkpoint = 30; ErrorDetails error = 31; SystemMessage system_message = 114; bytes permissions = 133; Generic generic = 140; repeated bytes completed_interactions = 147; bytes task_details = 148; }
 message Workspace { string workspace_folder_absolute_uri = 1; string git_root_absolute_uri = 2; bytes repository = 3; string branch_name = 4; }
+message DesktopExecutor { int32 termination_reason = 1; uint32 last_step_idx = 3; string execution_id = 9; }
+message DesktopStepOrigin { string trajectory_id = 1; uint32 step_index = 2; string cascade_id = 4; }
+message DesktopAnnotation { string title = 1; }
+message DesktopSummary { string summary = 1; uint32 step_count = 2; Timestamp last_modified_time = 3; string trajectory_id = 4; int32 status = 5; Timestamp created_time = 7; repeated Workspace workspaces = 9; Timestamp last_user_input_time = 10; DesktopAnnotation annotations = 15; uint32 last_user_input_step_index = 16; TrajectoryMetadata trajectory_metadata = 17; int32 trajectory_type = 22; int32 latest_executor_termination_reason = 28; }
+message DesktopEntry { string key = 1; DesktopSummary value = 2; }
+message DesktopIndex { repeated DesktopEntry entries = 1; }
 message TrajectoryMetadata { repeated Workspace workspaces = 1; Timestamp created_at = 2; string initialization_state_id = 3; bytes agent_script = 4; string parent_conversation_id = 5; string root_conversation_id = 6; repeated string workspace_uris = 7; bytes subagent_spec = 8; bytes static_config = 10; bytes executable_spec = 11; bytes source_metadata = 12; repeated int32 mendel_experiment_ids = 15; bool is_battle_mode_fork = 16; int32 nesting_depth = 17; string project_id = 18; string environment_id = 19; repeated string tags = 20; repeated bytes replacements = 21; bytes battle_mode_metadata = 22; bytes remote_control_details = 23; }
 `;
 export const wireRoot = protobuf.parse(schema, { keepCase: true }).root.resolveAll();

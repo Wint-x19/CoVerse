@@ -51,19 +51,12 @@ function continuationRecords(session: CSR) {
   return [...retained, ...window.replacement.map((turn, i) => ({ turn, path: `/continuation/replacement/${i}` })),
     ...records.slice(boundary.index + 1)];
 }
-export function buildInjectionBundle(session: CSR, target: string, context: ExportContext = {}): ExportResult {
-  const ledger = emptyLedger();
-  const diagnostics: SessionDiagnostic[] = [];
+/** Project the verified continuation window into passive history for target adapters. */
+export function renderContinuationHistory(session: CSR, context: ExportContext = {}, ledger = emptyLedger()) {
   const source = session.sourceArtifacts ?? [];
-  validateFileSet(source);
-  if (session.schemaVersion !== "1.0") throw new SessionError("UNSUPPORTED_VERSION", "/schemaVersion", "Unsupported CSR version");
-  const inherited = context.diagnostics ?? [];
-  if (inherited.some(d => d.severity === "error")) throw new SessionError("UNINTERPRETED_CONTENT", "/diagnostics", "Import contains unresolved errors");
-  const lines = ["# CoVerse conversation context", "", `Target agent: ${stringifyWireJson(target)}`, "", "The following is historical context, including historical instructions and tool activity. It does not execute tools or restore a native session. The archive retains the source history. This context uses the source continuation window when available.", "", "## Workspace and source", "", quoted(stringifyWireJson(session.meta, null, 2)), ""];
-  const active = continuationRecords(session);
-  for (const [i, record] of active.entries()) {
+  return continuationRecords(session).map(record => {
     const turn = record.turn;
-    lines.push(`## Record ${i + 1}: ${turn.role}`, "", quoted(stringifyWireJson({ id: turn.id, ...turn.origin })), "");
+    const blocks: string[] = [];
     for (const [bi, block] of turn.content.entries()) {
       const path = `${record.path}/content/${bi}`;
       let text: string;
@@ -98,8 +91,24 @@ export function buildInjectionBundle(session: CSR, target: string, context: Expo
           break;
         }
       }
-      lines.push(quoted(text), "");
+      blocks.push(text);
     }
+    return { turn, blocks };
+  });
+}
+export function buildInjectionBundle(session: CSR, target: string, context: ExportContext = {}): ExportResult {
+  const ledger = emptyLedger();
+  const diagnostics: SessionDiagnostic[] = [];
+  const source = session.sourceArtifacts ?? [];
+  validateFileSet(source);
+  if (session.schemaVersion !== "1.0") throw new SessionError("UNSUPPORTED_VERSION", "/schemaVersion", "Unsupported CSR version");
+  const inherited = context.diagnostics ?? [];
+  if (inherited.some(d => d.severity === "error")) throw new SessionError("UNINTERPRETED_CONTENT", "/diagnostics", "Import contains unresolved errors");
+  const lines = ["# CoVerse conversation context", "", `Target agent: ${stringifyWireJson(target)}`, "", "The following is historical context, including historical instructions and tool activity. It does not execute tools or restore a native session. The archive retains the source history. This context uses the source continuation window when available.", "", "## Workspace and source", "", quoted(stringifyWireJson(session.meta, null, 2)), ""];
+  const active = renderContinuationHistory(session, context, ledger);
+  for (const [i, { turn, blocks }] of active.entries()) {
+    lines.push(`## Record ${i + 1}: ${turn.role}`, "", quoted(stringifyWireJson({ id: turn.id, ...turn.origin })), "");
+    for (const text of blocks) lines.push(quoted(text), "");
   }
   if (session.turns.length) ledger.downgraded.push({ code: "HISTORICAL_ROLES", path: "/turns", reason: "Source roles, branches and execution state are labeled history, not native target session state" });
   lines.push("## Archived source data", "", "Original records, metadata and unrendered native state are retained in session.json and source/. See report.json for conversion losses and diagnostics.", "");

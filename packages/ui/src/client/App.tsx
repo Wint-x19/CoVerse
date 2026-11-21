@@ -146,6 +146,33 @@ export function App() {
     [sessions, activeSessionId],
   );
 
+  const waitingForDesktop = sessions.filter(session =>
+    session.handoff?.desktopError?.code === "DESKTOP_OPEN" && !settings.disabledAdapters.includes(session.agent)
+  ).map(session => session.id).join(",");
+  React.useEffect(() => {
+    if (!waitingForDesktop) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function retry() {
+      for (const id of waitingForDesktop.split(",")) {
+        if (cancelled) return;
+        try {
+          const updated = await api.materializeSession(id);
+          if (!cancelled && updated.handoff && updated.handoff.desktopError?.code !== "DESKTOP_OPEN") {
+            const handoff = updated.handoff;
+            setSessions(previous => previous.map(s => s.id === id ? { ...s, handoff } : s));
+          }
+        } catch (cause) {
+          if (!cancelled) setBannerError(cause instanceof Error ? cause.message : String(cause));
+          return;
+        }
+      }
+      if (!cancelled) timer = setTimeout(() => void retry(), 5000);
+    }
+    timer = setTimeout(() => void retry(), 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [waitingForDesktop]);
+
   // Global keyboard shortcuts (Cmd/Ctrl+K, Cmd/Ctrl+,, Escape)
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

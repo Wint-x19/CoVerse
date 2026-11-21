@@ -81,6 +81,8 @@ export interface HandoffMetadata {
   nativeResume: false;
   materialized?: boolean;
   materializationError?: SessionDiagnostic;
+  desktopSessionId?: string;
+  desktopError?: SessionDiagnostic;
   statistics: BundleStatistics;
   losses: LossCounts;
   ledger: LossLedger;

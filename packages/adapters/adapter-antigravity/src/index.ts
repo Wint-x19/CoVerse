@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 import { decodeWire } from "./wire.js";
+import { publishWhenDesktopClosed } from "./desktop.js";
 
 export const formatVersion = "sqlite-2_32_1-step0";
 const require = createRequire(import.meta.url);
@@ -76,6 +77,7 @@ function workspaceDirectory(metadata: Record<string, JsonValue> | undefined) {
 
 const adapter: SessionAdapter = {
   id: "antigravity", displayName: "Antigravity", status: "ready", supportedVersions: [formatVersion],
+  publishDesktopSession: async input => publishWhenDesktopClosed(input, await engine()),
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["sqlite-conversation-step0"], exportFormats: ["injection-bundle"] },
   readProjectDirectory: async files => {
     const { file, db } = await open(files);

@@ -159,7 +159,9 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
         <span className="whitespace-nowrap text-[var(--text-primary)]">{agentLabel(handoff.to)}</span>
         <span className="text-[var(--text-tertiary)]">·</span>
         <span className="whitespace-nowrap">{t.turns(handoff.statistics.turns)}</span>
-        {handoff.materialized && session.targetSessionId ? (
+        {handoff.to === "antigravity" && session.targetSessionId && !handoff.desktopSessionId ? (
+          <span className="text-[var(--accent-text)]">· {handoff.desktopError?.code === "DESKTOP_OPEN" ? t.closeDesktop : t.desktopPending}</span>
+        ) : handoff.materialized && session.targetSessionId ? (
           <>
             <span className="text-[var(--text-tertiary)]">·</span>
             <span className="whitespace-nowrap text-[#3ecf8e]">{t.synced}</span>
