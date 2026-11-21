@@ -60,9 +60,28 @@ function callBlock(value: JsonValue, at: string): Extract<ContentBlock, { type: 
   try { args = parseWireJson(text) as JsonValue; } catch { throw new SessionError("INVALID_INPUT", at, "Invalid tool argument JSON"); }
   return { type: "tool_call", id: requireString(call.id, at), name: requireString(call.name, at), arguments: args, argumentsText: text };
 }
+function trajectoryMetadata(db: Database, filePath: string) {
+  const data = rows(db, "SELECT data FROM trajectory_metadata_blob WHERE id = 'main'")[0]?.data;
+  if (!(data instanceof Uint8Array)) return undefined;
+  const decoded = decodeWire("TrajectoryMetadata", data, filePath + "/trajectory_metadata_blob");
+  if (decoded.unknown.length) throw new SessionError("UNSUPPORTED_VERSION", decoded.unknown[0]!, "Unknown trajectory metadata field");
+  return decoded.value;
+}
+
+function workspaceDirectory(metadata: Record<string, JsonValue> | undefined) {
+  const workspaces = metadata?.workspaces;
+  const first = Array.isArray(workspaces) ? workspaces[0] : undefined;
+  return isRecord(first) && typeof first.workspace_folder_absolute_uri === "string" ? first.workspace_folder_absolute_uri : undefined;
+}
+
 const adapter: SessionAdapter = {
   id: "antigravity", displayName: "Antigravity", status: "ready", supportedVersions: [formatVersion],
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["sqlite-conversation-step0"], exportFormats: ["injection-bundle"] },
+  readProjectDirectory: async files => {
+    const { file, db } = await open(files);
+    try { return workspaceDirectory(trajectoryMetadata(db, file.path)); }
+    finally { db.close(); }
+  },
   detect: async files => { try { const { db } = await open(files); db.close(); return { confidence: 1, formatVersion }; } catch (e) { return { confidence: 0, ...(e instanceof SessionError ? { diagnostics: [e.diagnostic] } : {}) }; } },
   import: async files => {
     const { file, db } = await open(files);
@@ -73,16 +92,13 @@ const adapter: SessionAdapter = {
       const session: CSR = { schemaVersion: "1.0", meta: { id: requireString(meta[0]!.trajectory_id, file.path), agent: "antigravity", agentFormatVersion: formatVersion }, turns: [], xExtensions: { "x-antigravity-trajectory": jsonRow(meta[0]!) }, sourceArtifacts: files, raw: {} };
       for (const table of Object.keys(columns)) (session.raw as Record<string, JsonValue>)[table] = rows(db, `SELECT * FROM ${table}${table === "steps" ? " ORDER BY idx" : ""}`).map(jsonRow);
       if (rows(db, "SELECT * FROM parent_references").length) throw new SessionError("MISSING_RELATED_RECORD", file.path, "Referenced parent trajectory requires a verified multi-trajectory importer");
-      const trajectoryMetadata = rows(db, "SELECT * FROM trajectory_metadata_blob");
-      const data = trajectoryMetadata.find(r => r.id === "main")?.data;
-      if (data instanceof Uint8Array) {
-        const decoded = decodeWire("TrajectoryMetadata", data, `${file.path}/trajectory_metadata_blob`);
-        session.xExtensions["x-antigravity-metadata"] = decoded.value;
-        if (decoded.unknown.length) throw new SessionError("UNSUPPORTED_VERSION", decoded.unknown[0]!, "Unknown trajectory metadata field");
-        const workspaces = decoded.value.workspaces;
-        if (Array.isArray(workspaces) && isRecord(workspaces[0]) && typeof workspaces[0].workspace_folder_absolute_uri === "string") session.meta.cwd = workspaces[0].workspace_folder_absolute_uri;
-        if (isRecord(decoded.value.created_at) && typeof decoded.value.created_at.seconds === "string") {
-          const ms = Number(decoded.value.created_at.seconds) * 1000;
+      const metadata = trajectoryMetadata(db, file.path);
+      if (metadata) {
+        session.xExtensions["x-antigravity-metadata"] = metadata;
+        const cwd = workspaceDirectory(metadata);
+        if (cwd) session.meta.cwd = cwd;
+        if (isRecord(metadata.created_at) && typeof metadata.created_at.seconds === "string") {
+          const ms = Number(metadata.created_at.seconds) * 1000;
           if (Number.isFinite(ms) && Math.abs(ms) <= 8.64e15) session.meta.createdAt = new Date(ms).toISOString();
         }
       }

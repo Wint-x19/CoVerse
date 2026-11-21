@@ -617,6 +617,8 @@ export function App() {
 
       <ImportDialog
         open={importOpen}
+        adapters={adapters}
+        onImported={handleConvertedOrHandedOff}
         t={t}
         onOpenChange={setImportOpen}
         onSelectLocalSession={handleSelectLocalSession}

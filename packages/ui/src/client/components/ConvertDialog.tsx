@@ -94,6 +94,7 @@ export function ConvertDialog({
         // Default to original project directory whenever available
         if (result.preview?.cwd) setCwd(result.preview.cwd);
         else if (source.originalCwd) setCwd(source.originalCwd);
+        else if (result.preview?.sourceCwd) setCwd(result.preview.sourceCwd);
         else setCwd(defaultCwd);
 
         // Default target to same agent (no forced conversion; user may switch to any other agent)

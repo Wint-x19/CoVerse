@@ -82,18 +82,30 @@ function normalizePathValue(raw: string | undefined): string | undefined {
   if (value.startsWith("file:")) {
     try {
       const url = new URL(value);
-      if (process.platform !== "win32" && /^\/[a-z]:\//i.test(url.pathname)) return undefined;
-      value = fileURLToPath(url);
+      const windows = Boolean(url.hostname && url.hostname !== "localhost") || /^\/[a-z]:\//i.test(url.pathname);
+      value = fileURLToPath(url, { windows });
     } catch {
       return undefined;
     }
   }
+  if (/^\\\\\?\\UNC\\/i.test(value)) return "\\\\" + value.slice(8);
+  if (/^\\\\\?\\[a-z]:\\/i.test(value)) return value.slice(4);
   return value;
+}
+
+function projectDirectory(raw: string | undefined, localOnly = false): string | undefined {
+  const value = normalizePathValue(raw);
+  if (!value) return undefined;
+  const windows = /^(?:[a-z]:[\\/]|[\\/]{2})/i.test(value);
+  if (localOnly && windows !== (process.platform === "win32")) return undefined;
+  if (windows) return path.win32.resolve(value);
+  return path.posix.isAbsolute(value) ? path.posix.resolve(value) : undefined;
 }
 
 async function resolveExistingDirectory(candidate: string | undefined): Promise<string | undefined> {
   const normalized = normalizePathValue(candidate);
   if (!normalized) return undefined;
+  if (projectDirectory(normalized) && !projectDirectory(normalized, true)) return undefined;
   try {
     const info = await fs.stat(normalized);
     if (info.isDirectory()) return await fs.realpath(normalized);
@@ -463,8 +475,27 @@ export class UiService {
 
   async listLocalSessions(agent?: string): Promise<LocalSessionRef[]> {
     const registry = await this.ensureDriversConfigured();
+    const { disabledAdapters } = await this.store.getSettings();
+    const enabled = new Set(this.adapters.list().filter(adapter =>
+      adapter.capabilities.import && !disabledAdapters.includes(adapter.id),
+    ).map(adapter => adapter.id));
     const targets = agent ? [registry.get(agent)] : registry.list();
-    const batches = await Promise.all(targets.map((driver) => driver.listLocalSessions(80)));
+    const batches = await Promise.all(targets.filter(driver => enabled.has(driver.id)).map(async driver => {
+      const adapter = this.adapters.get(driver.id);
+      const sessions = await driver.listLocalSessions(Infinity);
+      for (const session of sessions) {
+        let cwd = session.cwd;
+        if (!cwd && !session.active && adapter.readProjectDirectory) {
+          try {
+            cwd = await adapter.readProjectDirectory(await loadPathsAsFileSet([session.path]));
+          } catch {
+            // Keep unstable or unrecognized records selectable for individual inspection.
+          }
+        }
+        if (cwd) session.cwd = projectDirectory(cwd) ?? cwd;
+      }
+      return sessions;
+    }));
     return batches.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -691,8 +722,6 @@ export class UiService {
     initialMessages?: ChatMessage[];
   }): Promise<UiSession> {
     verifyInjectionBundle(input.artifacts, input.target.id);
-    const bundleId = makeId("bnd");
-    const bundlePath = await this.store.saveBundle(bundleId, input.artifacts);
 
     const reportBytes = input.artifacts.find((item) => item.path === "report.json")?.bytes;
     const manifestBytes = input.artifacts.find((item) => item.path === "manifest.json")?.bytes;
@@ -719,6 +748,8 @@ export class UiService {
       resolvedCwd = (await resolveExistingDirectory(input.sourceCwd)) ?? this.defaultCwd;
     }
 
+    const bundleId = makeId("bnd");
+    const bundlePath = await this.store.saveBundle(bundleId, input.artifacts);
     const handoff: HandoffMetadata = {
       bundleId,
       bundlePath,
@@ -779,15 +810,22 @@ export class UiService {
             return this.adapters.get(request.from);
           })();
 
+    const destination = (recordedCwd?: string) => {
+      if (!request.useSourceProject) return request.cwd;
+      const cwd = projectDirectory(recordedCwd ?? request.cwd, true);
+      if (!cwd) throw new SessionError("PROJECT_REQUIRED", "/cwd", "Open the session individually to select its local project folder.");
+      return cwd;
+    };
     // Reference-only import (zero copy, zero bundle) when format AND project path are unchanged
     if (source.id === target.id && request.paths && request.paths.length === 1) {
       const imported = await source.import(files);
       const sourceLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
-      const requestedLocalCwd = request.cwd?.trim()
-        ? await resolveExistingDirectory(request.cwd)
+      const requestedCwd = destination(imported.session.meta.cwd);
+      const requestedLocalCwd = requestedCwd?.trim()
+        ? await resolveExistingDirectory(requestedCwd)
         : undefined;
-      if (request.cwd?.trim() && !requestedLocalCwd) {
-        throw new SessionError("INVALID_INPUT", "/cwd", `Directory does not exist: ${request.cwd}`);
+      if (requestedCwd?.trim() && !requestedLocalCwd) {
+        throw new SessionError("INVALID_INPUT", "/cwd", `Directory does not exist: ${requestedCwd}`);
       }
       const effectiveCwd = requestedLocalCwd ?? sourceLocalCwd ?? this.defaultCwd;
       const pathUnchanged = sourceLocalCwd
@@ -813,6 +851,7 @@ export class UiService {
           (item) =>
             item.reference &&
             item.agent === source.id &&
+            sameLocalPath(item.cwd, effectiveCwd) &&
             item.targetSessionId === imported.session.meta.id,
         );
         const trimmedModel = request.model?.trim() || imported.session.meta.model;
@@ -858,13 +897,14 @@ export class UiService {
       result.session.meta.createdAt ?? nowIso(),
     );
 
+    const requestedCwd = destination(result.session.meta.cwd);
     const created = await this.persistBundleAsSession({
       artifacts: result.artifacts,
       target,
       from: source.id,
       fromFormat: result.session.meta.agentFormatVersion,
       ...(result.session.meta.cwd ? { sourceCwd: result.session.meta.cwd } : {}),
-      ...(request.cwd ? { requestedCwd: request.cwd } : {}),
+      ...(requestedCwd ? { requestedCwd } : {}),
       ...(request.model ? { model: request.model } : {}),
       title: request.title?.trim() || defaultTitle,
       initialMessages,

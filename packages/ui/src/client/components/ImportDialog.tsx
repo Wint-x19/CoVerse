@@ -1,25 +1,30 @@
 import * as React from "react";
-import { FileUp, Loader2, RefreshCw, Search } from "lucide-react";
-import type { LocalSessionRef, PickedFile } from "../../shared/types.js";
+import { FileUp, Folder, Loader2, RefreshCw, Search, Settings2 } from "lucide-react";
+import type { AdapterSummary, LocalSessionRef, PickedFile, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
-import { api } from "@/lib/api";
-import { agentLabel, cn, formatBytes, relativeTime, shortPath } from "@/lib/utils";
+import { api, ApiClientError } from "@/lib/api";
+import { agentLabel, cn, formatBytes, relativeTime } from "@/lib/utils";
+import { groupByProject } from "@/lib/projects";
 import { AgentGlyph } from "./AgentGlyph";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 
 interface ImportDialogProps {
   open: boolean;
+  adapters: AdapterSummary[];
+  onImported: (session: UiSession) => void;
   t: I18nMessages;
   onOpenChange: (open: boolean) => void;
   onSelectLocalSession: (session: LocalSessionRef) => void;
   onPickedFiles: (files: PickedFile[]) => void;
 }
 
-const AGENT_FILTERS = ["all", "codex", "claude-code", "antigravity"] as const;
+const sessionKey = (item: LocalSessionRef) => item.agent + ":" + item.path;
 
 export function ImportDialog({
   open,
+  adapters,
+  onImported,
   t,
   onOpenChange,
   onSelectLocalSession,
@@ -29,23 +34,38 @@ export function ImportDialog({
   const [loading, setLoading] = React.useState(false);
   const [agentFilter, setAgentFilter] = React.useState<string>("all");
   const [query, setQuery] = React.useState("");
+  const [selected, setSelected] = React.useState(new Set<string>());
+  const [target, setTarget] = React.useState("");
+  const [progress, setProgress] = React.useState("");
+  const [issues, setIssues] = React.useState<string[]>([]);
+  const generation = React.useRef(0);
 
   const load = React.useCallback(async () => {
+    const current = ++generation.current;
     setLoading(true);
     try {
       const list = await api.listLocalSessions();
+      if (generation.current !== current) return;
       setSessions(list);
-    } catch {
-      setSessions([]);
+      const keys = new Set(list.map(sessionKey));
+      setSelected(previous => new Set([...previous].filter(key => keys.has(key))));
+    } catch (error) {
+      if (generation.current === current) setIssues([String(error)]);
     } finally {
-      setLoading(false);
+      if (generation.current === current) setLoading(false);
     }
   }, []);
 
   React.useEffect(() => {
     if (!open) return;
     setQuery("");
+    setAgentFilter("all");
+    setSelected(new Set());
+    setTarget("");
+    setIssues([]);
+    setSessions([]);
     void load();
+    return () => { generation.current++; };
   }, [open, load]);
 
   const filtered = React.useMemo(() => {
@@ -61,6 +81,52 @@ export function ImportDialog({
     });
   }, [sessions, agentFilter, query]);
 
+  function select(items: LocalSessionRef[], checked: boolean) {
+    setSelected(previous => {
+      const next = new Set(previous);
+      for (const item of items) {
+        if (checked) next.add(sessionKey(item));
+        else next.delete(sessionKey(item));
+      }
+      return next;
+    });
+  }
+
+  async function importSelected() {
+    const batch = sessions.filter(item => selected.has(sessionKey(item)));
+    if (!batch.length || progress) return;
+    const messages: string[] = [];
+    setIssues([]);
+    for (const [index, item] of batch.entries()) {
+      setProgress(t.importingBatch(index + 1, batch.length));
+      const label = [item.cwd, agentLabel(item.agent), item.title].filter(Boolean).join(" · ");
+      try {
+        const session = await api.convertSource({
+          from: item.agent,
+          to: target || item.agent,
+          paths: [item.path],
+          title: item.title,
+          ...(item.cwd ? { cwd: item.cwd } : {}),
+          useSourceProject: true,
+          materialize: true,
+        });
+        onImported(session);
+        select([item], false);
+        if (session.bundlePending) {
+          messages.push([label, t.pendingSync, session.handoff?.materializationError?.message].filter(Boolean).join(" · "));
+        }
+      } catch (error) {
+        const detail = error instanceof ApiClientError && error.diagnostic.path === "/cwd"
+          ? t.locateProject
+          : error instanceof Error ? error.message : String(error);
+        messages.push(label + " · " + detail);
+      }
+    }
+    setProgress("");
+    setIssues(messages);
+    if (!messages.length) onOpenChange(false);
+  }
+
   const handleBrowseFiles = async () => {
     const picked = await api.pickSessionFiles().catch(() => []);
     if (picked.length > 0) {
@@ -70,17 +136,17 @@ export function ImportDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="import-dialog" className="max-w-[580px] p-0 overflow-hidden">
+    <Dialog open={open} onOpenChange={next => { if (!progress) onOpenChange(next); }}>
+      <DialogContent hideClose={Boolean(progress)} data-testid="import-dialog" className="flex max-h-[90vh] max-w-[640px] flex-col overflow-hidden p-0">
         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3 pr-10">
           <DialogHeader className="p-0 pr-0">
             <DialogTitle>{t.importSession}</DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="icon" onClick={() => void load()} disabled={loading} aria-label={t.refresh}>
+            <Button variant="ghost" size="icon" onClick={() => void load()} disabled={loading || Boolean(progress)} aria-label={t.refresh}>
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => void handleBrowseFiles()} data-testid="import-browse-btn">
+            <Button variant="secondary" size="sm" disabled={Boolean(progress)} onClick={() => void handleBrowseFiles()} data-testid="import-browse-btn">
               <FileUp className="h-3.5 w-3.5" />
               <span>{t.selectFilesButton}</span>
             </Button>
@@ -90,7 +156,7 @@ export function ImportDialog({
         {/* Agent filter + search */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-4 py-2.5">
           <div className="inline-flex items-center rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-0.5">
-            {AGENT_FILTERS.map((id) => (
+            {["all", ...adapters.filter(a => a.enabled && a.capabilities.import).map(a => a.id)].map((id) => (
               <button
                 key={id}
                 type="button"
@@ -131,48 +197,70 @@ export function ImportDialog({
               {t.noLocalSessions}
             </div>
           ) : (
-            <div className="flex flex-col gap-0.5">
-              {filtered.map((item) => (
-                <button
-                  key={`${item.agent}:${item.path}`}
-                  type="button"
-                  data-testid={`local-session-${item.id}`}
-                  onClick={() => {
-                    onOpenChange(false);
-                    onSelectLocalSession(item);
-                  }}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[var(--bg-hover)] cursor-pointer"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <AgentGlyph agent={item.agent} className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-[13px] text-[var(--text-primary)]">{item.title}</span>
-                        {item.active && (
-                          <span className="shrink-0 font-mono text-[10px] text-[#e5a93b]">{t.activeDb}</span>
-                        )}
+            groupByProject(filtered).map(group => {
+              const count = group.sessions.filter(item => selected.has(sessionKey(item))).length;
+              return <section key={group.directory} className="mb-2">
+                <label className="flex items-center gap-2 rounded bg-[var(--bg-subtle)] px-2.5 py-2 text-xs">
+                  <input type="checkbox" disabled={Boolean(progress)}
+                    checked={count === group.sessions.length}
+                    ref={node => { if (node) node.indeterminate = count > 0 && count < group.sessions.length; }}
+                    onChange={e => select(group.sessions, e.target.checked)} />
+                  <Folder className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate font-mono" title={group.directory}>{group.directory || t.unknownProject}</span>
+                  <span className="ml-auto text-[var(--text-tertiary)]">{group.sessions.length}</span>
+                </label>
+                {group.sessions.map(item => (
+                  <div key={sessionKey(item)} className="flex items-center gap-2 rounded px-2.5 hover:bg-[var(--bg-hover)]">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 py-2">
+                      <input type="checkbox" data-testid={`local-session-${item.id}`}
+                        checked={selected.has(sessionKey(item))} disabled={Boolean(progress)}
+                        onChange={e => select([item], e.target.checked)} />
+                      <AgentGlyph agent={item.agent} className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-[13px] text-[var(--text-primary)]">{item.title}</span>
+                          {item.active && (
+                            <span className="shrink-0 font-mono text-[10px] text-[#e5a93b]">{t.activeDb}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                          <span>{agentLabel(item.agent)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                        <span>{agentLabel(item.agent)}</span>
-                        {item.cwd && (
-                          <>
-                            <span>·</span>
-                            <span className="truncate">{shortPath(item.cwd, 2)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex shrink-0 flex-col items-end font-mono text-[11px] text-[var(--text-tertiary)]">
-                    <span>{relativeTime(item.updatedAt)}</span>
-                    <span>{formatBytes(item.size)}</span>
+                      <div className="flex shrink-0 flex-col items-end font-mono text-[11px] text-[var(--text-tertiary)]">
+                        <span>{relativeTime(item.updatedAt)}</span>
+                        <span>{formatBytes(item.size)}</span>
+                      </div>
+                    </label>
+                    <Button variant="ghost" size="icon" aria-label={t.openIndividually + " · " + item.title}
+                      title={t.openIndividually} disabled={Boolean(progress)} onClick={() => {
+                        onOpenChange(false);
+                        onSelectLocalSession(item);
+                      }}><Settings2 className="h-3.5 w-3.5" /></Button>
                   </div>
-                </button>
-              ))}
-            </div>
+                ))}
+              </section>;
+            })
           )}
         </div>
+        {issues.length > 0 && <div role="alert" className="max-h-28 shrink-0 overflow-auto px-4 py-2 text-xs text-[var(--text-secondary)]">
+          {issues.map((message, i) => <p key={i}>{message}</p>)}
+        </div>}
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-subtle)] px-4 py-3">
+          <label className="flex items-center gap-2 text-xs">
+            {t.targetAgent}
+            <select value={target} disabled={Boolean(progress)} onChange={e => setTarget(e.target.value)}
+              className="rounded border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2 py-1">
+              <option value="">{t.sourceAgents}</option>
+              {adapters.filter(a => a.enabled && a.capabilities.export).map(a =>
+                <option key={a.id} value={a.id}>{agentLabel(a.id)}</option>)}
+            </select>
+          </label>
+          <Button disabled={!selected.size || loading || Boolean(progress)} onClick={() => void importSelected()}>
+            {progress || t.importSelected(selected.size)}
+          </Button>
+        </footer>
       </DialogContent>
     </Dialog>
   );

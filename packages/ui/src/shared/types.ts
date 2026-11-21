@@ -181,6 +181,8 @@ export interface InspectResponse {
 export interface ConvertRequest {
   from: string;
   to: string;
+  /** Route by source metadata, falling back to the catalog cwd if the transcript omits it. */
+  useSourceProject?: boolean;
   files?: UploadedFilePayload[];
   paths?: string[];
   cwd?: string;

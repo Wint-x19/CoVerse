@@ -1,5 +1,5 @@
 import { parseWireJson, stringifyWireJson } from "@coverse/core";
-import { decompress } from "fzstd";
+import { decompress, Decompress } from "fzstd";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
@@ -32,6 +32,24 @@ function messageBlocks(value: JsonValue | undefined, path: string): ContentBlock
 const adapter: SessionAdapter = {
   id: "codex", displayName: "Codex", status: "ready", supportedVersions: [formatVersion],
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["rollout-jsonl", "rollout-jsonl-zstd"], exportFormats: ["injection-bundle"] },
+  readProjectDirectory: files => {
+    const file = files.find(item => item.path.endsWith(".jsonl.zst"));
+    if (!file) return undefined;
+    const chunks: Buffer[] = [];
+    let complete = false;
+    const decoder = new Decompress(chunk => {
+      if (complete) return;
+      const end = chunk.indexOf(10);
+      complete = end >= 0;
+      chunks.push(Buffer.from(complete ? chunk.subarray(0, end) : chunk));
+    });
+    for (let offset = 0; offset < file.bytes.length && !complete; offset += 65536) {
+      const end = Math.min(offset + 65536, file.bytes.length);
+      decoder.push(file.bytes.subarray(offset, end), end === file.bytes.length);
+    }
+    const head = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return head?.type === "session_meta" && typeof head.payload?.cwd === "string" ? head.payload.cwd : undefined;
+  },
   detect: files => { try { load(files); return { confidence: 1, formatVersion }; } catch (error) { return { confidence: 0, ...(error instanceof SessionError ? { diagnostics: [error.diagnostic] } : {}) }; } },
   import: files => {
     const { file, records, meta } = load(files);

@@ -56,13 +56,9 @@ async function inspectClaudeSessionHead(filePath: string): Promise<{ cwd?: strin
   try {
     const handle = await fs.open(filePath, "r");
     try {
-      const buffer = Buffer.alloc(16384);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-      if (bytesRead <= 0) return {};
-      const lines = buffer.subarray(0, bytesRead).toString("utf8").split(/\r?\n/);
       let cwd: string | undefined;
       let title: string | undefined;
-      for (const line of lines) {
+      for await (const line of handle.readLines()) {
         if (!line.trim()) continue;
         let row: unknown;
         try { row = JSON.parse(line); } catch { continue; }

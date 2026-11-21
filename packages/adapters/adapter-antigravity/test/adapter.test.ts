@@ -17,6 +17,7 @@ it("decodes independently encoded SQLite/protobuf golden data and all six suppor
   expect(r.session.turns[2]!.content[0]).toEqual({ type: "tool_result", callId: "sample-call", content: "Hello from the sample.", isError: false });
   expect(r.session.turns[5]!.origin!.kind).toBe("compaction");
   expect(r.session.meta.cwd).toBe("file:///sample/workspace");
+  expect(await adapter.readProjectDirectory!(input)).toBe(r.session.meta.cwd);
   const output = await adapter.export(r.session, { ledger: r.ledger });
   const context = new TextDecoder().decode(output.artifacts.find(f => f.path === "context.md")!.bytes);
   expect(context).toContain("The file was inspected");

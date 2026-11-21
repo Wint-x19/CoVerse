@@ -1,8 +1,10 @@
 import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { AgentDriver, DriverRegistry, type DriverPlugin } from "@coverse/drivers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AgentDriver, createDriverRegistry, DriverRegistry, type DriverPlugin } from "@coverse/drivers";
+import { pathToFileURL } from "node:url";
+import { groupByProject } from "../src/client/lib/projects.js";
 import {
   createAdapterRegistry,
   IPC_CHANNELS,
@@ -28,6 +30,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop()!;
     await fs.rm(dir, { recursive: true, force: true });
@@ -150,6 +153,84 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("groups all configured native sessions by full project path, including archives and long headers", async () => {
+    const home = await makeTempDir("coverse-catalog-");
+    vi.stubEnv("CODEX_HOME", home);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", home);
+    const workspace = path.join(home, "client A", "app");
+    const other = path.join(home, "client B", "app");
+    const sessionsDir = path.join(home, "sessions");
+    const archived = path.join(home, "archived_sessions");
+    const claudeProject = path.join(home, "projects", "encoded-project");
+    for (const dir of [sessionsDir, archived, claudeProject]) await fs.mkdir(dir, { recursive: true });
+    const header = JSON.stringify({ type: "session_meta", payload: { padding: "x".repeat(5000), cwd: workspace } });
+    for (let i = 0; i < 81; i++) await fs.writeFile(path.join(sessionsDir, "rollout-" + i + ".jsonl"), header);
+    await fs.writeFile(path.join(archived, "rollout-old.jsonl"), header);
+    await fs.copyFile(path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl.zst"), path.join(archived, "rollout-compressed.jsonl.zst"));
+    const row = { type: "user", padding: "y".repeat(17000), cwd: pathToFileURL(workspace).href, message: { content: "Shared project" } };
+    await fs.writeFile(path.join(claudeProject, "one.jsonl"), JSON.stringify(row));
+    await fs.writeFile(path.join(claudeProject, "two.jsonl"), JSON.stringify({ ...row, cwd: other }));
+    await fs.writeFile(path.join(claudeProject, "missing.jsonl"), JSON.stringify({ type: "user", message: { content: "No workspace" } }));
+    const service = new UiService(createAdapterRegistry(), createDriverRegistry(), new UiStore(path.join(home, "store")), home);
+    await service.updateSettings({ disabledAdapters: ["antigravity"] });
+    const catalog = await service.listLocalSessions();
+    const groups = groupByProject(catalog);
+    expect(catalog).toHaveLength(86);
+    expect(groups.find(group => group.directory === workspace)?.sessions).toHaveLength(83);
+    expect(groups.find(group => group.directory === other)?.sessions[0]?.id).toBe("two");
+    expect(groups.find(group => group.directory === "")?.sessions[0]?.id).toBe("missing");
+    expect(catalog.find(item => item.path.endsWith(".zst"))?.cwd).toBe("/sample/workspace");
+    expect(await service.listLocalSessions("antigravity")).toEqual([]);
+  });
+
+  it("registers each conversion in its recorded project and leaves missing projects available for remapping", async () => {
+    const root = await makeTempDir("coverse-project-routing-");
+    const store = new UiStore(path.join(root, "store"));
+    const drivers = createFakeDrivers();
+    const invocation = vi.spyOn(drivers.get("claude-code").plugin, "invocation");
+    const service = new UiService(createAdapterRegistry(), drivers, store, root);
+    const raw = await fs.readFile(path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl"), "utf8");
+    const lines = raw.trim().split(/\r?\n/);
+    const header = JSON.parse(lines[0]!);
+    const source = path.join(root, "source.jsonl");
+    const request = { from: "codex", to: "claude-code", paths: [source], cwd: root, useSourceProject: true };
+    for (const project of ["first", "second", "moved"]) {
+      const cwd = path.join(root, project);
+      header.payload.cwd = pathToFileURL(cwd).href;
+      await fs.writeFile(source, [JSON.stringify(header), ...lines.slice(1)].join("\n"));
+      if (project === "moved") {
+        await expect(service.convertSource(request)).rejects.toThrow("Directory does not exist");
+        break;
+      }
+      await fs.mkdir(cwd);
+      const converted = await service.convertSource(request);
+      expect(converted.cwd).toBe(await fs.realpath(cwd));
+      expect(invocation.mock.lastCall?.[0].cwd).toBe(converted.cwd);
+      expect(converted.handoff?.materialized).toBe(true);
+      expect(converted.targetSessionId).toBeTruthy();
+    }
+    expect(await store.listSessions()).toHaveLength(2);
+    expect(await fs.readdir(store.bundlesDir)).toHaveLength(2);
+  });
+
+  it("keeps references to the same native ID in separate project folders", async () => {
+    const root = await makeTempDir("coverse-project-references-");
+    const service = new UiService(createAdapterRegistry(), createFakeDrivers(), new UiStore(root), root);
+    const original = await fs.readFile(path.join(REPO_ROOT, "fixtures/codex/rollout-2026-11-17/sample.jsonl"), "utf8");
+    const lines = original.trim().split(/\r?\n/);
+    const header = JSON.parse(lines[0]!);
+    for (const name of ["one", "two"]) {
+      const folder = path.join(root, name);
+      await fs.mkdir(folder);
+      header.payload.cwd = folder;
+      const file = path.join(folder, "source.jsonl");
+      await fs.writeFile(file, [JSON.stringify(header), ...lines.slice(1)].join("\n"));
+      const request = { from: "codex", to: "codex", paths: [file], useSourceProject: true };
+      const imported = await service.convertSource(request);
+      expect((await service.convertSource(request)).id).toBe(imported.id);
+    }
+    expect(await service.listSessions()).toHaveLength(2);
+  });
   it("handles capabilities, session CRUD, dialogs, and honest agent-switch boundaries over IPC", async () => {
     const dataDir = await makeTempDir("coverse-desktop-data-");
     const workDir = await makeTempDir("coverse-desktop-cwd-");

@@ -56,12 +56,8 @@ async function readFirstLine(filePath: string): Promise<string | null> {
   try {
     const handle = await fs.open(filePath, "r");
     try {
-      const buffer = Buffer.alloc(4096);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-      if (bytesRead <= 0) return null;
-      const chunk = buffer.subarray(0, bytesRead).toString("utf8");
-      const newline = chunk.indexOf("\n");
-      return (newline >= 0 ? chunk.slice(0, newline) : chunk).trim();
+      for await (const line of handle.readLines()) return line;
+      return null;
     } finally {
       await handle.close();
     }
@@ -108,6 +104,7 @@ async function listCodexLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
     }
   }
   await walk(sessionsRoot, 0);
+  await walk(path.join(home, "archived_sessions"), 0);
   files.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   const refs: LocalSessionRef[] = [];

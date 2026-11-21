@@ -94,6 +94,8 @@ export interface SessionAdapter {
   readonly status: "scaffold" | "ready";
   readonly supportedVersions: readonly string[];
   readonly capabilities: Readonly<AdapterCapabilities>;
+  /** Catalog metadata for formats whose workspace is not available from the native session index. */
+  readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
   detect(input: FileSet): Detection | Promise<Detection>;
   import(input: FileSet): ImportResult | Promise<ImportResult>;
   export(session: CSR, context?: ExportContext): ExportResult | Promise<ExportResult>;
