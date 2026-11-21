@@ -32,6 +32,12 @@
 
 ## 已验证经验
 
+### 在线网关能回放的摘要与可移植的上下文
+
+2026-11-21 核对上游源码。CC Switch 的 Codex 兼容路径可以把自生成的摘要以带前缀的 base64 包装，在下次请求还原为文字。CLIProxyAPI 的部分执行器将生成的摘要封装为自有加密格式；共享展开逻辑按调用路径移除或保留其他来源的压缩项。这些往返依赖已知来源，不能证明网关能恢复第三方原生密文中的事实。[CC Switch 压缩转换](https://github.com/farion1231/cc-switch/blob/908a83edaf7b2c55b961ff1a31523735a417b6e9/src-tauri/src/proxy/providers/codex_compaction.rs) · [CLIProxyAPI 压缩转换](https://github.com/router-for-me/CLIProxyAPI/blob/f5c5681a8361c9da53e93c60b6507816eee7468b/internal/runtime/executor/helps/antigravity_compaction.go#L135)
+
+相同的损坏历史也会触发不同策略。CC Switch 的 Codex→Chat 路线将无调用可配对的工具结果转为带标记的用户消息；sub2api 的 Responses→Anthropic 回归用例要求移除孤立结果和无结果的调用；CoVerse 的请求校验拒绝不完整配对。核对保真度时，应分别断言结果正文、角色与调用关联。[CC Switch 孤立结果处理](https://github.com/farion1231/cc-switch/blob/908a83edaf7b2c55b961ff1a31523735a417b6e9/src-tauri/src/proxy/providers/transform_codex_chat.rs#L1455) · [sub2api 配对用例](https://github.com/Wei-Shaw/sub2api/blob/328db26f450edbdf9f8d4344a3ea903ac6396842/backend/internal/pkg/apicompat/responses_to_anthropic_tool_pairing_test.go#L113) · [CoVerse 请求校验](../packages/protocols/src/validation.ts)
+
 ### 底层协议的空损耗账本不能证明跨协议语义等价
 
 2026-11-21 使用合成输入调用 `convertRequest` 和 `convertResponse` 复核了三种默认严格模式仍会成功、三类账本均为空的情形：
