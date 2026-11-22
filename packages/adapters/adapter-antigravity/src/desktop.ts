@@ -103,7 +103,16 @@ export async function findDesktopProject(projects: string, cwd: string) {
     if (project.id !== entry.name.slice(0, -5)) continue;
     for (const resource of project.projectResources?.resources ?? []) {
       const uri = resource.folderUri ?? resource.gitFolder?.folderUri;
-      if (typeof uri === "string" && uri.startsWith("file:") && pathKey(fileURLToPath(uri)) === key) {
+      if (typeof uri !== "string" || !uri.startsWith("file:")) continue;
+      let registeredFolder: string;
+      try {
+        registeredFolder = await fs.realpath(fileURLToPath(uri));
+      } catch (error) {
+        const { code } = error as NodeJS.ErrnoException;
+        if (code === "ENOENT" || code === "ENOTDIR") continue;
+        throw error;
+      }
+      if (pathKey(registeredFolder) === key) {
         matches.push({ id: String(project.id), uri });
         break;
       }

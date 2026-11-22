@@ -46,6 +46,8 @@ Antigravity 的桌面登记补充了上述 CLI 流程。Windows 桌面版 2.34.0
 
 ## 已验证经验
 
+Windows 的 Antigravity 项目 URI 可能保留 8.3 短路径。匹配时对请求目录和登记目录都调用 `realpath`，命中后沿用已登记的 ID 与原始 URI。GitHub Windows runner 的 `RUNNER~1` 与 `runneradmin` 触发过重复建项目；回归用例用指向同一目录的两条路径验证该行为。
+
 ### Codex 桌面页面上下文可跨 writer 复用同一记录形状
 
 2026-11-22 在 `0.169.0-alpha.11.1` 的一份原生 rollout 中复现缺少调用 ID 的导入错误。此前仅在 `0.171.0-alpha.13` 中识别桌面注入的页面上下文。修复后按记录结构识别，两种 writer 共享回归用例，普通工具结果继续校验调用关联。[Codex 适配器](../packages/adapters/adapter-codex/src/index.ts)

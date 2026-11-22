@@ -105,6 +105,20 @@ it("matches git folders by path and creates distinct projects for identically na
   expect(await findDesktopProject(projects, b)).toEqual(created);
 });
 
+it("reuses the registered ID and URI when a folder has another filesystem path", async () => {
+  const folder = path.join(base, "workspace");
+  const alias = path.join(base, "workspace-alias");
+  await fs.mkdir(folder);
+  await fs.symlink(folder, alias, process.platform === "win32" ? "junction" : "dir");
+  const id = randomUUID();
+  const uri = pathToFileURL(alias).href;
+  const resources = [{ folderUri: pathToFileURL(path.join(base, "moved")).href }, { folderUri: uri }];
+  await fs.writeFile(path.join(projects, id + ".json"), JSON.stringify({ id, projectResources: { resources } }));
+  expect(await findDesktopProject(projects, folder)).toEqual({ id, uri });
+  expect(await findDesktopProject(projects, alias)).toEqual({ id, uri });
+  expect(await fs.readdir(projects)).toEqual([id + ".json"]);
+});
+
 it("leaves the desktop index untouched when the CLI snapshot is unstable", async () => {
   await fs.writeFile(path.join(cli, input.cliSessionId + ".db-wal"), "busy");
   await expect(publishToStore(input, base, await sql)).rejects.toMatchObject({ code: "UNSTABLE_INPUT" });
