@@ -1,14 +1,13 @@
 import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { decompress, Decompress } from "fzstd";
+import { ancestralRecords, prepareLineage, primaryLog, verifiedWriters } from "./lineage.js";
+import { nativeTranscript } from "./transcript.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
-const verifiedWriters = new Set(["0.167.0-alpha.4.1", "0.169.0-alpha.11.1", "0.169.1", "0.171.0-alpha.13"]);
 const operationalEvents = new Set(["task_started", "task_complete", "task_aborted", "turn_aborted", "token_count", "thread_settings_applied", "item_started", "item_completed", "agent_message_delta", "agent_reasoning_delta", "exec_command_begin", "exec_command_end", "exec_command_output_delta", "mcp_tool_call_begin", "mcp_tool_call_end", "patch_apply_begin", "patch_apply_end", "user_message", "agent_message", "agent_reasoning", "agent_reasoning_raw_content", "context_compacted", "session_configured"]);
 function load(files: FileSet) {
-  const logs = files.filter(f => /\.jsonl(?:\.zst)?$/.test(f.path));
-  if (logs.length !== 1) throw new SessionError("AMBIGUOUS_INPUT", "/input", "Supply exactly one Codex rollout, plus any referenced attachment files");
-  const file = logs[0]!;
+  const file = primaryLog(files);
   let bytes = file.bytes;
   if (file.path.endsWith(".zst")) {
     try { bytes = decompress(bytes); } catch { throw new SessionError("INVALID_INPUT", file.path, "Invalid or unsupported Zstandard rollout"); }
@@ -32,6 +31,7 @@ function messageBlocks(value: JsonValue | undefined, path: string): ContentBlock
 const adapter: SessionAdapter = {
   id: "codex", displayName: "Codex", status: "ready", supportedVersions: [formatVersion],
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["rollout-jsonl", "rollout-jsonl-zstd"], exportFormats: ["injection-bundle"] },
+  prepareLocalImport: prepareLineage,
   readProjectDirectory: files => {
     const file = files.find(item => item.path.endsWith(".jsonl.zst"));
     if (!file) return undefined;
@@ -52,10 +52,14 @@ const adapter: SessionAdapter = {
   },
   detect: files => { try { load(files); return { confidence: 1, formatVersion }; } catch (error) { return { confidence: 0, ...(error instanceof SessionError ? { diagnostics: [error.diagnostic] } : {}) }; } },
   import: files => {
-    const { file, records, meta } = load(files);
+    const { file, meta, records: local } = load(files);
+    const records = meta.history_base ? ancestralRecords(files) : local.slice(1).map(r => ({...r, artifact: file.path}));
     const ledger = emptyLedger();
-    const session: CSR = { schemaVersion: "1.0", meta: { id: requireString(meta.id, `${file.path}:1/id`), agent: "codex", agentFormatVersion: formatVersion }, turns: [], xExtensions: { "x-codex-writer": meta.cli_version! }, raw: records.map(r => r.value), sourceArtifacts: files };
+    const session: CSR = { schemaVersion: "1.0", meta: { id: requireString(meta.id, `${file.path}:1/id`), agent: "codex", agentFormatVersion: formatVersion }, turns: [], xExtensions: { "x-codex-writer": meta.cli_version! }, sourceArtifacts: files };
     if (typeof meta.cwd === "string") session.meta.cwd = meta.cwd;
+    const transcript = nativeTranscript(records, session.meta.cwd);
+    if (transcript) session.transcript = transcript;
+    session.raw = [local[0]!.value, ...records.map(r => r.value)];
     if (typeof meta.timestamp === "string") session.meta.createdAt = meta.timestamp;
     if (isRecord(meta.git)) session.xExtensions["x-codex-git"] = meta.git;
     let sequence = 0;
@@ -69,12 +73,13 @@ const adapter: SessionAdapter = {
       mirrors.set(key, (mirrors.get(key) ?? 0) + 1);
     }
     let destination = session.turns;
+    let artifact = file.path;
     const add = (role: Turn["role"], content: ContentBlock[], raw: JsonValue, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
-      destination.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact: file.path, record: line, ...(kind ? { kind } : {}) } });
+      destination.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact, record: line, ...(kind ? { kind } : {}) } });
     };
     if (isRecord(meta.base_instructions) && typeof meta.base_instructions.text === "string") add("system", [{ type: "text", text: meta.base_instructions.text }], meta.base_instructions, 1);
     const item = (p: Record<string, JsonValue>, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
-      const path = `${file.path}:${line}`;
+      const path = `${artifact}:${line}`;
       switch (p.type) {
         case "message":
           if (!["user", "assistant", "system", "developer"].includes(String(p.role))) throw new SessionError("INVALID_INPUT", path, "Unknown message role");
@@ -113,7 +118,8 @@ const adapter: SessionAdapter = {
         default: add("assistant", [{ type: "opaque", source: "codex:response_item", value: p }], p, line, kind);
       }
     };
-    for (const { value: r, line } of records.slice(1)) {
+    for (const { value: r, line, artifact: sourceArtifact } of records) {
+      artifact = sourceArtifact;
       if (!isRecord(r.payload)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Expected record payload");
       const p = r.payload;
       switch (r.type) {

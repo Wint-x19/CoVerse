@@ -47,6 +47,20 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
     invalid("session.json", "Unsupported or inconsistent source session");
   }
   if (!Array.isArray(session.sourceArtifacts)) invalid("session.json", "Missing source artifact inventory");
+  if (session.transcript !== undefined) {
+    const seen = new Set<string>();
+    if (!Array.isArray(session.transcript)) invalid("session.json", "Invalid native transcript");
+    for (const m of session.transcript) {
+      if (!isRecord(m) || typeof m.id !== "string" || seen.has(m.id) || (m.role !== "assistant" && m.role !== "user") ||
+          typeof m.text !== "string" || (m.activity !== undefined && typeof m.activity !== "string") ||
+          (m.createdAt !== undefined && typeof m.createdAt !== "string") ||
+          (m.durationMs !== undefined && (typeof m.durationMs !== "number" || !Number.isSafeInteger(m.durationMs) || m.durationMs < 0))) invalid("session.json", "Invalid native message");
+      seen.add(m.id);
+      if (m.changedFiles !== undefined && (!Array.isArray(m.changedFiles) || m.changedFiles.some(f =>
+        !isRecord(f) || typeof f.path !== "string" || !Number.isSafeInteger(f.added) || !Number.isSafeInteger(f.removed) ||
+        Number(f.added) < 0 || Number(f.removed) < 0))) invalid("session.json", "Invalid native file changes");
+    }
+  }
   const archived = new Set<string>();
   for (const item of session.sourceArtifacts) {
     if (!isRecord(item) || typeof item.path !== "string" || !item.path.startsWith("source/") || archived.has(item.path)) {

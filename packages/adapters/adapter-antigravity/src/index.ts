@@ -207,6 +207,17 @@ const adapter: SessionAdapter = {
       return { session, ledger };
     } finally { db.close(); }
   },
-  export: (session, context) => buildInjectionBundle(session, "antigravity", context),
+  export: (session, context) => {
+    const diagnostics = [...(context?.diagnostics ?? [])];
+    if (session.transcript?.some(m => m.changedFiles?.length)) {
+      diagnostics.push({code:"DESKTOP_FILE_CHANGES_AS_TEXT",path:"/transcript",severity:"warning",
+        message:"The desktop copy shows recorded paths and net line counts as text. Original patches remain in the source archive."});
+    }
+    if (session.transcript && session.continuation) {
+      diagnostics.push({code:"DESKTOP_CONTEXT_REBUILT",path:"/continuation",severity:"warning",
+        message:"Desktop history displays the original conversation. Antigravity builds its own model window; the CLI bundle retains the source checkpoint."});
+    }
+    return buildInjectionBundle(session, "antigravity", {...context, diagnostics});
+  },
 };
 export default adapter;

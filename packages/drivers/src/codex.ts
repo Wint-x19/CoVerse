@@ -114,12 +114,14 @@ async function listCodexLocalSessions(limit = 60, cache?: LocalSessionCache): Pr
     const previous = unchangedSession(cache, file.fullPath, file.size, updatedAt);
     let id = previous?.id ?? uuidMatch?.[1] ?? file.name;
     let cwd = previous?.cwd;
-    if (!previous && file.name.endsWith(".jsonl")) {
+    let parentSessionId = previous?.parentSessionId;
+    if ((!previous || parentSessionId === undefined) && file.name.endsWith(".jsonl")) {
       const firstLine = await readFirstLine(file.fullPath);
       if (firstLine) {
         try {
-          const head = JSON.parse(firstLine) as { type?: string; payload?: { id?: string; cwd?: string } };
+          const head = JSON.parse(firstLine) as { type?: string; payload?: { id?: string; cwd?: string; forked_from_id?: string } };
           if (head.type === "session_meta" && head.payload) {
+            parentSessionId = head.payload.forked_from_id ?? null;
             if (typeof head.payload.id === "string") id = head.payload.id;
             if (typeof head.payload.cwd === "string") cwd = head.payload.cwd;
           }
@@ -130,6 +132,7 @@ async function listCodexLocalSessions(limit = 60, cache?: LocalSessionCache): Pr
     refs.push({
       id,
       agent: "codex",
+      ...(parentSessionId !== undefined ? {parentSessionId} : {}),
       title,
       path: file.fullPath,
       ...(cwd ? { cwd } : {}),

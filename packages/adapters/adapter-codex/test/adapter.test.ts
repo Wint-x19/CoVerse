@@ -3,6 +3,29 @@ import { readFile } from "node:fs/promises";
 import adapter, { formatVersion } from "../src/index.js";
 const encode = (rows: unknown[]) => [{ path: "rollout.jsonl", bytes: new TextEncoder().encode(rows.map(r => JSON.stringify(r)).join("\n")) }];
 const header = { type: "session_meta", payload: { id: "sample-codex", cli_version: "0.169.0-alpha.11.1", cwd: "/sample", timestamp: "2026-11-17T00:00:00Z", base_instructions: { text: "Be precise." } } };
+const completed = (turn_id: string, item: object) => ({ type: "event_msg", payload: { type: "item_completed", turn_id, item } });
+it("reconstructs a native fork at its byte boundary, separates hidden inputs and counts net file edits", async () => {
+  const id = "12345678-0000-4000-8000-000000000001";
+  const base = [{...header, payload: {...header.payload, id}},
+    { type: "response_item", payload: {type:"message", role:"user", content:[{type:"input_text",text:"injected workspace"}]} },
+    completed("turn1", {type:"UserMessage",id:"u",content:[{type:"text",text:"first question\n"}]}),
+    completed("turn1", {type:"FileChange",id:"f",status:"completed",changes:{"/sample/test.md":{type:"add",content:"a\nb\n"}}}),
+    completed("turn1", {type:"FileChange",id:"f2",status:"completed",changes:{"/sample/test.md":{type:"update",unified_diff:"@@ -2,1 +2,1 @@\n-b\n+c"}}}),
+    completed("turn1", {type:"AgentMessage",id:"a",phase:"final_answer",content:[{type:"Text",text:"| A | B |\n|---|---|\n| x | y |"}]})];
+  const offset = encode(base)[0]!.bytes.length + 1;
+  const parent = encode([...base, completed("sibling", {type:"UserMessage",id:"s",content:[{type:"text",text:"excluded sibling"}]})]);
+  const child = encode([{...header,payload:{...header.payload,forked_from_id:id,history_base:{thread_id:id,end_ordinal_exclusive:base.length,end_byte_offset:offset}}},
+    completed("turn2", {type:"UserMessage",id:"u2",content:[{type:"text",text:"on fork"}]})]);
+  expect(() => adapter.import(child)).toThrow("parent");
+  const files = await adapter.prepareLocalImport!(child, async key => {expect(key).toBe(id); return parent;});
+  const imported = await adapter.import(files);
+  expect(imported.session.transcript).toEqual([
+    {id:"u",role:"user",text:"first question\n"},
+    {id:"a",role:"assistant",text:"| A | B |\n|---|---|\n| x | y |",changedFiles:[{path:"test.md",added:2,removed:0}]},
+    {id:"u2",role:"user",text:"on fork"}]);
+  expect(files.some(f => new TextDecoder().decode(f.bytes).includes("excluded sibling"))).toBe(false);
+  expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
+});
 const response = (payload: unknown) => ({ type: "response_item", payload });
 const sample = [header,
   response({ type: "message", role: "user", content: [{ type: "input_text", text: "Read the sample." }] }),

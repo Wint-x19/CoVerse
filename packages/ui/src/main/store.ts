@@ -92,8 +92,8 @@ export class UiStore {
   }
 
   async saveLocalCatalog(agent: string, rows: LocalSessionRef[], root?: string): Promise<void> {
-    const summaries = rows.map(({ id, title, path, cwd, size, updatedAt, active }) =>
-      ({ id, agent, title, path, cwd, size, updatedAt, active }));
+    const summaries = rows.map(({ id, title, path, cwd, size, updatedAt, active, parentSessionId }) =>
+      ({ id, agent, title, path, cwd, size, updatedAt, active, parentSessionId }));
     await this.writeJsonAtomic(this.catalogPath(agent), { root: root ?? null, sessions: summaries });
   }
 

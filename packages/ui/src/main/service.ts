@@ -141,7 +141,14 @@ export function csrTurnsToChatMessages(
   turns: readonly Turn[],
   sourceAgent: string,
   timestampFallback: string,
+  transcript?: CSR["transcript"],
 ): ChatMessage[] {
+  if (transcript) return transcript.map(m => ({
+    id: m.id, role: m.role, content: m.text, createdAt: m.createdAt ?? timestampFallback, historical: true,
+    ...(m.role === "assistant" ? {agent: sourceAgent} : {}), ...(m.activity ? {reasoning: m.activity} : {}),
+    ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
+    ...(m.durationMs !== undefined ? {durationMs: m.durationMs} : {}),
+  }));
   const messages: ChatMessage[] = [];
   const toolCallIndex = new Map<string, { message: ChatMessage; toolIdx: number }>();
 
@@ -518,7 +525,7 @@ export class UiService {
       }
       if (cwd) session.cwd = projectDirectory(cwd) ?? cwd;
       if (!cached || cached.id !== session.id || cached.title !== session.title ||
-          cached.cwd !== session.cwd || cached.active !== session.active) changed = true;
+          cached.cwd !== session.cwd || cached.active !== session.active || cached.parentSessionId !== session.parentSessionId) changed = true;
     }
     if (changed) await this.store.saveLocalCatalog(driver.id, sessions, root);
     return sessions;
@@ -528,9 +535,24 @@ export class UiService {
     return this.store.listSessions();
   }
 
-  async getSession(id: string): Promise<UiSession> {
+  async getSession(id: string, refreshLegacyDisplay = false): Promise<UiSession> {
     const session = await this.store.getSession(id);
     if (!session) throw new SessionError("NOT_FOUND", `/sessions/${id}`, `Session not found: ${id}`);
+    const ref = session.reference;
+    if (refreshLegacyDisplay && ref && !ref.displayVersion && session.messages.every(m => m.historical)) {
+      const adapter = this.adapters.get(ref.agent);
+      const paths = [ref.sourcePath];
+      const imported = await adapter.import(await this.prepareImport(adapter, await loadPathsAsFileSet(paths), paths));
+      if (imported.session.meta.id !== session.targetSessionId) throw new SessionError("INVALID_INPUT", "/reference", "The file now belongs to a different conversation.");
+      const messages = imported.session.transcript
+        ? csrTurnsToChatMessages(imported.session.turns, ref.agent, session.createdAt, imported.session.transcript)
+        : session.messages;
+      return this.store.mutateSession(id, current => {
+        if (current.reference?.sourcePath !== ref.sourcePath || current.reference.displayVersion || current.targetSessionId !== session.targetSessionId ||
+            !current.messages.every(m => m.historical)) return current;
+        return {...current, messages, reference: {...current.reference, displayVersion: 1}};
+      });
+    }
     return session;
   }
 
@@ -625,6 +647,19 @@ export class UiService {
     throw new SessionError("INVALID_INPUT", "/input", "At least one file or path is required");
   }
 
+  private async prepareImport(adapter: SessionAdapter, files: FileSet, paths?: readonly string[]) {
+    if (!adapter.prepareLocalImport || paths?.length !== 1) return files;
+    return adapter.prepareLocalImport(files, async id => {
+      const catalog = await this.listLocalSessions(adapter.id);
+      if (!catalog.some(row => sameLocalPath(row.path, paths[0]!))) {
+        throw new SessionError("MISSING_RELATED_RECORD", "/input", "Select the fork in its native session catalog to resolve its parent.");
+      }
+      const matches = catalog.filter(row => row.id === id);
+      if (matches.length !== 1) throw new SessionError("MISSING_RELATED_RECORD", "/input", "Cannot uniquely locate parent session " + id);
+      return loadPathsAsFileSet([matches[0]!.path]);
+    });
+  }
+
   async inspectSource(input: {
     paths?: readonly string[];
     files?: readonly UploadedFilePayload[];
@@ -664,7 +699,7 @@ export class UiService {
     let previewError: SessionDiagnostic | undefined;
     if (detected) {
       try {
-        const imported = await detected.import(files);
+        const imported = await detected.import(await this.prepareImport(detected, files, input.paths));
         const resolvedLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
         const opaqueCounts = new Map<string, number>();
         for (const turn of imported.session.turns) {
@@ -689,7 +724,7 @@ export class UiService {
           id: imported.session.meta.id,
           agent: imported.session.meta.agent,
           agentFormatVersion: imported.session.meta.agentFormatVersion,
-          turns: imported.session.turns.length,
+          turns: imported.session.transcript?.filter(m => m.role === "user").length ?? imported.session.turns.length,
           ...(resolvedLocalCwd ? { cwd: resolvedLocalCwd } : {}),
           ...(imported.session.meta.cwd ? { sourceCwd: imported.session.meta.cwd } : {}),
           ...(imported.session.meta.model ? { model: imported.session.meta.model } : {}),
@@ -745,6 +780,7 @@ export class UiService {
     title: string;
     sourceSessionId?: string;
     initialMessages?: ChatMessage[];
+    nativeTranscript?: boolean;
   }): Promise<UiSession> {
     verifyInjectionBundle(input.artifacts, input.target.id);
 
@@ -788,6 +824,7 @@ export class UiService {
       diagnostics: report.diagnostics ?? [],
       files: manifest.files,
       ...(input.sourceSessionId ? { sourceSessionId: input.sourceSessionId } : {}),
+      ...(process.platform === "win32" && input.target.publishDesktopSession && input.nativeTranscript ? {desktopFirst: true} : {}),
     };
 
     const timestamp = nowIso();
@@ -843,7 +880,7 @@ export class UiService {
     };
     // Reference-only import (zero copy, zero bundle) when format AND project path are unchanged
     if (source.id === target.id && request.paths && request.paths.length === 1) {
-      const imported = await source.import(files);
+      const imported = await source.import(await this.prepareImport(source, files, request.paths));
       const sourceLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
       const requestedCwd = destination(imported.session.meta.cwd);
       const requestedLocalCwd = requestedCwd?.trim()
@@ -869,6 +906,7 @@ export class UiService {
           imported.session.turns,
           source.id,
           imported.session.meta.createdAt ?? nowIso(),
+          imported.session.transcript,
         );
         const sourcePath = path.resolve(request.paths[0]!);
         const existingList = await this.store.listSessions();
@@ -890,6 +928,7 @@ export class UiService {
           targetSessionId: imported.session.meta.id,
           bundlePending: false,
           reference: {
+            displayVersion: 1,
             sourcePath,
             agent: source.id,
             formatVersion: imported.session.meta.agentFormatVersion,
@@ -906,7 +945,7 @@ export class UiService {
     const result = await convertSession({
       source,
       target,
-      artifacts: files,
+      artifacts: await this.prepareImport(source, files, request.paths),
       ...(request.omitOpaque ? { lossPolicy: { omitOpaque: true } } : {}),
     });
     const firstUserText = result.session.turns
@@ -920,6 +959,7 @@ export class UiService {
       result.session.turns,
       source.id,
       result.session.meta.createdAt ?? nowIso(),
+      result.session.transcript,
     );
 
     const requestedCwd = destination(result.session.meta.cwd);
@@ -933,6 +973,7 @@ export class UiService {
       ...(request.model ? { model: request.model } : {}),
       title: request.title?.trim() || defaultTitle,
       initialMessages,
+      nativeTranscript: !!result.session.transcript,
     });
 
     if (request.materialize !== false) {
@@ -957,7 +998,7 @@ export class UiService {
   private async registerSession(sessionId: string): Promise<UiSession> {
     const session = await this.getSession(sessionId);
     if (!session.handoff) return session;
-    if (!session.bundlePending) return this.publishDesktopCopy(session);
+    if (session.handoff.desktopFirst || !session.bundlePending) return this.publishDesktopCopy(session);
     const registry = await this.ensureDriversConfigured();
     const driver = registry.get(session.agent);
     const bundleFiles = await this.store.loadBundleFiles(session.handoff.bundleId);
@@ -1014,12 +1055,12 @@ export class UiService {
 
   private async publishDesktopCopy(session: UiSession): Promise<UiSession> {
     const publish = this.adapters.get(session.agent).publishDesktopSession;
-    if (!publish || !session.handoff || !session.targetSessionId || session.handoff.desktopSessionId) return session;
+    if (!publish || !session.handoff || (!session.targetSessionId && !session.handoff.desktopFirst) || session.handoff.desktopSessionId) return session;
     const bundleId = session.handoff.bundleId;
     let desktopSessionId: string | undefined;
     let error: SessionDiagnostic | undefined;
     try {
-      desktopSessionId = await publish({ cliSessionId: session.targetSessionId, transferId: session.id,
+      desktopSessionId = await publish({ ...(session.targetSessionId ? {cliSessionId: session.targetSessionId} : {}), transferId: session.id,
         title: session.title, cwd: session.cwd, bundleDirectory: this.store.bundlePath(bundleId),
         loadArtifacts: () => this.store.loadBundleFiles(bundleId) });
     } catch (cause) {
@@ -1037,6 +1078,7 @@ export class UiService {
 
   private async tryMaterializeSession(session: UiSession): Promise<UiSession> {
     if (!session.handoff || !session.bundlePending) return session;
+    if (session.handoff.desktopFirst) return this.materializeSession(session.id);
     const registry = await this.ensureDriversConfigured();
     const driver = registry.get(session.agent);
     const probed = await driver.probe();
@@ -1081,10 +1123,12 @@ export class UiService {
     let loadedPriorTurns = false;
     let continuation: CSR["continuation"];
     let referenced: CSR | undefined;
+    let priorTranscript: CSR["transcript"];
 
     if (sourceSession.reference && sourceSession.messages.every(m => m.historical)) {
       const files = await this.resolveInputFileSet({ paths: [sourceSession.reference.sourcePath] });
-      const imported = await this.adapters.get(sourceSession.agent).import(files);
+      const adapter = this.adapters.get(sourceSession.agent);
+      const imported = await adapter.import(await this.prepareImport(adapter, files, [sourceSession.reference.sourcePath]));
       if (imported.session.meta.id !== sourceSession.targetSessionId) {
         throw new SessionError("INVALID_INPUT", "/handoff", "The source file now belongs to a different conversation.");
       }
@@ -1104,6 +1148,7 @@ export class UiService {
           if (Array.isArray(prevCsr.turns)) {
             for (const turn of prevCsr.turns) turns.push(turn);
             continuation = prevCsr.continuation;
+            priorTranscript = prevCsr.transcript;
             loadedPriorTurns = true;
           }
         }
@@ -1166,6 +1211,10 @@ export class UiService {
         createdAt: sourceSession.createdAt,
       },
       turns,
+      ...(priorTranscript ? {transcript: [...priorTranscript, ...messagesToAppend.map(m => ({
+        id: m.id, role: m.role, text: m.content, createdAt: m.createdAt,
+        ...(m.reasoning ? {activity: m.reasoning} : {}), ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
+      }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {
         "x-coverse-desktop": {
@@ -1182,7 +1231,10 @@ export class UiService {
       ...(options.omitOpaque !== false ? { lossPolicy: { omitOpaque: true } } : {}),
     });
 
-    const carriedMessages: ChatMessage[] = sourceSession.messages.map((m) => ({
+    const sourceMessages = referenced?.transcript
+      ? csrTurnsToChatMessages(referenced.turns, sourceSession.agent, sourceSession.createdAt, referenced.transcript)
+      : sourceSession.messages;
+    const carriedMessages: ChatMessage[] = sourceMessages.map((m) => ({
       ...m,
       id: makeId("hist"),
       historical: true,
@@ -1199,6 +1251,7 @@ export class UiService {
       title: options.title?.trim() || sourceSession.title,
       sourceSessionId: sourceSession.id,
       initialMessages: carriedMessages,
+      nativeTranscript: !!csr.transcript,
     });
 
     if (options.materialize !== false) {

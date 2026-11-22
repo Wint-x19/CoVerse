@@ -313,6 +313,10 @@ export function App() {
     setSettingsOpen(false);
     setActiveSessionId(id);
     setBannerError(null);
+    const ref = sessions.find(row => row.id === id)?.reference;
+    if (ref && !ref.displayVersion) {
+      void api.getSession(id).then(upsertLocalSession).catch(e => setBannerError(e instanceof Error ? e.message : String(e)));
+    }
   };
 
   const handleDeleteSession = async (id: string) => {

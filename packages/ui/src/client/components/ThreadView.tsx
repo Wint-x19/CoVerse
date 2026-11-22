@@ -48,7 +48,7 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
   );
 }
 
-function ReasoningTrace({ text, t }: { text: string; t: I18nMessages }) {
+function ReasoningTrace({ text, t, durationMs }: { text: string; t: I18nMessages; durationMs?: number | undefined }) {
   const [open, setOpen] = React.useState(false);
   return (
     <div className="mb-2.5">
@@ -58,7 +58,7 @@ function ReasoningTrace({ text, t }: { text: string; t: I18nMessages }) {
         className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2 py-1 text-[11.5px] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] cursor-pointer"
       >
         <Sparkles className="h-3 w-3" />
-        <span>{t.reasoning}</span>
+        <span>{durationMs === undefined ? t.reasoning : t.elapsed(Math.floor(durationMs / 60000), Math.floor(durationMs / 1000) % 60)}</span>
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
       </button>
       {open && (
@@ -68,6 +68,17 @@ function ReasoningTrace({ text, t }: { text: string; t: I18nMessages }) {
       )}
     </div>
   );
+}
+
+function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFiles"]>; t: I18nMessages }) {
+  const row = (f: typeof files[number]) => <div key={f.path} className="mt-2 flex justify-between gap-4">
+    <code className="break-all">{f.path}</code><span className="shrink-0">+{f.added} −{f.removed}</span>
+  </div>;
+  return <div className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-xs">
+    <span>{t.editedFiles(files.length)}　+{files.reduce((n, f) => n + f.added, 0)} −{files.reduce((n, f) => n + f.removed, 0)}</span>
+    {files.slice(0, 3).map(row)}
+    {files.length > 3 && <details className="mt-2"><summary className="cursor-pointer">{t.moreFiles(files.length - 3)}</summary>{files.slice(3).map(row)}</details>}
+  </div>;
 }
 
 function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
@@ -90,7 +101,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
       </div>
 
       <div className="pl-[22px]">
-        {message.reasoning && <ReasoningTrace text={message.reasoning} t={t} />}
+        {message.reasoning && <ReasoningTrace text={message.reasoning} t={t} durationMs={message.durationMs} />}
         {message.tools && message.tools.length > 0 && <ToolTrace tools={message.tools} t={t} />}
 
         {message.content && (
@@ -99,6 +110,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
           </div>
         )}
 
+        {message.changedFiles?.length ? <ChangedFiles files={message.changedFiles} t={t} /> : null}
         {message.error && (
           <div
             role="alert"
@@ -158,10 +170,10 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
         <ArrowRight className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
         <span className="whitespace-nowrap text-[var(--text-primary)]">{agentLabel(handoff.to)}</span>
         <span className="text-[var(--text-tertiary)]">·</span>
-        <span className="whitespace-nowrap">{t.turns(handoff.statistics.turns)}</span>
-        {handoff.to === "antigravity" && session.targetSessionId && !handoff.desktopSessionId ? (
+        <span className="whitespace-nowrap">{t.turns(handoff.desktopFirst ? historicalMessages.filter(m => m.role === "user").length : handoff.statistics.turns)}</span>
+        {handoff.to === "antigravity" && (session.targetSessionId || handoff.desktopFirst) && !handoff.desktopSessionId ? (
           <span className="text-[var(--accent-text)]">· {handoff.desktopError?.code === "DESKTOP_OPEN" ? t.closeDesktop : t.desktopPending}</span>
-        ) : handoff.materialized && session.targetSessionId ? (
+        ) : handoff.desktopSessionId || (handoff.materialized && session.targetSessionId) ? (
           <>
             <span className="text-[var(--text-tertiary)]">·</span>
             <span className="whitespace-nowrap text-[#3ecf8e]">{t.synced}</span>

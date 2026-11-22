@@ -447,6 +447,35 @@ describe("CoVerse M4 desktop IPC & service", () => {
     }
   });
 
+  it("restores legacy display on selection and carries the same visible messages into a desktop handoff", async () => {
+    const root = await makeTempDir("coverse-visible-history-");
+    const store = new UiStore(path.join(root, "state"));
+    const service = new UiService(createAdapterRegistry(), createFakeDrivers(), store, root);
+    const id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const file = path.join(root, "rollout-test.jsonl");
+    const done = (item: object) => ({ type: "event_msg", payload: { type: "item_completed", turn_id: "round", item } });
+    await fs.writeFile(file, [
+      {type:"session_meta",payload:{id,cwd:root,cli_version:"0.169.0-alpha.11.1"}},
+      {type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"hidden workspace"}]}},
+      done({type:"UserMessage",id:"question",content:[{type:"text",text:"Original question\n"}]}),
+      done({type:"AgentMessage",id:"reply",content:[{type:"Text",text:"**Original reply**"}],phase:"final_answer"}),
+    ].map(r => JSON.stringify(r)).join("\n"));
+    const source = await service.convertSource({from:"codex",to:"codex",paths:[file],cwd:root});
+    await store.mutateSession(source.id, current => {
+      const reference = {...current.reference!};
+      delete reference.displayVersion;
+      return {...current, reference, messages:[]};
+    });
+    const refreshed = await service.getSession(source.id, true);
+    expect(refreshed.messages.map(m=>[m.role,m.content])).toEqual([["user","Original question\n"],["assistant","**Original reply**"]]);
+    const target = await service.handoffSession(source.id,{to:"antigravity", materialize:false});
+    expect(target.messages.map(m=>m.content)).toEqual(refreshed.messages.map(m=>m.content));
+    const files = await store.loadBundleFiles(target.handoff!.bundleId);
+    const csr = JSON.parse(new TextDecoder().decode(files.find(f=>f.path==="session.json")!.bytes));
+    expect(csr.transcript.map((m: {text:string})=>m.text)).toEqual(refreshed.messages.map(m=>m.content));
+    expect(csr.turns[0].content[0].text).toBe("hidden workspace");
+  });
+
   it("imports same-agent same-path local sessions by reference only (zero copy) and materializes converted sessions into target agent", async () => {
     const dataDir = await makeTempDir("coverse-desktop-ref-");
     const projectDir = await makeTempDir("coverse-desktop-proj-");

@@ -95,7 +95,7 @@ export function registerIpcHandlers(
   ipc.handle(IPC_CHANNELS.listSessions, () => wrap("/sessions", () => service.listSessions()));
 
   ipc.handle(IPC_CHANNELS.getSession, (_event, id) =>
-    wrap("/sessions/get", () => service.getSession(String(id))),
+    wrap("/sessions/get", () => service.getSession(String(id), true)),
   );
 
   ipc.handle(IPC_CHANNELS.createSession, (_event, input) =>

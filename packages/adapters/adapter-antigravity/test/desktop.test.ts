@@ -75,6 +75,25 @@ it("publishes native version-one history into its project and preserves resumed 
   expect(await fs.readFile(path.join(desktop, "annotations", id + ".pbtxt"), "utf8")).toContain(input.title);
 });
 
+it("exports the native display transcript locally even when compaction removed messages from the model window", async () => {
+  const { cliSessionId: _cli, ...offline } = input;
+  const transcript: CSR["transcript"] = [
+    { id:"u", role:"user", text:"Before compaction", createdAt:"2026-01-01T00:00:00Z" },
+    { id:"a", role:"assistant", text:"| A | B |\n|---|---|\n| x | y |", activity:"Progress", changedFiles:[{path:"example.md",added:2,removed:1}] },
+  ];
+  const id = await publishToStore({...offline, loadArtifacts: async () => buildInjectionBundle({...source,transcript},"antigravity").artifacts}, base, await sql);
+  const db = new (await sql).Database(await fs.readFile(path.join(desktop,"conversations",id+".db")));
+  try {
+    const type = wireRoot.lookupType("Step");
+    const native = db.exec("SELECT step_payload FROM steps ORDER BY idx")[0]!.values.map(([bytes]) => type.toObject(type.decode(bytes as Uint8Array)));
+    expect(native).toHaveLength(2);
+    expect(native[0]!.user_input.user_response).toBe(transcript[0]!.text);
+    expect(native[1]!.planner_response.response).toContain(transcript[1]!.text);
+    expect(native[1]!.planner_response.response).toContain("example.md");
+    expect(native[1]!.planner_response.thinking).toBe("Progress");
+  } finally { db.close(); }
+});
+
 it("matches git folders by path and creates distinct projects for identically named directories", async () => {
   const a = path.join(base, "a", "workspace"), b = path.join(base, "b", "workspace");
   for (const folder of [a, b]) await fs.mkdir(folder, { recursive: true });

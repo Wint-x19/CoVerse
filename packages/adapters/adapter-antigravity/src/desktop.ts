@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { SqlJsStatic } from "sql.js";
 import protobuf from "protobufjs";
-import { parseWireJson, renderContinuationHistory, SessionError, verifyInjectionBundle, type CSR, type DesktopPublication } from "@coverse/core";
+import { parseWireJson, renderContinuationHistory, SessionError, verifyInjectionBundle, type CSR, type DesktopPublication, type TranscriptMessage } from "@coverse/core";
 import { wireRoot } from "./wire.js";
 
 function encode(name: string, value: object): Uint8Array {
@@ -158,8 +158,13 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
   const csrFile = artifacts.find(f => f.path === "session.json")!;
   const csr = parseWireJson(new TextDecoder().decode(csrFile.bytes)) as unknown as CSR;
   csr.sourceArtifacts = artifacts.filter(f => f.path.startsWith("source/")).map(f => ({ path: f.path.slice(7), bytes: f.bytes }));
-  const history = renderContinuationHistory(csr, { lossPolicy: { omitOpaque: true } });
-  const seed = await readSeed(base, input.cliSessionId, sql);
+  const history: TranscriptMessage[] = csr.transcript ?? renderContinuationHistory(csr, { lossPolicy: { omitOpaque: true } }).map(({turn, blocks}) => {
+    let text = blocks.join("\n\n");
+    if (text && turn.role !== "user" && turn.role !== "assistant") text = "[Historical " + turn.role + "]\n" + text;
+    if (turn.content.some(block => block.type === "attachment")) text += "\nBundle directory: " + input.bundleDirectory;
+    return { id: turn.id, role: turn.role === "user" ? "user" as const : "assistant" as const, text };
+  });
+  const seed = input.cliSessionId ? await readSeed(base, input.cliSessionId, sql) : undefined;
   const project = await findDesktopProject(path.join(base, "config", "projects"), input.cwd);
   const now = Date.now();
   const timestamp = { seconds: Math.floor(now / 1000), nanos: (now % 1000) * 1000000 };
@@ -172,27 +177,33 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
   try {
     for (const statement of schema) db.run(statement);
     db.run("INSERT INTO trajectory_meta VALUES (?,?,4,1)", [tid, id]);
-    db.run("INSERT INTO trajectory_metadata_blob VALUES ('main',?)", [Buffer.concat([seed.trajectory, encode("TrajectoryMetadata", meta)])]);
-    db.run("INSERT INTO gen_metadata VALUES (0,?,?)", [seed.genData, seed.genSize]);
-    for (const { turn, blocks } of history) {
-      const user = turn.role === "user";
-      const isDialogue = user || turn.role === "assistant";
-      let text = blocks.join("\n\n");
-      if (!text) continue;
-      if (!isDialogue) text = "[Historical " + turn.role + "]\n" + text;
-      if (turn.content.some(block => block.type === "attachment")) text += "\nBundle directory: " + input.bundleDirectory;
+    db.run("INSERT INTO trajectory_metadata_blob VALUES ('main',?)", [Buffer.concat([seed?.trajectory ?? Buffer.alloc(0), encode("TrajectoryMetadata", meta)])]);
+    if (seed) db.run("INSERT INTO gen_metadata VALUES (0,?,?)", [seed.genData, seed.genSize]);
+    for (const message of history) {
+      const user = message.role === "user";
+      let text = message.text;
+      if (message.changedFiles?.length) {
+        const files = message.changedFiles;
+        const list = files.map(f => "- `" + f.path.replaceAll("`", "\\`") + "`　+" + f.added + " −" + f.removed);
+        text += "\n\n**已编辑 " + files.length + " 个文件**　+" + files.reduce((s,f) => s+f.added,0) +
+          " −" + files.reduce((s,f) => s+f.removed,0) + "\n\n" + list.join("\n");
+      }
+      if (!text && !message.activity) continue;
+      const ms = message.createdAt ? Date.parse(message.createdAt) : NaN;
+      const stepTime = Number.isFinite(ms) ? { seconds: Math.floor(ms/1000), nanos: (ms%1000)*1000000 } : timestamp;
       const type = user ? 14 : 15;
-      const metadata = { source: user ? 4 : 2, execution_id: execution, created_at: timestamp, viewable_at: timestamp, completed_at: timestamp,
+      const metadata = { source: user ? 4 : 2, execution_id: execution, created_at: stepTime, viewable_at: stepTime, completed_at: stepTime,
         model_api_content_id: randomUUID(), source_trajectory_step_info: encode("DesktopStepOrigin", {trajectory_id: tid, step_index: count, cascade_id: id}) };
-      const body = user ? { user_input: { user_response: text, items: [{ text }], user_config: seed.userConfig, client_message_id: randomUUID() } }
-        : { planner_response: { response: text, modified_response: text, message_id: randomUUID(), stop_reason: 2 } };
+      const body = user ? { user_input: { user_response: text, items: [{ text }], user_config: seed?.userConfig, client_message_id: randomUUID() } }
+        : { planner_response: { response: text, modified_response: text, thinking: message.activity,
+          message_id: randomUUID(), stop_reason: 2 } };
       db.run("INSERT INTO steps (idx,step_type,status,metadata,step_payload) VALUES (?,?,3,?,?)",
         [count, type, encode("Metadata", metadata), encode("Step", { type, status: 3, metadata, ...body })]);
       if (user) lastUser = count;
       count++;
     }
     if (!count) throw Error("No readable records in the source continuation window");
-    db.run("INSERT INTO executor_metadata VALUES (0,?)", [Buffer.concat([seed.executor, encode("DesktopExecutor",
+    db.run("INSERT INTO executor_metadata VALUES (0,?)", [Buffer.concat([seed?.executor ?? Buffer.alloc(0), encode("DesktopExecutor",
       { termination_reason: 4, last_step_idx: count - 1, execution_id: execution })])]);
     await publishNew(filename, db.export());
   } finally { db.close(); }

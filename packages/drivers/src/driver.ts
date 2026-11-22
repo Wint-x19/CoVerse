@@ -26,6 +26,8 @@ export interface ModelOption {
 }
 
 export interface LocalSessionRef {
+  /** Parent identity when this catalog row represents a native fork. Null denotes a verified root. */
+  parentSessionId?: string | null;
   id: string;
   agent: string;
   title: string;

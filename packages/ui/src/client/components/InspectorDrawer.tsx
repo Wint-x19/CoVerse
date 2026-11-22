@@ -198,7 +198,7 @@ export function InspectorDrawer({ open, session, t, onClose, onSessionUpdated }:
           </div>
         )}
 
-        {handoff && session.agent === "antigravity" && session.targetSessionId && (
+        {handoff && session.agent === "antigravity" && (session.targetSessionId || handoff.desktopFirst) && (
           <div className="space-y-1 border-t border-[var(--border-subtle)] pt-2">
             <div>{t.desktopCopy}</div>
             {handoff.desktopSessionId && <div className="flex items-center gap-1"><span className="truncate">{handoff.desktopSessionId}</span>
@@ -209,7 +209,7 @@ export function InspectorDrawer({ open, session, t, onClose, onSessionUpdated }:
             {syncError && <p role="alert">{syncError}</p>}
           </div>
         )}
-        {handoff && session.bundlePending && (
+        {handoff && session.bundlePending && !handoff.desktopFirst && (
           <div className="pt-1 flex flex-col gap-1.5">
             <Button
               type="button"

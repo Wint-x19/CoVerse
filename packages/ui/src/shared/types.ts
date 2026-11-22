@@ -17,6 +17,7 @@ export interface ModelOption {
 }
 
 export interface LocalSessionRef {
+  parentSessionId?: string | null;
   id: string;
   agent: string;
   title: string;
@@ -82,6 +83,7 @@ export interface HandoffMetadata {
   materialized?: boolean;
   materializationError?: SessionDiagnostic;
   desktopSessionId?: string;
+  desktopFirst?: boolean;
   desktopError?: SessionDiagnostic;
   statistics: BundleStatistics;
   losses: LossCounts;
@@ -92,6 +94,7 @@ export interface HandoffMetadata {
 }
 
 export interface SessionReference {
+  displayVersion?: 1;
   sourcePath: string;
   agent: string;
   formatVersion: string;
@@ -105,6 +108,8 @@ export interface ToolActivity {
 }
 
 export interface ChatMessage {
+  changedFiles?: import("@coverse/core").TranscriptMessage["changedFiles"];
+  durationMs?: number;
   id: string;
   role: "user" | "assistant";
   content: string;

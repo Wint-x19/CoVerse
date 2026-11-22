@@ -37,6 +37,16 @@ export interface Turn {
   origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
 }
 
+/** Native conversation surface, independent of the model's compacted input window. */
+export interface TranscriptMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt?: string;
+  activity?: string;
+  durationMs?: number;
+  changedFiles?: { path: string; added: number; removed: number }[];
+}
 export interface CSR {
   schemaVersion: "1.0";
   meta: {
@@ -49,6 +59,7 @@ export interface CSR {
     vcs?: { root: string; branch?: string; commit?: string };
   };
   turns: Turn[];
+  transcript?: TranscriptMessage[];
   /** At the boundary the source replaced earlier history. Later turns remain live. */
   continuation?: { boundaryId: string; retainedIds: string[]; replacement: Turn[] };
   xExtensions: Record<string, JsonValue>;
@@ -88,7 +99,7 @@ export interface ExportContext {
 export interface ExportResult { artifacts: FileSet; ledger: LossLedger; diagnostics?: SessionDiagnostic[] }
 
 export interface DesktopPublication {
-  cliSessionId: string;
+  cliSessionId?: string;
   transferId: string;
   title: string;
   cwd: string;
@@ -105,6 +116,7 @@ export interface SessionAdapter {
   readonly capabilities: Readonly<AdapterCapabilities>;
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
+  prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>): Promise<FileSet>;
   /** Publish a separate, resumable snapshot when the desktop and CLI have separate native stores. */
   publishDesktopSession?(input: DesktopPublication): Promise<string>;
   detect(input: FileSet): Detection | Promise<Detection>;

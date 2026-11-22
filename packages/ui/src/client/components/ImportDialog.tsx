@@ -36,6 +36,7 @@ export function ImportDialog({
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState(new Set<string>());
   const [target, setTarget] = React.useState("");
+  const [omitOpaque, setOmitOpaque] = React.useState(false);
   const [progress, setProgress] = React.useState("");
   const [issues, setIssues] = React.useState<string[]>([]);
   const generation = React.useRef(0);
@@ -82,6 +83,7 @@ export function ImportDialog({
     setAgentFilter("all");
     setSelected(new Set());
     setTarget("");
+    setOmitOpaque(false);
     setIssues([]);
     void load(true);
     return () => { generation.current++; };
@@ -128,13 +130,14 @@ export function ImportDialog({
           ...(item.cwd ? { cwd: item.cwd } : {}),
           useSourceProject: true,
           materialize: true,
+          ...(target && omitOpaque ? {omitOpaque: true} : {}),
         });
         onImported(session);
         select([item], false);
         if (session.handoff?.desktopError) {
           const error = session.handoff.desktopError;
           messages.push(label + " · " + (error.code === "DESKTOP_OPEN" ? t.closeDesktop : error.message));
-        } else if (session.bundlePending) {
+        } else if (session.bundlePending && !session.handoff?.desktopSessionId) {
           messages.push([label, t.pendingSync, session.handoff?.materializationError?.message].filter(Boolean).join(" · "));
         }
       } catch (error) {
@@ -247,6 +250,7 @@ export function ImportDialog({
                         </div>
                         <div className="flex items-center gap-2 font-mono text-[11px] text-[var(--text-tertiary)]">
                           <span>{agentLabel(item.agent)}</span>
+                          {item.parentSessionId !== undefined && <span>{item.parentSessionId ? t.forkedSession : t.originalSession} · {item.id.slice(0, 13)}</span>}
                         </div>
                       </div>
 
@@ -279,6 +283,10 @@ export function ImportDialog({
                 <option key={a.id} value={a.id}>{agentLabel(a.id)}</option>)}
             </select>
           </label>
+          {target && <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={omitOpaque} disabled={Boolean(progress)} onChange={e => setOmitOpaque(e.target.checked)} />
+            {t.omitOpaque}
+          </label>}
           {target === "antigravity" && <span className="flex-1 text-xs text-[var(--text-secondary)]">{t.desktopHint}</span>}
           <Button disabled={!selected.size || Boolean(progress)} onClick={() => void importSelected()}>
             {progress || t.importSelected(selected.size)}
