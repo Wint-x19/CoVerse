@@ -49,48 +49,44 @@ async function listStore(root: string) {
   let entries;
   try { entries = await fs.readdir(root, { withFileTypes: true }); } catch (error) { ignoreMissingEntry(error); return []; }
 
-  const dbs: { fullPath: string; name: string; mtimeMs: number; size: number }[] = [];
+  const refs: LocalSessionRef[] = [];
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".db")) continue;
     const fullPath = path.join(root, entry.name);
     try {
       const info = await fs.stat(fullPath);
-      dbs.push({ fullPath, name: entry.name, mtimeMs: info.mtimeMs, size: info.size });
+      let size = info.size;
+      let modified = info.mtimeMs;
+      for (const suffix of ["-wal", "-journal"]) {
+        try {
+          const companion = await fs.stat(fullPath + suffix);
+          if (companion.size) {
+            size += companion.size;
+            modified = Math.max(modified, companion.mtimeMs);
+          }
+        } catch (error) { ignoreMissingEntry(error); }
+      }
+      const id = entry.name.slice(0, -3);
+      refs.push({
+        id, agent: "antigravity", title: id, path: fullPath, size,
+        updatedAt: new Date(modified).toISOString(),
+        ...(size > info.size ? { active: true } : {}),
+      });
     } catch (error) { ignoreMissingEntry(error); }
   }
 
-  return dbs;
+  return refs;
 }
 
 async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
   const stores = await Promise.all(["antigravity", "antigravity-cli"].map(
     name => listStore(path.join(sessionRoot(), name, "conversations")),
   ));
-  const dbs = stores.flat().sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const refs: LocalSessionRef[] = [];
-  for (const db of dbs.slice(0, limit)) {
-    const id = db.name.replace(/\.db$/, "");
-    let active = false;
-    for (const suffix of ["-wal", "-journal"]) {
-      try {
-        if ((await fs.stat(db.fullPath + suffix)).size > 0) active = true;
-      } catch (error) { ignoreMissingEntry(error); }
-    }
-    refs.push({
-      id,
-      agent: "antigravity",
-      title: id,
-      path: db.fullPath,
-      updatedAt: new Date(db.mtimeMs).toISOString(),
-      size: db.size,
-      ...(active ? { active: true } : {}),
-    });
-  }
-  return refs;
+  return stores.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit);
 }
 
 export const antigravity: DriverPlugin = {
-  id: "antigravity", command: "agy", verifiedVersions: ["1.5.11"],
+  id: "antigravity", command: "agy", verifiedVersions: ["1.5.11", "1.5.14"],
   resumeArgs: id => ["--conversation", id],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["--input-format", "stream-json", "--output-format", "stream-json", "--disable-slash-commands"];

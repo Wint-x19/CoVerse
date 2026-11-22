@@ -15,12 +15,16 @@ it("discovers both Antigravity stores and flags a busy CLI conversation", async 
     await fs.mkdir(cli, {recursive:true});
     await fs.writeFile(path.join(cli, "one.db"), "test");
     await fs.writeFile(path.join(cli, "one.db-journal"), "busy");
-    expect(await driver.listLocalSessions()).toMatchObject([{id:"one", active:true}]);
+    expect(await driver.listLocalSessions()).toMatchObject([{id:"one", active:true, size:8}]);
     const desktop = path.join(sandbox, ".gemini", "antigravity", "conversations");
     await fs.mkdir(desktop, {recursive:true});
     await fs.writeFile(path.join(desktop, "two.db"), "test");
     expect((await driver.listLocalSessions()).map(s => s.id).sort()).toEqual(["one", "two"]);
     expect(await driver.listLocalSessions(1)).toHaveLength(1);
+    const journal = path.join(cli, "one.db-journal");
+    const latest = new Date(Date.now() + 10000);
+    await fs.utimes(journal, latest, latest);
+    expect(await driver.listLocalSessions(1)).toMatchObject([{id:"one"}]);
   } finally {
     homedir.mockRestore();
     await removeSandbox(sandbox);

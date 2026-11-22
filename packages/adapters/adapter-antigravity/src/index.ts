@@ -5,6 +5,7 @@ import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 import { decodeWire } from "./wire.js";
+import { committedSnapshot } from "./wal.js";
 import { publishWhenDesktopClosed } from "./desktop.js";
 
 export const formatVersion = "sqlite-2_32_1-step0";
@@ -25,14 +26,17 @@ function jsonRow(row: Row): Record<string, JsonValue> {
   return Object.fromEntries(Object.entries(row).map(([k, v]) => [k, v instanceof Uint8Array ? { encoding: "base64", data: Buffer.from(v).toString("base64") } : v]));
 }
 async function open(files: FileSet) {
-  if (files.some(f => /-(wal|journal)$/.test(f.path) && f.bytes.length)) throw new SessionError("UNSTABLE_INPUT", "/input", "Nonempty SQLite journal/WAL requires a consistent checkpointed snapshot");
+  if (files.some(f => f.path.endsWith("-journal") && f.bytes.length)) throw new SessionError("UNSTABLE_INPUT", "/input", "Nonempty SQLite rollback journal requires a checkpointed snapshot");
   const inputs = files.filter(f => f.path.endsWith(".db"));
   if (inputs.length !== 1) throw new SessionError("AMBIGUOUS_INPUT", "/input", "Supply one stable Antigravity SQLite conversation snapshot");
   const file = inputs[0]!;
   if (new TextDecoder().decode(file.bytes.subarray(0, 16)) !== "SQLite format 3\0") throw new SessionError("UNSUPPORTED_FORMAT", file.path, "Expected SQLite conversation database");
   let db: Database | undefined;
   try {
-    db = new (await engine()).Database(file.bytes);
+    const logs = files.filter(f => f.path.endsWith("-wal") && f.bytes.length);
+    if (logs.some(f => f.path !== file.path + "-wal")) throw new SessionError("UNSTABLE_INPUT", "/input", "Unmatched SQLite WAL");
+    const bytes = logs[0] ? committedSnapshot(file.bytes, logs[0], files.find(f => f.path === file.path + "-shm")) : file.bytes;
+    db = new (await engine()).Database(bytes);
     const tables = rows(db, "SELECT name FROM sqlite_master WHERE type='table'").map(r => String(r.name));
     if (tables.length !== Object.keys(columns).length || tables.some(t => !Object.hasOwn(columns, t))) throw new SessionError("UNSUPPORTED_VERSION", file.path, "Unverified Antigravity database schema");
     for (const [table, expected] of Object.entries(columns)) {

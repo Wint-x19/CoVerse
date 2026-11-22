@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import os from "node:os";
+import { inflateSync } from "node:zlib";
 import initSqlJs from "sql.js";
 import { it, expect } from "vitest";
 import adapter from "../src/index.js";
@@ -53,9 +54,30 @@ it("resolves CLI cascade IDs separately from trajectory IDs and imports mirrored
     expect(adapter.localResumeId!(session, path.join(base, "antigravity", "conversations", id + ".db"))).toBeUndefined();
   } finally { db.close(); }
 });
-it("rejects nonempty WAL and truncated binary input", async () => {
+it("rejects malformed WAL and truncated binary input", async () => {
   await expect(adapter.import([...files(await fixture()), { path: "sample.db-wal", bytes: Uint8Array.of(1) }])).rejects.toThrow("WAL");
   await expect(adapter.import(files((await fixture()).subarray(0, 128)))).rejects.toThrow();
+});
+it("reads the committed SQLite WAL view and rejects mismatched frames or index copies", async () => {
+  // SQLite's own journal for the reviewed sample after PRAGMA journal_mode=WAL and
+  // UPDATE trajectory_meta SET cascade_id='committed-receipt'. No native user data.
+  const main = await fixture();
+  main[18] = main[19] = 2;
+  main[27] = main[95] = 9;
+  const wal = inflateSync(Buffer.from("eJwzr2drYtB9JMHAIMAAAs8ufBL1mGR98NXNyz+T/9o+AwoxATEXTLyvZevtd/+1HvMCBRn5jzAA0SgYBaNgFIyCUTAKRsEoGAWjYBSMglEwCgYL8GVkDQ3l4DCAAl0gtgIK6aMKGeiagAgLGBcKjJPzc3MzS0pSU3SLUpNTMwtKABs4Kso=", "base64"));
+  const shm = inflateSync(Buffer.from("eJztzr0JwmAUBdAvdkklSCAzCFnALOA0mSJ1CovM4AIO4Abp0ynEzsIF8oNNiJWVIOfA5cHlFi+75WEWvbOdbzKlu1T1fT88+/aVHk/F9VHuznHZHLIv92FhWAgrm3UBAAAAAAAAAAAAAAAAAAAAAPDHol8/AAAAAAAAAAAAAAAAAADAhxFCbSmM", "base64"));
+  const input = [...files(main), {path:"sample.db-wal", bytes:wal}, {path:"sample.db-shm", bytes:shm}];
+  const readId = async (snapshot: typeof input) =>
+    (await adapter.import(snapshot)).session.xExtensions["x-antigravity-trajectory"];
+  expect(await readId(files(main))).not.toMatchObject({cascade_id:"committed-receipt"});
+  expect(await readId(input)).toMatchObject({cascade_id:"committed-receipt"});
+  expect(await readId([input[0]!, {...input[1]!, bytes:Buffer.concat([wal, Buffer.alloc(16, 255)])}, input[2]!]))
+    .toMatchObject({cascade_id:"committed-receipt"}); // Ignore bytes beyond the indexed commit.
+  for (const [bytes, offset] of [[wal, 55], [shm, 64], [shm, 32]] as const) {
+    bytes[offset] = bytes[offset]! ^ 1;
+    await expect(readId(input)).rejects.toMatchObject({code:"UNSTABLE_INPUT"});
+    bytes[offset] = bytes[offset]! ^ 1;
+  }
 });
 it("uses the checkpoint's explicit covered indices and retains uncovered steps", async () => {
   const db = new (await sql).Database(await fixture());

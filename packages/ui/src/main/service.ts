@@ -521,7 +521,7 @@ export class UiService {
       let cwd = session.cwd;
       if (cached && cached.active === session.active) {
         cwd ??= cached.cwd;
-      } else if (!cwd && !session.active && adapter.readProjectDirectory) {
+      } else if (!cwd && adapter.readProjectDirectory) {
         try {
           cwd = await adapter.readProjectDirectory(await loadPathsAsFileSet([session.path]));
         } catch {
