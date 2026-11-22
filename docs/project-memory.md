@@ -50,6 +50,14 @@ Antigravity 的桌面登记补充了上述 CLI 流程。Windows 桌面版 2.34.0
 
 ## 已验证经验
 
+### 五条路线的目标续聊与 Antigravity 桌面回传
+
+2026-11-23 在 Windows 用 Codex CLI `0.171.0-alpha.13`、Claude Code `2.1.121` 和 agy `1.5.14` 各创建专用原生会话。Codex ↔ Claude Code、Antigravity ↔ Claude Code、Antigravity → Codex 五条路线均在源项目中生成目标会话。另起目标 CLI，只提交会话 ID 与不含答案的问题，五条路线均取回源回执。首轮覆盖一问一答。随后用新的真实会话完成双轮复验，每份来源含四条消息，回执和标签分别来自两轮用户发言。五个目标均按指定顺序返回两项随机值。两批测试都核对了角色、顺序、逐条正文与源文件 SHA-256。CLI 登记使用既有的历史上下文注入流程。[真机测试入口](../tools/m31/native-handoffs.mjs)
+
+CoVerse 开发版的导入窗口能按项目选中 agy CLI 来源，转到 Claude Code 后用户原文只显示一次，审计面板显示已同步。Antigravity Windows 桌面端从项目侧栏打开 Claude Code 转入的会话后，也答回了正确回执。额外在该桌面会话写入一个标记，再转给 Claude Code 和 Codex，两者均从自己的目标会话准确取回桌面新增的值。
+
+Antigravity 的 CLI 文件以 `cascade_id` 命名，数据库内另有 `trajectory_id`。桌面退出后，最新提交可能仍在同名 WAL 中。本次回传的八个步骤及数据库各表内容与 SQLite 对同一份文件副本执行在线备份的结果一致。导入器使用校验后的 WAL 索引确定读取边界。该行为取代早期一律拒绝非空 WAL 的限制。[适配器支持范围](../packages/adapters/adapter-antigravity/README.md)
+
 Windows 的 Antigravity 项目 URI 可能保留 8.3 短路径。匹配时对请求目录和登记目录都调用 `realpath`，命中后沿用已登记的 ID 与原始 URI。GitHub Windows runner 的 `RUNNER~1` 与 `runneradmin` 触发过重复建项目；回归用例用指向同一目录的两条路径验证该行为。
 
 ### Codex 桌面页面上下文可跨 writer 复用同一记录形状

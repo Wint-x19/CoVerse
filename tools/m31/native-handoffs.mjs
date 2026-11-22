@@ -43,13 +43,17 @@ async function source(agent) {
   const cwd = path.join(base, "projects", agent);
   await fs.mkdir(cwd, { recursive: true });
   const receipt = randomBytes(12).toString("hex");
+  const label = randomBytes(6).toString("hex");
   const prompt = "My test receipt is " + receipt + ". Remember it for this chat. Reply with only STORED. No tools.";
   const { id, answer } = await nativeTurn(agent, cwd, prompt);
   assert.equal(answer, "STORED");
+  const follow = "Associate that receipt with shipment label " + label + ". Reply with only LINKED. No tools.";
+  assert.equal((await nativeTurn(agent, cwd, follow, id)).answer, "LINKED");
   const matches = (await service.listLocalSessions(agent)).filter(entry => entry.id === id);
   assert.equal(matches.length, 1, "Source must appear in the import catalog");
   const file = matches[0].path;
-  const result = { file, cwd, receipt, prompt, id, sha256: hash(await fs.readFile(file)) };
+  const expectedMessages = [["user", prompt], ["assistant", "STORED"], ["user", follow], ["assistant", "LINKED"]];
+  const result = { file, cwd, receipt, label, expectedMessages, id, sha256: hash(await fs.readFile(file)) };
   sources.set(agent, result);
   return result;
 }
@@ -72,17 +76,17 @@ for (const [from, to] of selected) {
     assert.equal(target.handoff?.materializationError, undefined);
     assert.ok(target.targetSessionId && !target.bundlePending, "Target CLI registration is pending");
     assert.equal(path.relative(target.cwd, s.cwd), "");
-    assert.deepEqual(target.messages.map(m => [m.role, m.content]), [["user", s.prompt], ["assistant", "STORED"]]);
+    assert.deepEqual(target.messages.map(m => [m.role, m.content]), s.expectedMessages);
     assert.equal(hash(await fs.readFile(s.file)), s.sha256, "Source changed during conversion");
     if (to === "antigravity" && process.platform === "win32") {
       assert.equal(target.handoff.desktopError, undefined);
       assert.ok(target.handoff.desktopSessionId, "Missing desktop project registration");
     }
     const bundle = await service.getBundleDetail(target.handoff.bundleId);
-    assert.ok(bundle.context.includes(s.receipt));
+    assert.ok(bundle.context.includes(s.receipt) && bundle.context.includes(s.label));
     const native = await nativeTurn(to, s.cwd,
-      "Use only the conversation above. What exact test receipt did I give you? Output the value alone, without tools.", target.targetSessionId);
-    assert.equal(native.answer, s.receipt);
+      "From our conversation, return the test receipt and its shipment label as receipt/label. Output only the two values separated by a slash. No tools.", target.targetSessionId);
+    assert.equal(native.answer, s.receipt + "/" + s.label);
     Object.assign(result, { passed: true, sourceSha256: s.sha256, losses: target.handoff.losses,
       sourceId: s.id, targetId: native.id, desktopId: target.handoff.desktopSessionId });
   } catch (error) {

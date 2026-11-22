@@ -6,6 +6,16 @@
 
 ## 运行与证据
 
+在已登录三种 CLI 的机器上，以下命令为五条跨 Agent 路线创建真实来源会话。测试从 CoVerse 桌面服务的本机会话列表找到来源，经过导入或当前会话的切换入口，最后另起目标 CLI 进程，按目标 UUID 追问。每条路线核对角色、正文、工作目录、源文件 SHA-256 和随机回执。Windows 上的 Claude Code → Antigravity 还要求完成桌面项目登记，请先退出 Antigravity 桌面客户端。结果与测试工作区保存在仓库忽略的 `.tmp/native-handoffs-*/` 下。
+
+```sh
+pnpm build
+node tools/m31/native-handoffs.mjs --live
+node tools/m31/native-handoffs.mjs --live antigravity:codex
+```
+
+三个客户端默认使用本机模型设置。可用 `COVERSE_TEST_CODEX_MODEL`、`COVERSE_TEST_CLAUDE_MODEL`、`COVERSE_TEST_AGY_MODEL` 指定当前账号可用的模型。测试会在各客户端留下专用原生会话。
+
 在仓库根目录使用已锁定的依赖。离线入口运行协议、适配器、驱动和专项回归，再启动可控子进程验证九个方向。完整的 `pnpm check` 已包含这些断言。
 
 ```sh

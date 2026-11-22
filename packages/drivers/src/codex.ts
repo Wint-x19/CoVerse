@@ -147,7 +147,7 @@ export const codex: DriverPlugin = {
   id: "codex",
   resumeArgs: id => ["resume", id],
   command: "codex",
-  verifiedVersions: ["codex-cli 0.169.0-alpha.11.1"],
+  verifiedVersions: ["codex-cli 0.169.0-alpha.11.1", "codex-cli 0.171.0-alpha.13"],
   invocation({ model, session, prompt, attachmentDirectory }) {
     const args = ["exec", "--json", "--skip-git-repo-check"];
     if (model) args.push("--model", model);
