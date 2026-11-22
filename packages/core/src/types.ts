@@ -117,6 +117,8 @@ export interface SessionAdapter {
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
   prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>): Promise<FileSet>;
+  /** Resolve a CLI-resumable identity when the native store distinguishes sessions from trajectories. */
+  localResumeId?(session: CSR, sourcePath: string): string | undefined;
   /** Publish a separate, resumable snapshot when the desktop and CLI have separate native stores. */
   publishDesktopSession?(input: DesktopPublication): Promise<string>;
   detect(input: FileSet): Detection | Promise<Detection>;

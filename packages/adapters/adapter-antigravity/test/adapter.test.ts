@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import path from "node:path";
+import os from "node:os";
 import initSqlJs from "sql.js";
 import { it, expect } from "vitest";
 import adapter from "../src/index.js";
@@ -32,6 +34,24 @@ it("rejects schema drift, unknown step formats, column/payload disagreement and 
     ["UPDATE steps SET step_type=999 WHERE idx=0", "disagree"],
     ["UPDATE steps SET has_subtrajectory=1 WHERE idx=0", "Subtrajectory"],
   ]) await expect(adapter.import(files(await mutate(statement!)))).rejects.toThrow(error!);
+});
+it("resolves CLI cascade IDs separately from trajectory IDs and imports mirrored user text once", async () => {
+  const db = new (await sql).Database(await fixture());
+  const id = "12345678-aaaa-4bbb-8ccc-123456789abc";
+  try {
+    db.run("UPDATE trajectory_meta SET cascade_id=?", [id]);
+    const type = wireRoot.lookupType("Step");
+    const original = db.exec("SELECT step_payload FROM steps WHERE idx=0")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step", original, "test").value;
+    step.user_input = {user_response: "Original prompt", items: [{text: "Original prompt"}]};
+    db.run("UPDATE steps SET step_payload=? WHERE idx=0", [type.encode(type.fromObject(step)).finish()]);
+    const {session} = await adapter.import(files(db.export()));
+    expect(session.turns[0]!.content).toEqual([{type:"text", text:"Original prompt"}]);
+    expect(session.meta.id).not.toBe(id);
+    const base = path.join(os.homedir(), ".gemini");
+    expect(adapter.localResumeId!(session, path.join(base, "antigravity-cli", "conversations", id + ".db"))).toBe(id);
+    expect(adapter.localResumeId!(session, path.join(base, "antigravity", "conversations", id + ".db"))).toBeUndefined();
+  } finally { db.close(); }
 });
 it("rejects nonempty WAL and truncated binary input", async () => {
   await expect(adapter.import([...files(await fixture()), { path: "sample.db-wal", bytes: Uint8Array.of(1) }])).rejects.toThrow("WAL");

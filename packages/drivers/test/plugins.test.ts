@@ -1,7 +1,31 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+import os from "node:os";
+import path from "node:path";
+import * as fs from "node:fs/promises";
+import { createSandbox, removeSandbox } from "../../../tools/test-helpers.js";
 import { createDriverRegistry } from "../src/index.js";
 
 const registry = createDriverRegistry();
+it("discovers both Antigravity stores and flags a busy CLI conversation", async () => {
+  const sandbox = await createSandbox();
+  const homedir = vi.spyOn(os, "homedir").mockReturnValue(sandbox);
+  try {
+    const driver = registry.get("antigravity");
+    const cli = path.join(sandbox, ".gemini", "antigravity-cli", "conversations");
+    await fs.mkdir(cli, {recursive:true});
+    await fs.writeFile(path.join(cli, "one.db"), "test");
+    await fs.writeFile(path.join(cli, "one.db-journal"), "busy");
+    expect(await driver.listLocalSessions()).toMatchObject([{id:"one", active:true}]);
+    const desktop = path.join(sandbox, ".gemini", "antigravity", "conversations");
+    await fs.mkdir(desktop, {recursive:true});
+    await fs.writeFile(path.join(desktop, "two.db"), "test");
+    expect((await driver.listLocalSessions()).map(s => s.id).sort()).toEqual(["one", "two"]);
+    expect(await driver.listLocalSessions(1)).toHaveLength(1);
+  } finally {
+    homedir.mockRestore();
+    await removeSandbox(sandbox);
+  }
+});
 it("uses explicit native resume with a prompt on stdin on each target", () => {
   for (const driver of registry.list()) {
     const { args, input } = driver.plugin.invocation({ session: "target-id", prompt: "new question", cwd: ".", model: "test-model" });

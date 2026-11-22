@@ -54,6 +54,11 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function localResumeId(adapter: SessionAdapter, session: CSR, sourcePath: string) {
+  const id = adapter.localResumeId ? adapter.localResumeId(session, sourcePath) : session.meta.id;
+  return id && SESSION_UUID.test(id) ? id : undefined;
+}
+
 function makeId(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
@@ -543,7 +548,7 @@ export class UiService {
       const adapter = this.adapters.get(ref.agent);
       const paths = [ref.sourcePath];
       const imported = await adapter.import(await this.prepareImport(adapter, await loadPathsAsFileSet(paths), paths));
-      if (imported.session.meta.id !== session.targetSessionId) throw new SessionError("INVALID_INPUT", "/reference", "The file now belongs to a different conversation.");
+      if (imported.session.meta.id !== (ref.sourceSessionId ?? session.targetSessionId)) throw new SessionError("INVALID_INPUT", "/reference", "The file now belongs to a different conversation.");
       const messages = imported.session.transcript
         ? csrTurnsToChatMessages(imported.session.turns, ref.agent, session.createdAt, imported.session.transcript)
         : session.messages;
@@ -717,7 +722,7 @@ export class UiService {
         const canReference = Boolean(
           input.paths &&
             input.paths.length === 1 &&
-            SESSION_UUID.test(imported.session.meta.id) &&
+            localResumeId(detected, imported.session, input.paths[0]!) &&
             (resolvedLocalCwd !== undefined || !imported.session.meta.cwd),
         );
         preview = {
@@ -894,7 +899,8 @@ export class UiService {
         ? sameLocalPath(effectiveCwd, sourceLocalCwd)
         : !imported.session.meta.cwd;
 
-      if (pathUnchanged && SESSION_UUID.test(imported.session.meta.id)) {
+      const resumeId = localResumeId(source, imported.session, request.paths[0]!);
+      if (pathUnchanged && resumeId) {
         const firstUserText = imported.session.turns
           .find((turn) => turn.role === "user")
           ?.content.find((block) => block.type === "text");
@@ -915,7 +921,8 @@ export class UiService {
             item.reference &&
             item.agent === source.id &&
             sameLocalPath(item.cwd, effectiveCwd) &&
-            item.targetSessionId === imported.session.meta.id,
+            (item.targetSessionId === resumeId || (sameLocalPath(item.reference.sourcePath, request.paths![0]!) &&
+              item.targetSessionId === imported.session.meta.id)),
         );
         const trimmedModel = request.model?.trim() || imported.session.meta.model;
         const timestamp = nowIso();
@@ -925,9 +932,10 @@ export class UiService {
           agent: source.id,
           ...(trimmedModel ? { model: trimmedModel } : {}),
           cwd: effectiveCwd,
-          targetSessionId: imported.session.meta.id,
+          targetSessionId: resumeId,
           bundlePending: false,
           reference: {
+            sourceSessionId: imported.session.meta.id,
             displayVersion: 1,
             sourcePath,
             agent: source.id,
@@ -1129,7 +1137,7 @@ export class UiService {
       const files = await this.resolveInputFileSet({ paths: [sourceSession.reference.sourcePath] });
       const adapter = this.adapters.get(sourceSession.agent);
       const imported = await adapter.import(await this.prepareImport(adapter, files, [sourceSession.reference.sourcePath]));
-      if (imported.session.meta.id !== sourceSession.targetSessionId) {
+      if (imported.session.meta.id !== (sourceSession.reference.sourceSessionId ?? sourceSession.targetSessionId)) {
         throw new SessionError("INVALID_INPUT", "/handoff", "The source file now belongs to a different conversation.");
       }
       referenced = imported.session;

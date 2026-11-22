@@ -1,5 +1,7 @@
 import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { createRequire } from "node:module";
+import os from "node:os";
+import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 import { decodeWire } from "./wire.js";
@@ -78,6 +80,13 @@ function workspaceDirectory(metadata: Record<string, JsonValue> | undefined) {
 const adapter: SessionAdapter = {
   id: "antigravity", displayName: "Antigravity", status: "ready", supportedVersions: [formatVersion],
   publishDesktopSession: async input => publishWhenDesktopClosed(input, await engine()),
+  localResumeId(session, sourcePath) {
+    const meta = session.xExtensions["x-antigravity-trajectory"];
+    const id = isRecord(meta) && meta.cascade_id;
+    if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return undefined;
+    const nativePath = path.join(os.homedir(), ".gemini", "antigravity-cli", "conversations", id + ".db");
+    return path.relative(nativePath, path.resolve(sourcePath)) === "" ? id : undefined;
+  },
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["sqlite-conversation-step0"], exportFormats: ["injection-bundle"] },
   readProjectDirectory: async files => {
     const { file, db } = await open(files);
@@ -129,10 +138,12 @@ const adapter: SessionAdapter = {
         switch (step.type) {
           case 14: {
             role = "user"; const user = object(step.user_input, at);
-            // query is legacy; user_response and TextOrScopeItem carry distinct native user inputs.
+            // CLI and desktop can mirror a single text item into user_response.
+            const mirror = Array.isArray(user.items) && user.items.length === 1 &&
+              isRecord(user.items[0]) && user.items[0].text === user.user_response;
             for (const key of ["query", "user_response"]) if (typeof user[key] === "string" && user[key]) content.push({ type: "text", text: user[key] });
             if (Array.isArray(user.items)) for (const item of user.items) {
-              const entry = object(item, at); if (typeof entry.text === "string") content.push({ type: "text", text: entry.text });
+              const entry = object(item, at); if (!mirror && typeof entry.text === "string") content.push({ type: "text", text: entry.text });
               opaqueFields(content, entry, ["item"]);
             }
             opaqueFields(content, user, ["active_user_state", "images", "artifact_comments", "media", "file_diff_comments", "file_comments", "side_channels"]);

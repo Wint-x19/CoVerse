@@ -43,8 +43,9 @@ async function listAntigravityModels(executable: Executable | null): Promise<Mod
   }
 }
 
-async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
-  const root = path.join(os.homedir(), ".gemini", "antigravity", "conversations");
+const sessionRoot = () => path.join(os.homedir(), ".gemini");
+
+async function listStore(root: string) {
   let entries;
   try { entries = await fs.readdir(root, { withFileTypes: true }); } catch (error) { ignoreMissingEntry(error); return []; }
 
@@ -58,15 +59,23 @@ async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef
     } catch (error) { ignoreMissingEntry(error); }
   }
 
-  dbs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return dbs;
+}
+
+async function listAntigravityLocalSessions(limit = 60): Promise<LocalSessionRef[]> {
+  const stores = await Promise.all(["antigravity", "antigravity-cli"].map(
+    name => listStore(path.join(sessionRoot(), name, "conversations")),
+  ));
+  const dbs = stores.flat().sort((a, b) => b.mtimeMs - a.mtimeMs);
   const refs: LocalSessionRef[] = [];
   for (const db of dbs.slice(0, limit)) {
     const id = db.name.replace(/\.db$/, "");
     let active = false;
-    try {
-      const wal = await fs.stat(db.fullPath + "-wal");
-      if (wal.size > 0) active = true;
-    } catch (error) { ignoreMissingEntry(error); }
+    for (const suffix of ["-wal", "-journal"]) {
+      try {
+        if ((await fs.stat(db.fullPath + suffix)).size > 0) active = true;
+      } catch (error) { ignoreMissingEntry(error); }
+    }
     refs.push({
       id,
       agent: "antigravity",
@@ -126,5 +135,6 @@ export const antigravity: DriverPlugin = {
     };
   },
   listModels: listAntigravityModels,
+  localSessionsRoot: sessionRoot,
   listLocalSessions: listAntigravityLocalSessions,
 };
