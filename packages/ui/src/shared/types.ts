@@ -113,6 +113,7 @@ export type FilePreview =
   | { kind: "directory"; path: string; entries: string[] };
 
 export interface ChatMessage {
+  relatedSessions?: import("@coverse/core").RelatedSession[];
   sources?: import("@coverse/core").RecordedSource[];
   recordedTime?: boolean;
   usageScope?: import("@coverse/core").MessageMetadata["usageScope"];

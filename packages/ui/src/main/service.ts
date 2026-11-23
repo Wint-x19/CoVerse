@@ -1219,6 +1219,7 @@ export class UiService {
           ...(message.durationMs !== undefined ? {durationMs:message.durationMs} : {}),
           ...(message.reviews?.length ? {reviews:message.reviews} : {}),
           ...(message.plan ? {plan:message.plan} : {}),
+          ...(message.relatedSessions ? {relatedSessions:message.relatedSessions} : {}),
           ...(changedFiles?.length ? {changedFiles} : {}),
           origin:{artifact:"coverse-desktop/sessions.json",record:index+1,kind:"message",
             ...(message.lineage?.parentId ? {parentId:"ui-" + message.lineage.parentId} : {}),
@@ -1258,6 +1259,7 @@ export class UiService {
         ...(m.sources ? {sources:m.sources} : {}),
         ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
         ...(m.lineage ? {lineage:m.lineage} : {}),
+        ...(m.relatedSessions ? {relatedSessions:m.relatedSessions} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {

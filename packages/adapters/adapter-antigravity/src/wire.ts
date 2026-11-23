@@ -22,6 +22,9 @@ message GroundingSupport { int32 start_index = 1; int32 end_index = 2; repeated 
 message GroundingMetadata { repeated Source sources = 1; repeated GroundingSupport grounding_supports = 2; }
 message TaskBoundary { string task_name = 1; string task_status = 2; string task_summary = 3; string task_summary_with_citations = 4; int32 mode = 5; string delta_summary = 6; string delta_summary_with_citations = 7; }
 message TaskSnapshot { string task_id = 1; string tool_name = 2; string tool_summary = 3; string description = 4; Timestamp start_time = 5; uint32 step_index = 6; string log_uri = 7; bool is_daemon = 8; }
+message SubagentSpec { string type_name = 1; string role = 2; string initial_prompt = 3; bool inherit = 4; string branch = 5; string workspace_uri = 6; int32 model = 7; int32 model_tier = 8; string share = 10; bool run_as_task = 9; bool fork = 11; string model_option = 12; }
+message SubagentResult { string conversation_id = 1; string log_absolute_uri = 2; repeated string workspace_uris = 3; }
+message SubagentSnapshot { SubagentSpec spec = 4; SubagentResult result = 5; bool killed = 6; int32 spawn_step_index = 7; }
 message TrajectoryReference { string trajectory_id = 1; int32 step_index = 2; int32 trajectory_type = 3; int32 step_type = 4; int32 reference_type = 5; string conversation_id = 6; }
 message ChildTrajectory { string trajectory_id = 1; repeated bytes steps = 2; repeated bytes generator_metadata = 3; int32 trajectory_type = 4; repeated TrajectoryReference parent_references = 5; string cascade_id = 6; bytes metadata = 7; int32 source = 8; repeated bytes executor_metadatas = 9; repeated bytes battle_mode_infos = 10; }
 message ArtifactSnapshot { string artifact_name = 1; string content = 2; string artifact_absolute_uri = 3; Timestamp last_edited = 4; ArtifactReviewState review_state = 5; ArtifactMetadata artifact_metadata = 6; UrlArtifact url_artifact_payload = 7; }

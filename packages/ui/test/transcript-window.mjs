@@ -48,6 +48,7 @@ try {
         results:[{text:"Recorded tool output"}],timestamp:at}],
       changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
     {id:"p",role:"assistant",agent:"codex",createdAt:at,content:"Review the change",
+      relatedSessions:[{kind:"child",id:"linked-fixture",label:"Linked session"}],
       model:"model-test",durationMs:350,usage:{input:7,output:3,reasoning:1},usageScope:"request",
       sources:[{url:"https://example.org/fixture",title:"Recorded source"}],
       plan:{text:"Review the change",steps:[{title:"Run tests",status:"completed"}]},
@@ -55,7 +56,7 @@ try {
   ]});
   registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => [],
     locateFile:async () => path.join(root,"two lines.md")});
-  await store.upsertSession({...session,id:"partial",title:"Partial fixture",messages:[
+  await store.upsertSession({...session,id:"partial",targetSessionId:"linked-fixture",title:"Partial fixture",messages:[
     {id:"available",role:"user",content:"Kept part",createdAt:at,historical:true},
   ],readOnly:[{code:"MISSING_ATTACHMENT",path:"full.log",message:"Missing companion full.log",severity:"warning"}]});
   win = new BrowserWindow({show: false, webPreferences: {
@@ -233,8 +234,10 @@ try {
   assert.match(located,/first line\nsecond line/);
   const partial = await win.webContents.executeJavaScript('(' + (async () => {
     document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
-    document.querySelector('[data-testid="session-item-partial"]').click();
-    await new Promise(resolve => requestAnimationFrame(resolve));
+    document.querySelector('button[title="linked-fixture"]').click();
+    for (let i=0;i<100 && !document.body.innerText.includes("Missing companion full.log");i++) {
+      await new Promise(resolve => setTimeout(resolve,30));
+    }
     return [document.body.innerText.includes("Missing companion full.log"),!!document.querySelector('[data-testid="composer"]')];
   }).toString() + ')()');
   assert.deepEqual(partial,[true,false]);

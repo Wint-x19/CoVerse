@@ -57,6 +57,28 @@ it("opens embedded subtrajectory messages separately and verifies their declared
     expect(new TextDecoder().decode(exported.artifacts.find(a => a.path === "session.json")!.bytes)).toContain("child output");
   } finally {db.close();}
 });
+it("preserves links to external subagent logs and parent steps in partial history",async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const encode = (name:string,obj:object) => wireRoot.lookupType(name).encode(wireRoot.lookupType(name).fromObject(obj)).finish();
+    const raw = db.exec("SELECT step_payload FROM steps WHERE idx=5")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step",raw,"checkpoint").value;
+    (step.checkpoint as Record<string,unknown>).subagent_snapshots = [encode("SubagentSnapshot",{
+      spec:{role:"Reviewer"},result:{conversation_id:"child-session",log_absolute_uri:"file:///old/log.txt"},
+    })];
+    db.run("UPDATE steps SET step_payload=? WHERE idx=5",[encode("Step",step)]);
+    const child = (await adapter.import([...files(db.export()),{path:"logs/log.txt",bytes:new Uint8Array([65])}])).session.turns[5]!;
+    expect(child.relatedSessions).toEqual([{kind:"child",id:"child-session",label:"Reviewer"}]);
+    expect(child.content).toContainEqual(expect.objectContaining({type:"media",asset:expect.objectContaining({value:"logs/log.txt"})}));
+    db.run("INSERT INTO parent_references(idx,data) VALUES(0,?)",[encode("TrajectoryReference",{
+      trajectory_id:"parent-trajectory",conversation_id:"parent-session",step_index:4})]);
+    const exported = files(db.export());
+    await expect(adapter.import(exported)).rejects.toThrow(/parent trajectory/i);
+    expect((await adapter.readForDisplay!(exported)).session.turns[0]?.relatedSessions).toEqual([
+      {kind:"parent",id:"parent-session",trajectoryId:"parent-trajectory",step:4},
+    ]);
+  } finally {db.close();}
+});
 it("displays a verified task-boundary step with its state and summary", async () => {
   const db = new (await sql).Database(await fixture());
   try {

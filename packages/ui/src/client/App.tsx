@@ -324,6 +324,30 @@ export function App() {
     }
   };
 
+  const openRelated = async (agent:string,ref:import("@coverse/core").RelatedSession) => {
+    try {
+      const ids = [ref.id,ref.trajectoryId].filter(Boolean);
+      const existing = sessions.filter(s => s.agent === agent && (ids.includes(s.targetSessionId) || (s.reference && (
+        ids.includes(s.reference.sourceSessionId) || ids.includes(s.reference.sourcePath.split(/[\\/]/).at(-1)?.replace(/\.db$/i,""))))));
+      const known = existing.find(s => s.cwd === activeSession?.cwd) ?? (existing.length === 1 ? existing[0] : undefined);
+      let opened:UiSession;
+      if (known) opened = await api.getSession(known.id);
+      else {
+        const matches = (await api.listLocalSessions(agent)).filter(r => ids.includes(r.id));
+        const local = matches.find(s => s.cwd === activeSession?.cwd) ?? (matches.length === 1 ? matches[0] : undefined);
+        if (!local) throw new Error(t.missingRelated + " · " + ref.id);
+        const input = {paths:[local.path]};
+        const inspected = await api.inspectSource(input);
+        opened = await api.convertSource({...input,from:agent,to:agent,materialize:false,
+          ...(inspected.canReadPartial ? {viewOnly:true} : {}), ...(inspected.preview?.cwd ? {cwd:inspected.preview.cwd} : {})});
+      }
+      upsertLocalSession(opened);setActiveSessionId(opened.id);setBannerError(null);
+      if (ref.step !== undefined) requestAnimationFrame(() => {
+        document.getElementById("timeline-" + (ref.trajectoryId ?? ref.id) + ":" + ref.step)?.scrollIntoView({block:"center"});
+      });
+    } catch (e) {setBannerError(e instanceof Error ? e.message : String(e));}
+  };
+
   const handleDeleteSession = async (id: string) => {
     try {
       await api.deleteSession(id);
@@ -621,6 +645,7 @@ export function App() {
                       }
                       t={t}
                       onInspectHandoff={() => setInspectorOpen(true)}
+                      onOpenRelated={openRelated}
                     />
                     <div className="shrink-0 px-6 pb-5 pt-2 flex justify-center">
                       {activeSession?.readOnly ? <div className="w-full max-w-[740px] rounded border p-3 text-xs">

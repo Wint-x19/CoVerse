@@ -74,6 +74,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     ...(m.sources ? {sources:m.sources} : {}),
     ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
     ...(m.lineage ? {lineage:m.lineage} : {}),
+    ...(m.relatedSessions ? {relatedSessions:m.relatedSessions} : {}),
     ...(m.tools?.length ? {tools:m.tools.map(tool => ({...tool,timestamp:m.createdAt ?? timestamp}))} : {}),
     ...(m.durationMs !== undefined ? {durationMs:m.durationMs} : {}),
   }));
@@ -119,7 +120,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       if (block.type === "reasoning") reasoning.push(block.text);
     }
     const content = parts.join("\n\n");
-    if (!content && !sources.length && !turn.childTrajectory && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
+    if (!content && !sources.length && !turn.relatedSessions?.length && !turn.childTrajectory && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
     const base = {id:turn.id,content,createdAt:turn.createdAt ?? timestamp,historical:true,
       ...(turn.createdAt ? {recordedTime:true} : {}), ...(turn.model ? {model:turn.model} : {}),
@@ -144,6 +145,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       ...(sources.length ? {sources} : {}),
       ...(lineage && Object.keys(lineage).length ? {lineage} : {}),
       ...(turn.childTrajectory?.turns.length ? {childBranch:turn.childTrajectory.id} : {}),
+      ...(turn.relatedSessions?.length ? {relatedSessions:turn.relatedSessions} : {}),
       ...(turn.reviews?.length ? {reviews:turn.reviews} : {})});
   }
   const visible = new Set(messages.map(m => m.id));

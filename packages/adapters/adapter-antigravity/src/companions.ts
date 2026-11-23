@@ -65,6 +65,10 @@ export async function nativeCompanions(files:FileSet,sourcePath:string,id:string
       uris.add(snapshot.artifact_absolute_uri);
       if (typeof snapshot.content === "string") for (const uri of localLinks(snapshot.content,snapshot.artifact_absolute_uri)) uris.add(uri);
     }
+    if (isRecord(step.checkpoint) && Array.isArray(step.checkpoint.subagent_snapshots)) for (const entry of step.checkpoint.subagent_snapshots) {
+      const child = nestedRecord("SubagentSnapshot",entry,"/subsessions");
+      if (isRecord(child?.result) && typeof child.result.log_absolute_uri === "string") uris.add(child.result.log_absolute_uri);
+    }
   }
   const result = [...files];
   for (const uri of uris) {

@@ -75,13 +75,17 @@ async function importHistory(files:FileSet, forDisplay = false) {
     const diagnostics:SessionDiagnostic[] = [];
     const session: CSR = { schemaVersion: "1.0", meta: { id: requireString(meta[0]!.trajectory_id, file.path), agent: "antigravity", agentFormatVersion: formatVersion }, turns: [], xExtensions: { "x-antigravity-trajectory": jsonRow(meta[0]!) }, sourceArtifacts: files, raw: {} };
     for (const table of Object.keys(columns)) (session.raw as Record<string, JsonValue>)[table] = rows(db, `SELECT * FROM ${table}${table === "steps" ? " ORDER BY idx" : ""}`).map(jsonRow);
+    const parents: CSR["turns"] = [];
     for (const row of rows(db,"SELECT * FROM parent_references ORDER BY idx")) {
       if (!forDisplay) throw new SessionError("MISSING_RELATED_RECORD",file.path,"Referenced parent trajectory requires its original history");
       const ref = row.data instanceof Uint8Array ? decodeWire("TrajectoryReference",row.data,file.path).value : {};
       const at = file.path + "/parent_references/" + row.idx;
       const message = "Parent trajectory " + String(ref.conversation_id ?? ref.trajectory_id ?? row.idx) + " · step " + String(ref.step_index ?? "?");
       diagnostics.push({code:"MISSING_RELATED_RECORD",path:at,message,severity:"warning"});
-      session.turns.push({id:at,role:"system",content:[{type:"text",text:message}],event:{id:at,kind:"context",text:message}});
+      const id = ref.conversation_id ?? ref.trajectory_id;
+      parents.push({id:at,role:"system",content:[{type:"text",text:message}],event:{id:at,kind:"context",text:message},
+        ...(typeof id === "string" ? {relatedSessions:[{id,kind:"parent",...(typeof ref.step_index === "number" ? {step:ref.step_index} : {}),
+          ...(typeof ref.trajectory_id === "string" ? {trajectoryId:ref.trajectory_id} : {})}]} : {})});
     }
     const metadata = trajectoryMetadata(db, file.path);
     if (metadata) {
@@ -94,6 +98,7 @@ async function importHistory(files:FileSet, forDisplay = false) {
       }
     }
     readSteps(session, rows(db, "SELECT * FROM steps ORDER BY idx"),{file,files,ledger,...(forDisplay ? {missing:diagnostics} : {})});
+    session.turns = [...parents,...session.turns];
     ledger.downgraded.push({ code: "ARCHIVED_NATIVE_STATE", path: "/raw", reason: "Database generation, executor, rendering, configuration and permission state is archived; it is not restored in the target Agent" });
     if (diagnostics.length) session.incomplete = diagnostics;
     return { session, ledger,diagnostics };

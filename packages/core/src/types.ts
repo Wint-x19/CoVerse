@@ -48,6 +48,7 @@ export interface Turn extends MessageMetadata {
   plan?: RecordedPlan;
   event?: HistoryEvent;
   childTrajectory?: {id:string;turns:Turn[]};
+  relatedSessions?: RelatedSession[];
   assets?: RecordedAsset[];
   reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
@@ -78,6 +79,7 @@ export interface RecordedAsset {
 }
 
 export interface RecordedSource {url:string;title?:string;excerpt?:string}
+export interface RelatedSession {id:string;kind:"parent"|"child";label?:string;step?:number;trajectoryId?:string}
 
 export interface RecordedTool {
   sources?: RecordedSource[];
@@ -112,6 +114,7 @@ export interface MessageLineage {
 }
 
 export interface TranscriptMessage extends MessageMetadata {
+  relatedSessions?: RelatedSession[];
   id: string;
   role: "user" | "assistant";
   text: string;

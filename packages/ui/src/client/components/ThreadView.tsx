@@ -19,6 +19,7 @@ interface ThreadViewProps {
   streaming: StreamingState | null;
   t: I18nMessages;
   onInspectHandoff: () => void;
+  onOpenRelated: (agent:string,ref:NonNullable<ChatMessage["relatedSessions"]>[number]) => void;
 }
 
 function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
@@ -236,6 +237,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
 
 const JumpContext = React.createContext<(id:string) => void>(() => {});
 const BrowseContext = React.createContext<(id:string) => void>(() => {});
+const RelatedContext = React.createContext<ThreadViewProps["onOpenRelated"]>(() => {});
 
 function HistoryEvents({events,t}: {events:ChatMessage["before"];t:I18nMessages}) {
   const jump = React.useContext(JumpContext);
@@ -255,6 +257,7 @@ function HistoryEvents({events,t}: {events:ChatMessage["before"];t:I18nMessages}
 function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
   const jump = React.useContext(JumpContext);
   const browse = React.useContext(BrowseContext);
+  const related = React.useContext(RelatedContext);
   const visible = message.content || message.tools?.length || message.reasoning || message.plan || message.changedFiles?.length ||
     message.assets?.length || message.sources?.length || message.reviews?.length || message.error || message.usage;
   return <MessageOrigin.Provider value={message.id}>
@@ -269,11 +272,15 @@ function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
       </div>}
       {(visible || !(message.before || message.after)) && <MessageRow message={message} t={t}/>}
       {message.childBranch && <button type="button" className="cursor-pointer text-xs text-[var(--accent-text)]" onClick={() => browse(message.childBranch!)}>{t.openSubsession}</button>}
+      {message.relatedSessions?.map((ref,i) => <button type="button" key={i} title={ref.id}
+        className="my-1 block cursor-pointer text-xs text-[var(--accent-text)]" onClick={() => related(message.agent ?? "",ref)}>
+        {ref.kind === "child" ? t.openSubsession : t.openParentSession} · {ref.label || ref.id}
+      </button>)}
       <HistoryEvents events={message.after} t={t}/></div>
   </MessageOrigin.Provider>;
 }
 
-export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadViewProps) {
+export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -336,6 +343,7 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
 
   return (
     <JumpContext.Provider value={jump}>
+    <RelatedContext.Provider value={onOpenRelated}>
     <BrowseContext.Provider value={id => setSelection({sessionId:session.id,id})}>
     <div className="flex-1 overflow-y-auto" data-testid="thread-view">
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
@@ -386,6 +394,6 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
         <div ref={bottomRef} />
       </div>
     </div>
-    </BrowseContext.Provider></JumpContext.Provider>
+    </BrowseContext.Provider></RelatedContext.Provider></JumpContext.Provider>
   );
 }

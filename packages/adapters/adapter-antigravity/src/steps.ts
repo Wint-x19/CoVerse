@@ -48,6 +48,7 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
     const changedFiles: RecordedFileChange[] = [];
     let reviews: Turn["reviews"];
     let plan: Turn["plan"];
+    const related:NonNullable<Turn["relatedSessions"]> = [];
     let event: Turn["event"];
     let role: Turn["role"] = "system", kind: NonNullable<Turn["origin"]>["kind"] = "message";
     const recordCall = (value: JsonValue, inPlanner: boolean) => {
@@ -174,6 +175,20 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
           content.push({type:"text", text:"Historical file change:\n" + stringifyWireJson(diff, null, 2)});
         }
         readArtifactSnapshots(checkpoint, content, files, at);
+        if (Array.isArray(checkpoint.subagent_snapshots)) for (const bytes of checkpoint.subagent_snapshots) {
+          const child = nestedRecord("SubagentSnapshot",bytes,at);
+          if (!child) {content.push({type:"opaque",source:"antigravity:subagent_snapshots",value:bytes});continue;}
+          const result = isRecord(child.result) ? child.result : {}, spec = isRecord(child.spec) ? child.spec : {};
+          const label = spec.role ?? spec.type_name;
+          if (typeof result.conversation_id === "string") related.push({kind:"child",id:result.conversation_id,
+            ...(typeof label === "string" ? {label} : {})});
+          content.push({type:"text",text:"Historical subagent:\n" + stringifyWireJson(child,null,2)});
+          if (typeof result.log_absolute_uri === "string") {
+            const file = companionForUri(result.log_absolute_uri,files);
+            content.push({type:"media",asset:{location:file ? "attachment" : "project",sourceUri:result.log_absolute_uri,
+              value:file?.path ?? result.log_absolute_uri,mediaType:"text/plain",label:typeof label === "string" ? label : "Subagent log"}});
+          }
+        }
         if (Array.isArray(checkpoint.running_task_snapshots)) for (const bytes of checkpoint.running_task_snapshots) {
           const task = nestedRecord("TaskSnapshot",bytes,at);
           const title = task?.description ?? task?.tool_summary ?? task?.task_id;
@@ -184,7 +199,7 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
           (plan ??= {steps:[]}).steps.push({title,status:"in_progress"});
           content.push({type:"text",text:"Historical running task:\n" + stringifyWireJson(task,null,2)});
         }
-        opaqueFields(content, checkpoint, opaqueKeys.filter(key => !["trajectory_file_diffs","artifact_snapshots","running_task_snapshots"].includes(key))); break;
+        opaqueFields(content, checkpoint, opaqueKeys.filter(key => !["trajectory_file_diffs","artifact_snapshots","running_task_snapshots","subagent_snapshots"].includes(key))); break;
       }
       default: throw new SessionError("UNSUPPORTED_VERSION", at, "Unverified Antigravity step type");
     }
@@ -194,6 +209,7 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
       ...(changedFiles.length ? {changedFiles} : {}),
       ...(reviews?.length ? {reviews} : {}),
       ...(plan ? {plan} : {}),
+      ...(related.length ? {relatedSessions:related} : {}),
       ...(event ? {event} : {}),
       origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind,
         ...(previousId ? {parentId:previousId} : {}), ...(parent ? {subsession:true} : {}) } });
