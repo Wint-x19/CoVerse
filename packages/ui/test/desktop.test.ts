@@ -162,6 +162,32 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("recovers status-only live file changes from the matching native turn and never substitutes another turn", async () => {
+    const root = await makeTempDir("coverse-live-diff-");
+    const id = "11111111-2222-4333-8444-555555555555";
+    const file = path.join(root,"rollout-test.jsonl");
+    const done = (item:object) => ({type:"event_msg",payload:{type:"item_completed",turn_id:"turn-1",item}});
+    await fs.writeFile(file,[
+      {type:"session_meta",payload:{id,cli_version:"0.169.0-alpha.11.1",cwd:root}},
+      done({type:"UserMessage",id:"u",content:[{type:"text",text:"edit it"}]}),
+      done({type:"FileChange",id:"f",status:"completed",changes:{"note.txt":{type:"update",unified_diff:"@@ -1 +1 @@\n-old\n+written"}}}),
+      done({type:"AgentMessage",id:"a",content:[{type:"text",text:"echo:codex:direct:default"}]}),
+    ].map(row => JSON.stringify(row)).join("\n"));
+    const plugin = createFakeDriverPlugin("codex");
+    const decode = plugin.decoder();
+    plugin.decoder = () => record => record.event === "tool" ? [{type:"tool",name:"file_change",state:"completed",
+      changedFiles:[{path:"note.txt",added:null,removed:null}]}] : decode(record);
+    plugin.listLocalSessions = async () => [{id,agent:"codex",title:"fixture",cwd:root,path:file,size:100,updatedAt:new Date().toISOString()}];
+    const drivers = new DriverRegistry().register(new AgentDriver(plugin,{command:process.execPath}));
+    const service = new UiService(createAdapterRegistry(),drivers,new UiStore(path.join(root,"ui")),root);
+    for (const prompt of ["edit it","different turn"]) {
+      const session = await service.createSession({agent:"codex",cwd:root});
+      await service.runTurn(session.id,{prompt},() => {});
+      const final = (await service.getSession(session.id)).messages.at(-1);
+      if (prompt === "edit it") expect(final?.changedFiles?.[0]?.patches).toEqual(["@@ -1 +1 @@\n-old\n+written"]);
+      else expect(final?.changedFiles).toBeUndefined();
+    }
+  });
   it("opens nested histories on a separate path and maintains a jump back to the outer turn", () => {
     const messages = csrTurnsToChatMessages([{id:"outer",role:"user",content:[{type:"text",text:"outer question"}],
       origin:{artifact:"a.db",record:0,branchId:"main"},childTrajectory:{id:"child",turns:[

@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {fromUnifiedDiff,isRecord,type RecordedFileChange} from "@coverse/core";
 import { driverError, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, wireText, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
 
 function codexHome(): string {
@@ -175,7 +176,14 @@ export const codex: DriverPlugin = {
           const rest = Object.fromEntries(Object.entries(item).filter(([k]) => ![
             "type","id","status","tool","command","query","arguments","error","result","aggregated_output",
           ].includes(k)));
+          const files: RecordedFileChange[] = [];
+          if (item.type === "file_change" && Array.isArray(item.changes)) for (const change of item.changes) {
+            if (!isRecord(change) || typeof change.path !== "string") continue;
+            const patch = change.unified_diff ?? change.diff;
+            files.push(typeof patch === "string" ? fromUnifiedDiff(change.path,patch) : {path:change.path,added:null,removed:null});
+          }
           return [{type:"tool", name:String(item.tool ?? item.type), state:failed ? "failed" : String(item.status ?? record.type),
+            ...(files.length ? {changedFiles:files} : {}),
             ...(typeof item.id === "string" ? {id:item.id} : {}),
             ...(args !== undefined ? {argumentsText:wireText(args)} : {}),
             ...(output !== undefined ? {results:[{text:wireText(output),...(failed ? {failed:true} : {})}]} : {}),

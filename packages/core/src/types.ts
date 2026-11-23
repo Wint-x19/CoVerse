@@ -77,6 +77,7 @@ export interface RecordedAsset {
 }
 
 export interface RecordedTool {
+  changedFiles?: RecordedFileChange[];
   plan?: RecordedPlan;
   id?: string;
   name: string;
@@ -188,6 +189,7 @@ export interface SessionAdapter {
   readonly supportedVersions: readonly string[];
   readonly capabilities: Readonly<AdapterCapabilities>;
   readToolPlan?(name: string, args: JsonValue, result?: JsonValue): RecordedPlan | undefined;
+  readToolChanges?(name:string, args:JsonValue, result?:JsonValue): RecordedFileChange[] | undefined;
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
   prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>): Promise<FileSet>;

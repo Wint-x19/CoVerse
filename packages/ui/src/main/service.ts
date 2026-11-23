@@ -1133,6 +1133,7 @@ export class UiService {
       if (message.reviews?.length) content.push({type:"text",displayAs:"review",
         text:"Historical review:\n" + JSON.stringify(message.reviews, null, 2)});
       if (content.length > 0) {
+        const changedFiles = message.changedFiles ?? message.tools?.flatMap(t => t.changedFiles ?? []);
         turns.push({
           id: `ui-${message.id}`,
           role: message.role,
@@ -1143,7 +1144,11 @@ export class UiService {
           ...(message.durationMs !== undefined ? {durationMs:message.durationMs} : {}),
           ...(message.reviews?.length ? {reviews:message.reviews} : {}),
           ...(message.plan ? {plan:message.plan} : {}),
-          origin: { artifact: "coverse-desktop/sessions.json", record: index + 1, kind: "message" },
+          ...(changedFiles?.length ? {changedFiles} : {}),
+          origin:{artifact:"coverse-desktop/sessions.json",record:index+1,kind:"message",
+            ...(message.lineage?.parentId ? {parentId:"ui-" + message.lineage.parentId} : {}),
+            ...(message.lineage?.branchId ? {branchId:message.lineage.branchId} : {}),
+            ...(message.lineage?.subsession ? {subsession:true} : {}),...(message.lineage?.reverted ? {reverted:true} : {})},
         });
       }
       appendEvents(message.after,index+1,message.id + ":after");
@@ -1259,6 +1264,28 @@ export class UiService {
     this.activeRuns.clear();
   }
 
+  private async recoverRunChanges(agent:string, nativeId:string, cwd:string, prompt:string, answer:string) {
+    try {
+      const refs = (await this.listLocalSessions(agent)).filter(row => row.id === nativeId);
+      const ref = refs.find(row => row.cwd && sameLocalPath(row.cwd,cwd)) ?? (refs.length === 1 ? refs[0] : undefined);
+      if (!ref) return;
+      const adapter = this.adapters.get(agent);
+      const files = await this.prepareImport(adapter,await loadPathsAsFileSet([ref.path]),[ref.path]);
+      const {session} = await adapter.import(files);
+      if ((localResumeId(adapter,session,ref.path) ?? session.meta.id) !== nativeId) return;
+      const project = projectDirectory(session.meta.cwd);
+      if (project && !sameLocalPath(project,cwd)) return;
+      const history = csrTurnsToChatMessages(session.turns,agent,"",session.transcript);
+      let start = history.length - 1;
+      while (start >= 0 && history[start]!.role !== "user") start--;
+      if (start < 0 || history[start]!.content.trim() !== prompt.trim()) return;
+      const tail = history.slice(start+1);
+      if (answer.trim() && tail.filter(m => m.content.trim()).at(-1)?.content.trim() !== answer.trim()) return;
+      const changes = tail.flatMap(m => m.changedFiles ?? []);
+      return changes.some(f => f.patches?.length) ? changes : undefined;
+    } catch { return; } // The CLI may not have flushed its native file yet. Keep the original status-only event.
+  }
+
   async runTurn(
     sessionId: string,
     input: { prompt: string; model?: string; cwd?: string },
@@ -1368,12 +1395,18 @@ export class UiService {
           const {type, ...fields} = event;
           const update: ToolActivity = {...fields,timestamp:nowIso()};
           const readPlan = this.adapters.get(session.agent).readToolPlan;
+          const readChanges = this.adapters.get(session.agent).readToolChanges;
           const args = fields.argumentsText ?? (fields.id && tools.find(t => t.id === fields.id)?.argumentsText);
-          if (readPlan && args) {
+          if ((readPlan || readChanges) && args) {
             try {
               const result = fields.details && fields.results ? parseWireJson(fields.details) : undefined;
-              const plan = readPlan(fields.name,parseWireJson(args),result);
+              const parsed = parseWireJson(args);
+              const plan = readPlan?.(fields.name,parsed,result);
               if (plan) update.plan = plan;
+              if (fields.state === "completed") {
+                const changes = readChanges?.(fields.name,parsed,result);
+                if (changes) update.changedFiles = changes;
+              }
             } catch { /* Plain text custom-tool inputs still appear verbatim in the trace. */ }
           }
           tools = updateToolActivity(tools,update);
@@ -1385,10 +1418,17 @@ export class UiService {
         }
       }
 
+      const missingDiff = tools.some(tool => tool.changedFiles?.some(f => !f.patches));
+      const nativeChanges = missingDiff && acquiredSessionId ?
+        await this.recoverRunChanges(session.agent,acquiredSessionId,resolvedCwd,promptToSend,textBuffer) : undefined;
+      if (nativeChanges) for (const file of tools.flatMap(tool => tool.changedFiles ?? [])) {
+        if (!nativeChanges.some(native => sameLocalPath(path.resolve(resolvedCwd,native.path),path.resolve(resolvedCwd,file.path)))) nativeChanges.push(file);
+      }
       const assistantMessage: ChatMessage = {
         id: makeId("msg"),
         role: "assistant",
         content: textBuffer,
+        ...(nativeChanges ? {changedFiles:nativeChanges} : {}),
         durationMs:Date.now()-runStarted,
         ...(usageScope ? {usageScope} : {}),
         createdAt: nowIso(),

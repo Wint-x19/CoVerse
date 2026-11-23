@@ -1,4 +1,4 @@
-import { structuredPatch, type StructuredPatchHunk } from "diff";
+import { parsePatch, structuredPatch, type StructuredPatchHunk } from "diff";
 import type { RecordedFileChange } from "./types.js";
 
 export function fileChangeFromHunks(path: string, hunks: readonly StructuredPatchHunk[]): RecordedFileChange {
@@ -27,4 +27,12 @@ export function compareFileVersions(path: string, before: string, after: string)
   ];
   return fileChangeFromHunks(path, [{oldStart: old.length ? 1 : 0, oldLines: old.length,
     newStart: next.length ? 1 : 0, newLines: next.length, lines: [...body(before,old,"-"), ...body(after,next,"+")]}]);
+}
+
+export function fromUnifiedDiff(path:string, patch:string): RecordedFileChange {
+  try {
+    const hunks = parsePatch(patch).flatMap(file => file.hunks);
+    if (hunks.length) return {...fileChangeFromHunks(path,hunks),patches:[patch]};
+  } catch { /* Some tool outputs use a native patch dialect. Keep those lines readable. */ }
+  return {path,added:null,removed:null,patches:[patch]};
 }

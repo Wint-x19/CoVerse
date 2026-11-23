@@ -75,6 +75,8 @@ it("maps Codex and Antigravity tool and terminal records", () => {
 
 it("preserves tool identities, exact arguments and real outputs across each CLI stream", () => {
   const codex = registry.get("codex").plugin.decoder();
+  expect(codex({type:"item.completed",item:{id:"f",type:"file_change",changes:[{path:"a.md",diff:"@@ -1 +1 @@\n-a\n+b\n"},{path:"b.md",kind:"update"}]}})[0])
+    .toMatchObject({changedFiles:[{path:"a.md",added:1,removed:1,patches:["@@ -1 +1 @@\n-a\n+b\n"]},{path:"b.md",added:null,removed:null}]});
   expect(codex({type:"item.completed",item:{id:"c",type:"command_execution",command:"read example",exit_code:1,aggregated_output:"missing"}})[0])
     .toMatchObject({id:"c",argumentsText:"read example",results:[{text:"missing",failed:true}]});
   const claude = registry.get("claude-code").plugin.decoder();

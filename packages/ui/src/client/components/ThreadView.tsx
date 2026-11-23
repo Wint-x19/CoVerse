@@ -123,6 +123,10 @@ function ToolPlans({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages})
   return tools?.map((tool,i) => tool.plan ? <PlanCard key={i} plan={tool.plan} t={t}/> : null);
 }
 
+function ToolChanges({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages}) {
+  return tools?.map((tool,i) => tool.changedFiles?.length ? <ChangedFiles key={i} files={tool.changedFiles} t={t}/> : null);
+}
+
 function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMessages}) {
   return reviews?.map((review, index) => <section key={index} className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-sm">
     <FileLink target={{path:review.path}}>{review.path}</FileLink>
@@ -189,7 +193,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
           </div>
         )}
 
-        {message.changedFiles?.length ? <ChangedFiles files={message.changedFiles} t={t} /> : null}
+        {message.changedFiles?.length ? <ChangedFiles files={message.changedFiles} t={t} /> : <ToolChanges tools={message.tools} t={t}/>}
         <MessageAssets assets={message.assets}/>
         <ReviewCards reviews={message.reviews} t={t}/>
         {message.error && (
@@ -351,6 +355,7 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
               {streaming.reasoning && <ReasoningTrace text={streaming.reasoning} t={t}/>}
               {streaming.tools.length > 0 && <ToolTrace tools={streaming.tools} t={t} />}
               <ToolPlans tools={streaming.tools} t={t}/>
+              <ToolChanges tools={streaming.tools} t={t}/>
               {streaming.text ? (
                 <div className="cv-prose">
                   <MessageMarkdown text={streaming.text}/>

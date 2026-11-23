@@ -68,6 +68,10 @@ function blocks(content: JsonValue | undefined, at: string): ContentBlock[] {
 }
 const adapter: SessionAdapter = {
   readToolPlan,
+  readToolChanges(name,args,result) {
+    const file = recordedEdit({type:"tool_call",id:"",name,arguments:args},result);
+    return file ? [file] : undefined;
+  },
   id: "claude-code", displayName: "Claude Code", status: "ready", supportedVersions: [formatVersion],
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["transcript-jsonl"], exportFormats: ["injection-bundle"] },
   detect: files => { try { load(files); return { confidence: 1, formatVersion }; } catch (e) { return { confidence: 0, ...(e instanceof SessionError ? { diagnostics: [e.diagnostic] } : {}) }; } },
