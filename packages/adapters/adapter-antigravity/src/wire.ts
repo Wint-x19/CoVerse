@@ -9,6 +9,8 @@ message Timestamp { int64 seconds = 1; int32 nanos = 2; }
 // TrajectoryFileDiff fields verified against the 2.34.0 desktop descriptors.
 message TrajectoryFileDiff { string uri = 1; string original_content = 2; string modified_content = 3; bool is_artifact_file = 4; bool is_knowledge_file = 5; Timestamp last_modified_at = 6; bool has_model_edited = 7; uint32 first_touched_step_index = 8; uint32 last_touched_step_index = 9; bool is_noop = 10; bytes original_content_hash = 11; }
 message ReviewSelection { string content = 1; int32 start_line = 2; int32 end_line = 3; string before_text = 4; string after_text = 5; }
+message ImageData { string base64_data = 1; string mime_type = 2; string caption = 3; string uri = 4; }
+message Media { string mime_type = 1; bytes data = 2; }
 message DiffCommentInfo { ReviewSelection original_selection = 1; ReviewSelection modified_selection = 2; string comment = 3; }
 message FileCommentInfo { string comment = 1; ReviewSelection selection = 2; bytes image_selection = 3; }
 message FileComment { string file_uri = 1; repeated FileCommentInfo file_comment_infos = 2; }

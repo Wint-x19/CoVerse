@@ -1,4 +1,4 @@
-import { stringifyWireJson } from "@coverse/core";
+import { blockAsset, stringifyWireJson, type RecordedAsset } from "@coverse/core";
 import { recordedEdit } from "./file-edit.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
@@ -32,9 +32,17 @@ function blocks(content: JsonValue | undefined, at: string): ContentBlock[] {
       case "tool_use":
         if (b.input === undefined) throw new SessionError("INVALID_INPUT", at, "Tool input is missing");
         return { type: "tool_call", id: requireString(b.id, at), name: requireString(b.name, at), arguments: b.input };
-      case "tool_result":
+      case "tool_result": {
         if (b.content === undefined) throw new SessionError("INVALID_INPUT", at, "Tool result content is missing");
-        return { type: "tool_result", callId: requireString(b.tool_use_id, at), content: b.content, ...(typeof b.is_error === "boolean" ? { isError: b.is_error } : {}) };
+        const assets: RecordedAsset[] = [], visible: string[] = [];
+        if (Array.isArray(b.content)) for (const item of b.content) {
+          const media = isRecord(item) && (item.type === "image" || item.type === "document") && blockAsset(blocks([item],at)[0]!);
+          if (media) assets.push(media);
+          else visible.push(isRecord(item) && typeof item.text === "string" ? item.text : stringifyWireJson(item,null,2));
+        }
+        return { type: "tool_result", callId: requireString(b.tool_use_id, at), content: b.content,
+          ...(assets.length ? {assets,displayText:visible.join("\n\n")} : {}), ...(typeof b.is_error === "boolean" ? { isError: b.is_error } : {}) };
+      }
       case "image":
         if (isRecord(b.source)) {
           if (b.source.type === "url" && typeof b.source.url === "string") return { type: "image", url: b.source.url };
@@ -42,7 +50,16 @@ function blocks(content: JsonValue | undefined, at: string): ContentBlock[] {
         }
         break;
       case "document":
-        if (isRecord(b.source) && b.source.type === "text" && typeof b.source.data === "string") return { type: "text", text: `Historical document:\n${b.source.data}` };
+        if (isRecord(b.source)) {
+          const label = typeof b.title === "string" ? {label:b.title} : {};
+          const mediaType = typeof b.source.media_type === "string" ? b.source.media_type : "application/pdf";
+          if (b.source.type === "text" && typeof b.source.data === "string") return {type:"media",asset:{
+            location:"text",value:b.source.data,mediaType:"text/plain",...label}};
+          if (b.source.type === "url" && typeof b.source.url === "string") return {type:"media",asset:{
+            location:"remote",value:b.source.url,mediaType,...label}};
+          if (b.source.type === "base64" && typeof b.source.data === "string") return {type:"media",asset:{
+            location:"embedded",mediaType,value:"data:" + mediaType + ";base64," + b.source.data,...label}};
+        }
         break;
     }
     return { type: "opaque", source: "claude-code", value: b };

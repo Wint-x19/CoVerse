@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type { CoverseDesktopBridge } from "../shared/types.js";
 
 declare global {

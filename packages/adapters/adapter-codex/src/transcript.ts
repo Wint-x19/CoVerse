@@ -1,4 +1,4 @@
-import { isRecord, SessionError, stringifyWireJson, type JsonValue, type RecordedTool, type TranscriptMessage } from "@coverse/core";
+import { imageAsset, isRecord, SessionError, stringifyWireJson, type JsonValue, type RecordedAsset, type RecordedTool, type TranscriptMessage } from "@coverse/core";
 
 type Row = Record<string, JsonValue>;
 type Changes = { lines: boolean[]; removed: number; patches: string[] };
@@ -64,12 +64,18 @@ export function patchEventFiles(changes: Row, cwd?: string) {
   collectChanges(files, changes);
   return fileRows(files, cwd);
 }
-function textParts(content: JsonValue | undefined) {
+function textParts(content: JsonValue | undefined, assets: RecordedAsset[]) {
   if (!Array.isArray(content)) return "";
   return content.map(p => {
     if (!isRecord(p)) return "";
     if (typeof p.text === "string") return p.text;
-    if (p.type === "image" || p.type === "localImage" || p.type === "local_image") return "[image: " + (p.url ?? p.path ?? "") + "]";
+    if (["image","localimage","local_image","input_image","output_image"].includes(String(p.type).toLowerCase())) {
+      const source = p.url ?? p.path ?? p.image_url;
+      if (typeof source === "string") {
+        assets.push(imageAsset(source));
+        return "";
+      }
+    }
     return typeof p.name === "string" ? p.name : "";
   }).join("");
 }
@@ -124,11 +130,12 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
       const tool = nativeTool(item);
       if (tool) tools.push(tool);
       if (!["UserMessage", "AgentMessage", "Plan"].includes(String(item.type))) continue;
-      const text = item.type === "Plan" && typeof item.text === "string" ? item.text : textParts(item.content);
+      const assets: RecordedAsset[] = [];
+      const text = item.type === "Plan" && typeof item.text === "string" ? item.text : textParts(item.content, assets);
       if (item.type === "AgentMessage" && item.phase === "commentary") { activity.push(text); continue; }
-      if (!text) continue;
+      if (!text && !assets.length) continue;
       const role = item.type === "UserMessage" ? "user" : "assistant";
-      const msg: TranscriptMessage = { id, role, text, ...(at ? {createdAt: at} : {}) };
+      const msg: TranscriptMessage = { id, role, text, ...(at ? {createdAt: at} : {}), ...(assets.length ? {assets} : {}) };
       if (role === "assistant") {
         if (activity.length) msg.activity = activity.splice(0).join("\n\n");
         if (tools.length) msg.tools = tools.splice(0);

@@ -9,6 +9,23 @@ it("imports official-reader validated text, reasoning and tool chains", async ()
   expect(r.session.turns[1]!.content.map(b => b.type)).toEqual(["reasoning", "tool_call"]);
   expect((await adapter.export(r.session)).artifacts.map(f => f.path)).toContain("context.md");
 });
+it("preserves PDF and text documents as named previews", async () => {
+  const rows = await fixture();
+  rows[0].message.content = [
+    {type:"document",title:"notes",source:{type:"text",data:"page body"}},
+    {type:"document",title:"scan",source:{type:"base64",media_type:"application/pdf",data:"AQID"}},
+  ];
+  const {session} = await adapter.import(input(rows));
+  expect(session.turns[0]!.content).toEqual([
+    {type:"media",asset:{location:"text",label:"notes",mediaType:"text/plain",value:"page body"}},
+    {type:"media",asset:{location:"embedded",label:"scan",mediaType:"application/pdf",value:"data:application/pdf;base64,AQID"}},
+  ]);
+  const returned = [{type:"text",text:"preview"}, {type:"image",source:{type:"base64",media_type:"image/png",data:"AQID"}}];
+  rows[2].message.content[0].content = returned;
+  expect((await adapter.import(input(rows))).session.turns[2]!.content[0]).toMatchObject({
+    content:returned,displayText:"preview",assets:[{location:"embedded",mediaType:"image/png"}],
+  });
+});
 it("shows the recorded Edit hunks and distinguishes new files from overwrites with unknown history", async () => {
   const rows = await fixture();
   const call = rows[1].message.content[1];

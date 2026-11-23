@@ -73,6 +73,10 @@ export function renderContinuationHistory(session: CSR, context: ExportContext =
           break;
         }
         case "image": text = `Historical image reference: ${block.url}`; ledger.downgraded.push({ code: "IMAGE_REFERENCE", path, reason: "Image reference is preserved; the target must load it separately. No remote resource was fetched" }); break;
+        case "media":
+          text = "Historical " + block.asset.mediaType + (block.asset.label ? " (" + block.asset.label + ")" : "") + ":\n" + block.asset.value;
+          ledger.downgraded.push({code:"MEDIA_AS_HISTORY",path,reason:"Recorded media is carried as a historical reference or embedded source value"});
+          break;
         case "opaque":
         case "unknown": {
           if (block.type === "opaque" && block.requiredForContinuation) {

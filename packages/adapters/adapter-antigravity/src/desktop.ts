@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { SqlJsStatic } from "sql.js";
 import protobuf from "protobufjs";
-import { parseWireJson, renderContinuationHistory, SessionError, verifyInjectionBundle, type CSR, type DesktopPublication, type TranscriptMessage } from "@coverse/core";
+import { blockAsset, parseWireJson, renderContinuationHistory, SessionError, verifyInjectionBundle, type CSR, type DesktopPublication, type TranscriptMessage } from "@coverse/core";
 import { wireRoot } from "./wire.js";
 
 function encode(name: string, value: object): Uint8Array {
@@ -168,10 +168,11 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
   const csr = parseWireJson(new TextDecoder().decode(csrFile.bytes)) as unknown as CSR;
   csr.sourceArtifacts = artifacts.filter(f => f.path.startsWith("source/")).map(f => ({ path: f.path.slice(7), bytes: f.bytes }));
   const history: TranscriptMessage[] = csr.transcript ?? renderContinuationHistory(csr, { lossPolicy: { omitOpaque: true } }).map(({turn, blocks}) => {
-    let text = blocks.join("\n\n");
+    const assets = turn.content.flatMap(b => blockAsset(b) ?? []);
+    let text = blocks.filter((_,i) => !blockAsset(turn.content[i]!)).join("\n\n");
     if (text && turn.role !== "user" && turn.role !== "assistant") text = "[Historical " + turn.role + "]\n" + text;
     if (turn.content.some(block => block.type === "attachment")) text += "\nBundle directory: " + input.bundleDirectory;
-    return { id: turn.id, role: turn.role === "user" ? "user" as const : "assistant" as const, text };
+    return { id: turn.id, role: turn.role === "user" ? "user" as const : "assistant" as const, text, assets };
   });
   const seed = input.cliSessionId ? await readSeed(base, input.cliSessionId, sql) : undefined;
   const project = await findDesktopProject(path.join(base, "config", "projects"), input.cwd);
@@ -191,6 +192,16 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
     for (const message of history) {
       const user = message.role === "user";
       let text = message.text;
+      const media: Uint8Array[] = [];
+      for (const asset of message.assets ?? []) {
+        const prefix = "data:" + asset.mediaType + ";base64,";
+        if (asset.location === "embedded" && asset.value.startsWith(prefix)) {
+          media.push(encode("Media",{mime_type:asset.mediaType,data:asset.value.slice(prefix.length)}));
+          if (asset.label) text += (text ? "\n" : "") + asset.label;
+        } else {
+          text += (text ? "\n" : "") + (asset.label ?? asset.mediaType) + "\n" + asset.value;
+        }
+      }
       for (const tool of message.tools ?? []) {
         const details = [tool.name + " (" + tool.state + ")", tool.argumentsText,
           ...(tool.results ?? []).map(result => result.text), tool.details].filter(value => value !== undefined);
@@ -204,14 +215,14 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
           ? "　+" + files.reduce((s,f) => s+(f.added ?? 0),0) + " −" + files.reduce((s,f) => s+(f.removed ?? 0),0) : "";
         text += "\n\n**已编辑 " + files.length + " 个文件**" + total + "\n\n" + list.join("\n");
       }
-      if (!text && !message.activity) continue;
+      if (!text && !message.activity && !media.length) continue;
       const ms = message.createdAt ? Date.parse(message.createdAt) : NaN;
       const stepTime = Number.isFinite(ms) ? { seconds: Math.floor(ms/1000), nanos: (ms%1000)*1000000 } : timestamp;
       const type = user ? 14 : 15;
       const metadata = { source: user ? 4 : 2, execution_id: execution, created_at: stepTime, viewable_at: stepTime, completed_at: stepTime,
         model_api_content_id: randomUUID(), source_trajectory_step_info: encode("DesktopStepOrigin", {trajectory_id: tid, step_index: count, cascade_id: id}) };
-      const body = user ? { user_input: { user_response: text, items: [{ text }], user_config: seed?.userConfig, client_message_id: randomUUID() } }
-        : { planner_response: { response: text, modified_response: text, thinking: message.activity,
+      const body = user ? { user_input: { user_response: text, items: [{ text }], media, user_config: seed?.userConfig, client_message_id: randomUUID() } }
+        : { planner_response: { response: text, modified_response: text, thinking: message.activity, media,
           message_id: randomUUID(), stop_reason: 2 } };
       db.run("INSERT INTO steps (idx,step_type,status,metadata,step_payload) VALUES (?,?,3,?,?)",
         [count, type, encode("Metadata", metadata), encode("Step", { type, status: 3, metadata, ...body })]);

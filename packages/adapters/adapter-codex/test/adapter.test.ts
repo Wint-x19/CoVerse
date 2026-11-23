@@ -28,6 +28,16 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("keeps image-only native messages in both roles and resolves local images against their project", async () => {
+  const {session} = await adapter.import(encode([header,
+    completed("t",{id:"u",type:"UserMessage",content:[{type:"localImage",path:"shot.png"}]}),
+    completed("t",{id:"a",type:"AgentMessage",content:[{type:"image",url:"data:image/png;base64,AQID"}]}),
+  ]));
+  expect(session.transcript).toMatchObject([
+    {role:"user",text:"",assets:[{location:"project",value:"shot.png"}]},
+    {role:"assistant",text:"",assets:[{location:"embedded",mediaType:"image/png"}]},
+  ]);
+});
 it("retains native command arguments, failure output and exit code on tool-only turns", async () => {
   const { session } = await adapter.import(encode([header,
     completed("turn", {id:"u",type:"UserMessage",content:[{type:"text",text:"run tests"}]}),

@@ -78,7 +78,8 @@ it("publishes native version-one history into its project and preserves resumed 
 it("exports the native display transcript locally even when compaction removed messages from the model window", async () => {
   const { cliSessionId: _cli, ...offline } = input;
   const transcript: CSR["transcript"] = [
-    { id:"u", role:"user", text:"Before compaction", createdAt:"2026-01-01T00:00:00Z" },
+    { id:"u", role:"user", text:"Before compaction", createdAt:"2026-01-01T00:00:00Z",
+      assets:[{location:"embedded",mediaType:"image/png",value:"data:image/png;base64,AQID"}] },
     { id:"a", role:"assistant", text:"| A | B |\n|---|---|\n| x | y |", activity:"Progress", changedFiles:[{path:"example.md",added:2,removed:1}],
       tools:[{name:"Read",state:"completed",argumentsText:"example.md",results:[{text:"recorded file output"}]}] },
   ];
@@ -89,6 +90,8 @@ it("exports the native display transcript locally even when compaction removed m
     const native = db.exec("SELECT step_payload FROM steps ORDER BY idx")[0]!.values.map(([bytes]) => type.toObject(type.decode(bytes as Uint8Array)));
     expect(native).toHaveLength(2);
     expect(native[0]!.user_input.user_response).toBe(transcript[0]!.text);
+    const media = wireRoot.lookupType("Media");
+    expect(media.toObject(media.decode(native[0]!.user_input.media[0]),{bytes:String})).toEqual({mime_type:"image/png",data:"AQID"});
     expect(native[1]!.planner_response.response).toContain(transcript[1]!.text);
     expect(native[1]!.planner_response.response).toContain("example.md");
     expect(native[1]!.planner_response.response).toContain("recorded file output");

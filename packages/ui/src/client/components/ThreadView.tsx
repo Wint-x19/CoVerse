@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileLink, MessageMarkdown, UserText } from "./FileViewer";
+import { FileLink, MessageAssets, MessageMarkdown, UserText } from "./FileViewer";
 import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Sparkles, Terminal } from "lucide-react";
 import type { ChatMessage, ToolActivity, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
@@ -44,9 +44,9 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
               <dl className="ml-3 space-y-1 py-2">
                 <dt>{t.toolInput}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap">{tool.argumentsText ?? t.unrecorded}</pre></dd>
                 <dt>{t.toolOutput}</dt><dd>{tool.results?.length ? tool.results.map((result, i) =>
-                  <pre key={i} className={cn("max-h-80 overflow-auto whitespace-pre-wrap",result.failed && "text-red-500")}>
-                    {result.text || t.emptyOutput}
-                  </pre>) : t.unrecorded}</dd>
+                  <div key={i}><pre className={cn("max-h-80 overflow-auto whitespace-pre-wrap",result.failed && "text-red-500")}>
+                    {result.displayText ?? (result.text || t.emptyOutput)}
+                  </pre><MessageAssets assets={result.assets}/></div>) : t.unrecorded}</dd>
                 {tool.details && <><dt>{t.toolDetails}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap">{tool.details}</pre></dd></>}
               </dl>
             </details>
@@ -123,6 +123,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
       <div data-testid={`message-user-${message.id}`} className="flex justify-end">
         <div className="max-w-[82%] rounded-xl border border-[var(--border-subtle)] bg-[var(--user-bubble)] px-3.5 py-2.5 text-[14px] leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
           <UserText text={message.content}/>
+          <MessageAssets assets={message.assets}/>
           <ReviewCards reviews={message.reviews} t={t}/>
         </div>
       </div>
@@ -148,6 +149,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
         )}
 
         {message.changedFiles?.length ? <ChangedFiles files={message.changedFiles} t={t} /> : null}
+        <MessageAssets assets={message.assets}/>
         <ReviewCards reviews={message.reviews} t={t}/>
         {message.error && (
           <div

@@ -420,14 +420,16 @@ export class UiService {
 
   async previewFile(id: unknown, reference: unknown, scope: unknown): Promise<FilePreview> {
     if (typeof id !== "string" || typeof reference !== "string" || !reference ||
-        (scope !== "project" && scope !== "bundle")) throw new Error("Invalid file reference");
+        (scope !== "project" && scope !== "bundle" && scope !== "attachment")) throw new Error("Invalid file reference");
     const session = await this.getSession(id);
     const bundle = session.handoff;
-    if (scope === "bundle" && !bundle?.files.some(file => file.path === reference)) {
+    const archived = scope === "bundle" || (scope === "attachment" && bundle !== undefined);
+    const requested = archived && scope === "attachment" ? "source/" + reference : reference;
+    if (archived && !bundle?.files.some(file => file.path === requested)) {
       throw new Error("File is not part of this conversation archive");
     }
-    const root = await fs.realpath(scope === "project" ? session.cwd : this.store.bundlePath(bundle!.bundleId));
-    const value = normalizePathValue(reference);
+    const root = await fs.realpath(archived ? this.store.bundlePath(bundle!.bundleId) : session.cwd);
+    const value = normalizePathValue(requested);
     if (!value) throw new Error("Invalid file path");
     const candidate = path.resolve(root, value);
     const inside = (p: string) => {
@@ -444,6 +446,15 @@ export class UiService {
       return {kind: "directory", path: display, entries: entries.map(entry => entry.name + (entry.isDirectory() ? "/" : "")).sort()};
     }
     if (!stat.isFile()) throw new Error("Cannot preview this file type");
+    const media: Record<string,string> = {".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".gif":"image/gif",
+      ".webp":"image/webp",".avif":"image/avif",".bmp":"image/bmp",".ico":"image/x-icon",".pdf":"application/pdf",
+      ".mp4":"video/mp4",".webm":"video/webm",".mp3":"audio/mpeg",".ogg":"audio/ogg",".wav":"audio/wav"};
+    const mime = media[path.extname(target).toLowerCase()];
+    if (mime) {
+      if (stat.size > 96 * 1024 * 1024) throw new Error("File exceeds the 96 MiB media preview limit");
+      const bytes = await fs.readFile(target);
+      return {kind:"media",path:display,mediaType:mime,url:"data:" + mime + ";base64," + bytes.toString("base64")};
+    }
     if (stat.size > 8 * 1024 * 1024) throw new Error("File exceeds the 8 MiB preview limit");
     const bytes = await fs.readFile(target);
     if (bytes.includes(0)) throw new Error("Binary file has no text preview");
@@ -1106,6 +1117,11 @@ export class UiService {
         }
       }
       if (message.content) content.push({ type: "text", text: message.content });
+      for (const asset of message.assets ?? []) {
+        if (asset.location === "attachment" && sourceArtifacts.some(f => f.path === asset.value))
+          content.push({type:"attachment",path:asset.value,mediaType:asset.mediaType});
+        else content.push({type:"media",asset});
+      }
       if (message.reviews?.length) content.push({type:"text",displayAs:"review",
         text:"Historical review:\n" + JSON.stringify(message.reviews, null, 2)});
       if (content.length > 0) {
@@ -1139,6 +1155,7 @@ export class UiService {
         ...(m.reasoning ? {activity: m.reasoning} : {}), ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
         ...(m.reviews ? {reviews:m.reviews} : {}),
         ...(m.tools?.length ? {tools:m.tools} : {}),
+        ...(m.assets?.length ? {assets:m.assets} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {

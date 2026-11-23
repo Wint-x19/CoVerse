@@ -10,6 +10,22 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("decodes image captions and embedded media and preserves unfamiliar media payloads", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const original = db.exec("SELECT step_payload FROM steps WHERE idx=0")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step", original, "test").value;
+    const user = step.user_input as Record<string,unknown>;
+    const encode = (name:string,obj:object) => wireRoot.lookupType(name).encode(wireRoot.lookupType(name).fromObject(obj)).finish();
+    user.images = [encode("ImageData",{base64_data:"AQID",mime_type:"image/png",caption:"source image"})];
+    user.media = [encode("Media",{mime_type:"video/webm",data:"BAUG"}),Buffer.from([0xf8,7,1])];
+    db.run("UPDATE steps SET step_payload=? WHERE idx=0",[encode("Step",step)]);
+    const {session} = await adapter.import(files(db.export()));
+    expect(session.turns[0]!.content).toContainEqual({type:"media",asset:{location:"embedded",mediaType:"image/png",value:"data:image/png;base64,AQID",label:"source image"}});
+    expect(session.turns[0]!.content).toContainEqual({type:"media",asset:{location:"embedded",mediaType:"video/webm",value:"data:video/webm;base64,BAUG"}});
+    expect(session.turns[0]!.content.filter(b => b.type === "opaque")).toHaveLength(1);
+  } finally {db.close();}
+});
 it("retains both review sides, file comments and artifact selections on their original user turn", async () => {
   const db = new (await sql).Database(await fixture());
   try {

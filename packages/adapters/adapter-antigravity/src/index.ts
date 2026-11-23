@@ -6,6 +6,7 @@ import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, compareFileVersions, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type RecordedFileChange, type SessionAdapter, type Turn } from "@coverse/core";
 import { decodeWire, nestedRecord } from "./wire.js";
 import { readReviews } from "./reviews.js";
+import { readMedia } from "./media.js";
 import { committedSnapshot } from "./wal.js";
 import { publishWhenDesktopClosed } from "./desktop.js";
 
@@ -154,7 +155,8 @@ const adapter: SessionAdapter = {
               opaqueFields(content, entry, ["item"]);
             }
             reviews = readReviews(user, content, at);
-            opaqueFields(content, user, ["active_user_state", "images", "media", "side_channels"]);
+            readMedia(user, content, at);
+            opaqueFields(content, user, ["active_user_state", "side_channels"]);
             break;
           }
           case 15: {
@@ -163,7 +165,8 @@ const adapter: SessionAdapter = {
             if (typeof planner.response === "string") content.push({ type: "text", text: planner.response });
             if (typeof planner.modified_response === "string" && planner.modified_response !== planner.response) content.push({ type: "text", text: `Modified historical response:\n${planner.modified_response}` });
             if (Array.isArray(planner.tool_calls)) for (const call of planner.tool_calls) recordCall(call, true);
-            opaqueFields(content, planner, ["thinking_redacted", "knowledge_base_items", "side_channels", "passback_context", "grounding_metadata", "media"]);
+            readMedia(planner, content, at);
+            opaqueFields(content, planner, ["thinking_redacted", "knowledge_base_items", "side_channels", "passback_context", "grounding_metadata"]);
             break;
           }
           case 132: {
@@ -179,7 +182,8 @@ const adapter: SessionAdapter = {
                 if (candidates.length !== 1) throw new SessionError("MISSING_ATTACHMENT", at, "Supply the uniquely named full tool output referenced by full_output_uri");
                 content.push({ type: "attachment", path: candidates[0]!.path, mediaType: "text/plain" });
               }
-              opaqueFields(content, result, ["payload", "media", "data", "tool_call_step", "tool_result_step", "result_struct", "result_value"]);
+              readMedia(result, content, at);
+              opaqueFields(content, result, ["payload", "data", "tool_call_step", "tool_result_step", "result_struct", "result_value"]);
             } else if (step.status === 3) throw new SessionError("INVALID_INPUT", at, "Completed tool step has no result");
             else content.push({ type: "text", text: `Historical tool step has no result; native status=${String(step.status)}` });
             break;
@@ -188,7 +192,8 @@ const adapter: SessionAdapter = {
             const system = object(step.system_message, at);
             if (typeof system.message === "string") content.push({ type: "text", text: system.message });
             if (system.metadata) content.push({ type: "text", text: `Historical system metadata:\n${stringifyWireJson(system.metadata)}` });
-            opaqueFields(content, system, ["agent_message", "media"]); break;
+            readMedia(system, content, at);
+            opaqueFields(content, system, ["agent_message"]); break;
           }
           case 17: content.push({ type: "text", text: `Historical error:\n${stringifyWireJson(object(step.error_message, at), null, 2)}` }); break;
           case 23: {

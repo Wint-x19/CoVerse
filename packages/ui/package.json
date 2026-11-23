@@ -47,6 +47,7 @@
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.2",
     "lucide-react": "^0.511.0",
+    "pdfjs-dist": "5.4.624",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",

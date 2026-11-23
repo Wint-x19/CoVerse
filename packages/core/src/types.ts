@@ -22,9 +22,10 @@ export interface LossLedger {
 export type ContentBlock =
   | { type: "text" | "reasoning"; text: string; displayAs?: "review" }
   | { type: "tool_call"; id: string; name: string; arguments: JsonValue; argumentsText?: string }
-  | { type: "tool_result"; callId: string; callTurnId?: string; content: JsonValue; isError?: boolean }
+  | { type: "tool_result"; callId: string; callTurnId?: string; content: JsonValue; isError?: boolean; assets?: RecordedAsset[]; displayText?: string }
   | { type: "attachment"; path: string; mediaType: string }
   | { type: "image"; url: string; detail?: string }
+  | { type: "media"; asset: RecordedAsset }
   | { type: "opaque"; source: string; value: JsonValue; requiredForContinuation?: boolean }
   | { type: "unknown"; raw: JsonValue };
 
@@ -54,12 +55,19 @@ export interface RecordedReview {
   selections: {side: "original" | "modified" | "file"; text?: string; start?: number; end?: number}[];
 }
 
+export interface RecordedAsset {
+  location: "embedded" | "remote" | "project" | "attachment" | "text";
+  value: string;
+  mediaType: string;
+  label?: string;
+}
+
 export interface RecordedTool {
   id?: string;
   name: string;
   state: string;
   argumentsText?: string;
-  results?: {text: string; failed?: boolean}[];
+  results?: {text: string; failed?: boolean; assets?: RecordedAsset[]; displayText?: string}[];
   details?: string;
 }
 
@@ -69,6 +77,7 @@ export interface TranscriptMessage {
   text: string;
   createdAt?: string;
   activity?: string;
+  assets?: RecordedAsset[];
   tools?: RecordedTool[];
   durationMs?: number;
   changedFiles?: RecordedFileChange[];

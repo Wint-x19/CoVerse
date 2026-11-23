@@ -27,6 +27,12 @@ function verifyReviews(value: JsonValue | undefined) {
   }
 }
 
+function validAsset(asset: JsonValue | undefined) {
+  return isRecord(asset) && ["embedded","remote","project","attachment","text"].includes(String(asset.location)) &&
+    typeof asset.value === "string" && typeof asset.mediaType === "string" &&
+    (asset.label === undefined || typeof asset.label === "string");
+}
+
 /** Validate the same bytes that will be injected. Source files may contain arbitrary binary data. */
 export function verifyInjectionBundle(files: FileSet, target: string) {
   try { validateFileSet(files); } catch { invalid("/manifest", "Invalid artifact paths"); }
@@ -79,6 +85,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
       seen.add(m.id);
       verifyChanges(m.changedFiles);
       verifyReviews(m.reviews);
+      if (m.assets !== undefined && (!Array.isArray(m.assets) || !m.assets.every(validAsset))) invalid("session.json","Invalid message media");
     }
   }
   const archived = new Set<string>();
@@ -102,6 +109,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
     verifyChanges(turn.changedFiles);
     verifyReviews(turn.reviews);
     for (const block of turn.content) {
+      if (isRecord(block) && block.type === "media" && !validAsset(block.asset)) invalid("session.json","Invalid media block");
       if (isRecord(block) && block.type === "attachment") {
         if (typeof block.path !== "string" || !names.has("source/" + block.path)) invalid("session.json", "Missing required attachment");
         attachments.add("source/" + block.path);

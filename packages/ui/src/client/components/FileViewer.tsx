@@ -7,14 +7,29 @@ import { fileReference, fileTokens, linkFilePaths, locateQuote, type FileReferen
 import {reviewSegments} from "@/lib/review-directives";
 import type { I18nMessages } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import type {RecordedAsset} from "@coverse/core";
+import {AssetPreview, imageMime} from "./AssetPreview";
 
-type Target = FileReference & {scope?: FileScope};
+type Target = FileReference & {scope?: FileScope; asset?: RecordedAsset};
 const FileContext = React.createContext<(target: Target) => void>(() => {});
 
 export function FileLink({target, children}: {target: Target; children: React.ReactNode}) {
   const open = React.useContext(FileContext);
   return <button type="button" className="cursor-pointer break-all text-left text-[var(--accent-text)] hover:underline"
     title={target.path} onClick={() => open(target)}>{children}</button>;
+}
+
+export function MessageAssets({assets}: {assets?: readonly RecordedAsset[] | undefined}) {
+  return assets?.map((asset,i) => {
+    const local = asset.location === "project" || asset.location === "attachment";
+    const label = asset.label || (local || asset.location === "remote" ? asset.value : asset.mediaType);
+    const thumb = asset.location === "embedded" && imageMime(asset.mediaType) && asset.value.startsWith("data:" + asset.mediaType + ";base64,");
+    return <div className="my-2" key={i}><FileLink target={local ?
+      {path:asset.value,scope:asset.location === "attachment" ? "attachment" : "project"} : {path:label,asset}}>
+      {thumb && <img loading="lazy" alt={label} src={asset.value} className="mb-1 max-h-44 max-w-full rounded object-contain"/>}
+      {label}
+    </FileLink></div>;
+  });
 }
 
 export function MessageMarkdown({text}: {text: string}) {
@@ -62,6 +77,7 @@ function Preview({sessionId, target, open, t}: {
   React.useEffect(() => { selected.current?.scrollIntoView({block: "center"}); }, [result, target.line]);
   if (result === null) return <p>{t.loading}</p>;
   if (typeof result === "string") return <p role="alert">{result}</p>;
+  if (result.kind === "media") return <AssetPreview url={result.url} type={result.mediaType} label={result.path} t={t}/>;
   if (result.kind === "directory") return <ul>{result.entries.map(entry => <li key={entry}>
     <button type="button" className="cursor-pointer hover:underline" onClick={() =>
       open({path: result.path + "/" + entry})}>{entry}</button></li>)}</ul>;
@@ -92,7 +108,9 @@ export function FileViewer({sessionId, children, t}: {sessionId?: string | undef
       <DialogContent aria-describedby={undefined} className="max-w-[min(90vw,960px)]">
         <DialogTitle className="mr-8 mb-3 break-all">{target.path}{target.line ? " · L" + target.line : ""}</DialogTitle>
         <div className="max-h-[70vh] overflow-auto">
-          <Preview key={JSON.stringify([sessionId, target])} sessionId={sessionId} target={target} open={open} t={t}/>
+          {target.asset ? target.asset.location === "text" ? <pre className="whitespace-pre-wrap">{target.asset.value}</pre>
+            : <AssetPreview url={target.asset.value} type={target.asset.mediaType} label={target.path} t={t}/>
+            : <Preview key={JSON.stringify([sessionId, target])} sessionId={sessionId} target={target} open={open} t={t}/>}
         </div>
       </DialogContent>
     </Dialog>}

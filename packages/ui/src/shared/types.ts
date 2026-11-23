@@ -106,12 +106,14 @@ export interface ToolActivity extends RecordedTool {
   timestamp: string;
 }
 
-export type FileScope = "project" | "bundle";
+export type FileScope = "project" | "bundle" | "attachment";
 export type FilePreview =
   | { kind: "text"; path: string; content: string }
+  | { kind: "media"; path: string; url: string; mediaType: string }
   | { kind: "directory"; path: string; entries: string[] };
 
 export interface ChatMessage {
+  assets?: import("@coverse/core").RecordedAsset[];
   reviews?: import("@coverse/core").RecordedReview[];
   changedFiles?: import("@coverse/core").TranscriptMessage["changedFiles"];
   durationMs?: number;

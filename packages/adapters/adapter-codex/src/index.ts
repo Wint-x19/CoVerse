@@ -1,4 +1,4 @@
-import { parseWireJson, stringifyWireJson } from "@coverse/core";
+import { imageAsset, parseWireJson, stringifyWireJson } from "@coverse/core";
 import { decompress, Decompress } from "fzstd";
 import { ancestralRecords, prepareLineage, primaryLog, verifiedWriters } from "./lineage.js";
 import { nativeTranscript, patchEventFiles } from "./transcript.js";
@@ -162,7 +162,19 @@ const adapter: SessionAdapter = {
             const key = `${role}\0${p.message}`, remaining = mirrors.get(key) ?? 0;
             if (remaining) mirrors.set(key, remaining - 1);
             else add(role, [{ type: "text", text: p.message }], p, line);
-            if ([p.images, p.local_images, p.attachments].some(v => Array.isArray(v) && v.length)) add(role, [{ type: "opaque", source: "codex:event-attachments", value: p }], p, line);
+            const media: ContentBlock[] = [];
+            for (const entry of [p.images,p.local_images].flatMap(v => Array.isArray(v) ? v : [])) {
+              if (typeof entry === "string" && entry.length) media.push({type:"media",asset:imageAsset(entry)});
+              else media.push({type:"opaque",source:"codex:event-attachments",value:entry});
+            }
+            if (Array.isArray(p.attachments) && p.attachments.length) media.push({type:"opaque",source:"codex:event-attachments",value:p.attachments});
+            if (media.length) {
+              const message = destination.slice().reverse().find(t => t.role === role && t.content.some(b => b.type === "text" && b.text === p.message));
+              if (message) {
+                const images = new Set(message.content.flatMap(b => b.type === "image" ? [b.url] : []));
+                message.content.push(...media.filter(b => b.type !== "media" || !images.has(b.asset.value)));
+              } else add(role, media, p, line);
+            }
           } else if (p.type === "agent_reasoning" || p.type === "agent_reasoning_raw_content") {
             // These records are not assumed to be duplicates of a reasoning summary.
             const text = p.text;
