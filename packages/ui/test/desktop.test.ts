@@ -140,6 +140,8 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
   };
 
   registerIpcHandlers(ipcMain, service, {
+    ...(dialogs?.locateFile ? {locateFile:dialogs.locateFile} : {}),
+    ...(dialogs?.revealFile ? {revealFile:dialogs.revealFile} : {}),
     pickDirectory: dialogs?.pickDirectory ?? (async () => null),
     pickSessionFiles: dialogs?.pickSessionFiles ?? (async () => []),
   });
@@ -288,7 +290,10 @@ describe("CoVerse M4 desktop IPC & service", () => {
     await fs.writeFile(path.join(workspace, "two lines.md"), "one\ntwo");
     const service = new UiService(createAdapterRegistry(), createFakeDrivers(), new UiStore(root), workspace);
     const session = await service.createSession({agent: "codex", cwd: workspace});
-    const {invoke} = createMockIpc(service);
+    const reveal = vi.fn(async (_target:string) => {});
+    const chosen = path.join(root,"relocated.md");
+    await fs.writeFile(chosen,"selected outside project");
+    const {invoke} = createMockIpc(service,{locateFile:async () => chosen,revealFile:reveal});
     const preview = (ref: string, scope = "project") => invoke(IPC_CHANNELS.previewFile, session.id, ref, scope);
     expect(await preview("two lines.md")).toMatchObject({ok: true, data: {content: "one\ntwo"}});
     expect(await preview(pathToFileURL(path.join(workspace, "two lines.md")).href)).toMatchObject({ok: true});
@@ -296,6 +301,10 @@ describe("CoVerse M4 desktop IPC & service", () => {
     expect(await preview("../settings.json")).toMatchObject({ok: false});
     expect(await preview("missing.md")).toMatchObject({ok: false});
     expect(await preview("two lines.md", "bundle")).toMatchObject({ok: false});
+    expect(await invoke(IPC_CHANNELS.locateFile,session.id)).toMatchObject({ok:true,data:{content:"selected outside project"}});
+    expect(await invoke(IPC_CHANNELS.revealFile,session.id,"two lines.md","project")).toMatchObject({ok:true,data:true});
+    expect(reveal).toHaveBeenCalledWith(await fs.realpath(path.join(workspace,"two lines.md")));
+    expect(fileReference("sample.ts#L4-L9")).toEqual({path:"sample.ts",line:4,endLine:9});
     expect(fileReference("two%20lines.md#L2", true)).toEqual({path: "two lines.md", line: 2});
     expect(fileReference("sample.ts:8:2")).toEqual({path: "sample.ts", line: 8});
     expect(fileReference("C:\\project\\file.ts:18")).toEqual({path: "C:\\project\\file.ts", line: 18});

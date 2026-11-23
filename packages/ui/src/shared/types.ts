@@ -256,6 +256,8 @@ export interface RunMessageInput {
 }
 
 export interface CoverseDesktopBridge {
+  locateFile(sessionId:string):Promise<IpcEnvelope<FilePreview | null>>;
+  revealFile(sessionId:string,path:string,scope:FileScope):Promise<IpcEnvelope<boolean>>;
   previewFile(sessionId: string, path: string, scope: FileScope): Promise<IpcEnvelope<FilePreview>>;
   readonly platform: string;
   capabilities(refresh?: boolean): Promise<IpcEnvelope<CapabilitiesResponse>>;

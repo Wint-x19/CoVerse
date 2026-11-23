@@ -56,6 +56,8 @@ async function unwrap<T>(
 }
 
 export const api = {
+  locateFile: (id:string) => unwrap("/file/locate",b => b.locateFile(id)),
+  revealFile: (id:string,path:string,scope:import("../../shared/types.js").FileScope) => unwrap("/file/reveal",b => b.revealFile(id,path,scope)),
   previewFile: (id: string, path: string, scope: import("../../shared/types.js").FileScope) =>
     unwrap("/file/preview", (b) => b.previewFile(id, path, scope)),
   get platform(): string {

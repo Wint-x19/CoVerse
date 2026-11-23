@@ -1,6 +1,7 @@
 export interface FileReference {
   path: string;
   line?: number;
+  endLine?: number;
   quote?: string;
 }
 
@@ -22,15 +23,15 @@ export function locateQuote(content: string, quote: string, recordedLine?: numbe
 
 export function fileReference(value: string, encoded = false): FileReference | undefined {
   if (!value || value.startsWith("#") || /^(?:\/\/|\\\\)/.test(value)) return;
-  const location = /(?:#L(\d+)(?:C\d+)?(?:-L?\d+)?|:(\d+)(?::\d+)?)$/i.exec(value);
+  const location = /(?:#L(\d+)(?:C\d+)?(?:-L?(\d+))?|:(\d+)(?::\d+)?(?:-(\d+))?)$/i.exec(value);
   let path = location ? value.slice(0, location.index) : value;
   if (/^[a-z][\w+.-]*:/i.test(path) && !/^(?:[a-z]:[\\/]|file:\/\/)/i.test(path)) return;
   if (encoded && !path.startsWith("file:")) {
     try { path = decodeURIComponent(path); } catch { return; }
   }
   if (!path || /[\u0000-\u001f]/.test(path)) return;
-  const line = Number(location?.[1] ?? location?.[2]);
-  return Number.isSafeInteger(line) && line > 0 ? {path, line} : {path};
+  const line = Number(location?.[1] ?? location?.[3]), end = Number(location?.[2] ?? location?.[4]);
+  return Number.isSafeInteger(line) && line > 0 ? {path,line,...(Number.isSafeInteger(end) && end > line ? {endLine:end} : {})} : {path};
 }
 
 // Match paths in prose without turning ordinary words, version numbers or URLs into file links.

@@ -419,7 +419,7 @@ export class UiService {
     return this.store.listSessions();
   }
 
-  async previewFile(id: unknown, reference: unknown, scope: unknown): Promise<FilePreview> {
+  async resolveFileTarget(id:unknown,reference:unknown,scope:unknown) {
     if (typeof id !== "string" || typeof reference !== "string" || !reference ||
         (scope !== "project" && scope !== "bundle" && scope !== "attachment")) throw new Error("Invalid file reference");
     const session = await this.getSession(id);
@@ -443,8 +443,16 @@ export class UiService {
     if (!inside(candidate)) throw new Error("File is outside this conversation's project");
     const target = await fs.realpath(candidate);
     if (!inside(target)) throw new Error("File is outside this conversation's project");
+    return {target,display:path.relative(root,target) || "."};
+  }
+
+  async previewFile(id: unknown, reference: unknown, scope: unknown): Promise<FilePreview> {
+    const {target,display} = await this.resolveFileTarget(id,reference,scope);
+    return this.readFilePreview(target,display);
+  }
+
+  async readFilePreview(target:string,display:string):Promise<FilePreview> {
     const stat = await fs.stat(target);
-    const display = path.relative(root, target) || ".";
     if (stat.isDirectory()) {
       const entries = await fs.readdir(target, {withFileTypes: true});
       return {kind: "directory", path: display, entries: entries.map(entry => entry.name + (entry.isDirectory() ? "/" : "")).sort()};

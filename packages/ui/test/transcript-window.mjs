@@ -35,7 +35,7 @@ try {
     {id:"parent",role:"user",content:"Choose a path",createdAt:at,historical:true,lineage:{branchId:"main"},childBranch:"left"},
     {id:"left",role:"assistant",content:"Child reply",createdAt:at,historical:true,lineage:{branchId:"left",parentId:"parent",subsession:true}},
     {id:"right",role:"assistant",content:"Second fork",createdAt:at,historical:true,lineage:{branchId:"right",parentId:"parent"}},
-    {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>)",
+    {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>) [moved](missing.md#L1-L2)",
       reviews:[{path:"two lines.md",comment:"Recheck this line",selections:[{side:"modified",text:"second line",start:1}]}],
       assets:[{location:"embedded",value:pixel,label:"Screenshot",mediaType:"image/png"},
         {location:"project",value:"review.pdf",mediaType:"application/pdf"},
@@ -53,7 +53,8 @@ try {
       plan:{text:"Review the change",steps:[{title:"Run tests",status:"completed"}]},
       before:[{id:"checkpoint",kind:"compaction",text:"Recorded summary boundary"}]},
   ]});
-  registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => []});
+  registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => [],
+    locateFile:async () => path.join(root,"two lines.md")});
   await store.upsertSession({...session,id:"partial",title:"Partial fixture",messages:[
     {id:"available",role:"user",content:"Kept part",createdAt:at,historical:true},
   ],readOnly:[{code:"MISSING_ATTACHMENT",path:"full.log",message:"Missing companion full.log",severity:"warning"}]});
@@ -214,6 +215,22 @@ try {
   }).toString() + ')()');
   assert.equal(width,48);
   console.log("Verified opening a generated WebM recording in Electron");
+  const located = await win.webContents.executeJavaScript('(' + (async () => {
+    document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+    document.querySelector('button[title="missing.md"]').click();
+    for (let i=0; i<100; i++) {
+      const button = [...document.querySelectorAll('[role="dialog"] button')].find(el => el.textContent === "选择本机文件");
+      if (button) {button.click();break;}
+      await new Promise(resolve => setTimeout(resolve,30));
+    }
+    for (let i=0; i<100; i++) {
+      const selected = document.querySelector('[data-file-line="1"]');
+      if (selected) return selected.textContent;
+      await new Promise(resolve => setTimeout(resolve,30));
+    }
+    throw new Error("Moved file did not open");
+  }).toString() + ')()');
+  assert.match(located,/first line\nsecond line/);
   const partial = await win.webContents.executeJavaScript('(' + (async () => {
     document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
     document.querySelector('[data-testid="session-item-partial"]').click();

@@ -24,6 +24,8 @@ export interface IpcMainLike {
 }
 
 export interface DesktopDialogs {
+  locateFile?(defaultPath:string):Promise<string | null>;
+  revealFile?(path:string):Promise<void>;
   pickDirectory(defaultPath?: string): Promise<string | null>;
   pickSessionFiles(): Promise<PickedFile[]>;
   pickExecutable?(defaultPath?: string): Promise<string | null>;
@@ -31,6 +33,8 @@ export interface DesktopDialogs {
 }
 
 export const IPC_CHANNELS = {
+  locateFile:"coverse:file:locate",
+  revealFile:"coverse:file:reveal",
   previewFile: "coverse:file:preview",
   capabilities: "coverse:capabilities",
   getSettings: "coverse:settings:get",
@@ -74,6 +78,17 @@ export function registerIpcHandlers(
   ipc.handle(IPC_CHANNELS.previewFile, (_event, sessionId, path, scope) =>
     wrap("/file/preview", () => service.previewFile(sessionId, path, scope)),
   );
+  ipc.handle(IPC_CHANNELS.locateFile,(_event,id) => wrap("/file/locate",async () => {
+    const session = await service.getSession(String(id));
+    const picked = await dialogs.locateFile?.(session.cwd);
+    return picked ? service.readFilePreview(picked,picked) : null;
+  }));
+  ipc.handle(IPC_CHANNELS.revealFile,(_event,id,ref,scope) => wrap("/file/reveal",async () => {
+    const {target} = await service.resolveFileTarget(id,ref,scope);
+    if (!dialogs.revealFile) return false;
+    await dialogs.revealFile(target);
+    return true;
+  }));
   ipc.handle(IPC_CHANNELS.capabilities, (_event, refresh) =>
     wrap("/capabilities", () => service.getCapabilities(Boolean(refresh))),
   );

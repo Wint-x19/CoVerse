@@ -51,7 +51,7 @@ export function MessageMarkdown({text}: {text: string}) {
     }}}>{part.text}</Markdown>
     : <section key={index} className="my-2 rounded-md border border-[var(--border-subtle)] p-3">
       <strong>{part.title}</strong><p>{part.body}</p>
-      <FileLink target={{path:part.file, ...(part.start ? {line:part.start} : {})}}>
+      <FileLink target={{path:part.file, ...(part.start ? {line:part.start} : {}),...(part.end ? {endLine:part.end} : {})}}>
         {part.file}{part.start ? ":" + part.start : ""}{part.end && part.end !== part.start ? "–" + part.end : ""}
       </FileLink>
     </section>)}</>;
@@ -83,6 +83,7 @@ function Preview({sessionId, target, open, t}: {
   sessionId: string; target: Target; open: (target: Target) => void; t: I18nMessages;
 }) {
   const [result, setResult] = React.useState<FilePreview | string | null>(null);
+  const [pickedPath,setPickedPath] = React.useState("");
   React.useEffect(() => {
     let active = true;
     api.previewFile(sessionId, target.path, target.scope ?? "project")
@@ -91,14 +92,25 @@ function Preview({sessionId, target, open, t}: {
     return () => { active = false; };
   }, [sessionId, target.path, target.scope]);
   if (result === null) return <p>{t.loading}</p>;
-  if (typeof result === "string") return <p role="alert">{result}</p>;
+  if (typeof result === "string") return <div className="space-y-3"><p role="alert">{result}</p>
+    <div className="flex gap-3 text-xs text-[var(--accent-text)]">
+      <button type="button" onClick={async () => {
+        try { const chosen = await api.locateFile(sessionId); if (chosen) {setPickedPath(chosen.path);setResult(chosen);} }
+        catch (error) {setResult(error instanceof Error ? error.message : String(error));}
+      }}>{t.locateFile}</button>
+      <button type="button" onClick={async () => {
+        try { await api.revealFile(sessionId,target.path,target.scope ?? "project"); }
+        catch (error) {setResult(error instanceof Error ? error.message : String(error));}
+      }}>{t.revealFile}</button>
+    </div></div>;
   if (result.kind === "media") return <AssetPreview url={result.url} type={result.mediaType} label={result.path} t={t}/>;
   if (result.kind === "directory") return <ul>{result.entries.map(entry => <li key={entry}>
     <button type="button" className="cursor-pointer hover:underline" onClick={() =>
       open({path: result.path + "/" + entry})}>{entry}</button></li>)}</ul>;
   if (target.documentUri && /\.md$/i.test(target.path) && !target.line && !target.quote)
     return <div className="cv-prose"><MessageMarkdown text={result.content}/></div>;
-  return <HistoricalText text={result.content} target={target} t={t}/>;
+  return <>{pickedPath && <p className="mb-2 break-all text-xs text-[var(--text-secondary)]">{pickedPath}</p>}
+    <HistoricalText text={result.content} target={target} t={t}/></>;
 }
 
 function HistoricalText({text,target,t}: {text:string;target:Target;t:I18nMessages}) {
@@ -109,6 +121,9 @@ function HistoricalText({text,target,t}: {text:string;target:Target;t:I18nMessag
   const line = located ?? 1;
   // Keep very large text previews selectable without mounting a DOM element for each line.
   const index = Math.min(line - 1, lines.length - 1);
+  const count = target.quote && located ? target.quote.trimEnd().split(/\r\n|\n|\r/).length :
+    Math.max(1,(target.endLine ?? line) - line + 1);
+  const end = Math.min(lines.length,index + count);
   return <div className="font-mono text-xs whitespace-pre">
     {line > lines.length && <p role="status">{t.missingLine(line, lines.length)}</p>}
     {target.quote && located === undefined && <aside className="my-2 whitespace-pre-wrap border-l pl-2">
@@ -116,9 +131,9 @@ function HistoricalText({text,target,t}: {text:string;target:Target;t:I18nMessag
     </aside>}
     {index > 0 && <pre>{lines.slice(0, index).join("\n") + "\n"}</pre>}
     <div ref={selected} data-file-line={index + 1} className={located ? "bg-[var(--bg-hover)]" : undefined}>
-      {located && <span className="mr-2 select-none text-[var(--accent-text)]">{index + 1}</span>}{lines[index] || " "}
+      {located && <span className="mr-2 select-none text-[var(--accent-text)]">{index + 1}</span>}{lines.slice(index,end).join("\n") || " "}
     </div>
-    {index + 1 < lines.length && <pre>{lines.slice(index + 1).join("\n")}</pre>}
+    {end < lines.length && <pre>{lines.slice(end).join("\n")}</pre>}
   </div>;
 }
 

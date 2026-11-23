@@ -118,6 +118,11 @@ if (!gotLock) {
     service = new UiService(createAdapterRegistry(), null, store, resolveDefaultCwd());
 
     const dialogs: DesktopDialogs = {
+      async locateFile(defaultPath) {
+        const result = await dialog.showOpenDialog(mainWindow ?? undefined!,{defaultPath,properties:["openFile"]});
+        return result.canceled ? null : result.filePaths[0] ?? null;
+      },
+      async revealFile(file) { shell.showItemInFolder(file); },
       async pickDirectory(defaultPath?: string) {
         const result = await dialog.showOpenDialog(mainWindow ?? undefined!, {
           ...(defaultPath ? { defaultPath } : {}),

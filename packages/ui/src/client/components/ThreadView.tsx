@@ -143,7 +143,7 @@ function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMess
     <p className="my-1 whitespace-pre-wrap">{review.comment}</p>
     {review.selections.map((selection, i) => <div key={i} className="mt-2 border-l pl-2">
       <FileLink target={{path:review.path, ...(selection.text ? {quote:selection.text} : {}),
-        ...(selection.start !== undefined ? {line:Math.max(1, selection.start)} : {})}}>
+        ...(selection.start !== undefined ? {line:Math.max(1, selection.start)} : {}), ...(selection.end ? {endLine:selection.end} : {})}}>
         {t.reviewSide[selection.side]} {selection.start}{selection.end !== undefined && selection.end !== selection.start ? "–" + selection.end : ""}
       </FileLink>
       {selection.text && <pre className="max-h-60 overflow-auto whitespace-pre-wrap">{selection.text}</pre>}
