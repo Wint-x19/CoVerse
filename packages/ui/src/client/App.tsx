@@ -31,6 +31,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 interface StreamingState {
   sessionId: string;
   text: string;
+  reasoning:string;
+  model?:string;
   tools: ToolActivity[];
 }
 
@@ -417,7 +419,7 @@ export function App() {
         ),
       );
 
-      setStreaming({ sessionId, text: "", tools: [] });
+      setStreaming({ sessionId, text: "", reasoning:"", tools: [] });
 
       await api.streamMessage(
         sessionId,
@@ -427,6 +429,11 @@ export function App() {
           cwd: target.cwd,
         },
         (event) => {
+          if (event.type === "reasoning" || event.type === "model") {
+            setStreaming(prev => prev && prev.sessionId === sessionId ? event.type === "reasoning"
+              ? {...prev,reasoning:prev.reasoning + event.text} : {...prev,model:event.model} : prev);
+            return;
+          }
           if (event.type === "text") {
             setStreaming((prev) =>
               prev && prev.sessionId === sessionId ? { ...prev, text: prev.text + event.text } : prev,
@@ -609,7 +616,7 @@ export function App() {
                     <ThreadView
                       session={activeSession!}
                       streaming={
-                        isRunningActive && streaming ? { text: streaming.text, tools: streaming.tools } : null
+                        isRunningActive && streaming ? streaming : null
                       }
                       t={t}
                       onInspectHandoff={() => setInspectorOpen(true)}

@@ -1124,6 +1124,7 @@ export class UiService {
         }
       }
       if (message.content) content.push({ type: "text", text: message.content });
+      if (message.reasoning) content.push({type:"reasoning",text:message.reasoning});
       for (const asset of message.assets ?? []) {
         if (asset.location === "attachment" && sourceArtifacts.some(f => f.path === asset.value))
           content.push({type:"attachment",path:asset.value,mediaType:asset.mediaType});
@@ -1333,6 +1334,7 @@ export class UiService {
 
     let acquiredSessionId = session.targetSessionId;
     let textBuffer = "";
+    let reasoningBuffer = "", runModel = effectiveModel;
     let tools: ToolActivity[] = [];
     let latestUsage: ProtocolUsage | undefined;
     let usageScope: ChatMessage["usageScope"];
@@ -1353,6 +1355,12 @@ export class UiService {
         if (event.type === "session") {
           acquiredSessionId = event.id;
           emit({ type: "session", id: event.id });
+        } else if (event.type === "reasoning") {
+          reasoningBuffer += event.text;
+          emit(event);
+        } else if (event.type === "model") {
+          runModel = event.model;
+          emit(event);
         } else if (event.type === "text") {
           textBuffer += event.text;
           emit({ type: "text", text: event.text });
@@ -1385,7 +1393,8 @@ export class UiService {
         ...(usageScope ? {usageScope} : {}),
         createdAt: nowIso(),
         agent: session.agent,
-        ...(effectiveModel ? { model: effectiveModel } : {}),
+        ...(runModel ? { model: runModel } : {}),
+        ...(reasoningBuffer ? {reasoning:reasoningBuffer.trimEnd()} : {}),
         ...(tools.length > 0 ? { tools } : {}),
         ...(latestUsage ? { usage: latestUsage } : {}),
       };
@@ -1409,7 +1418,8 @@ export class UiService {
         ...(usageScope ? {usageScope} : {}),
         createdAt: nowIso(),
         agent: session.agent,
-        ...(effectiveModel ? { model: effectiveModel } : {}),
+        ...(runModel ? { model: runModel } : {}),
+        ...(reasoningBuffer ? {reasoning:reasoningBuffer.trimEnd()} : {}),
         ...(tools.length > 0 ? { tools } : {}),
         ...(latestUsage ? { usage: latestUsage } : {}),
         error: diagnostic,

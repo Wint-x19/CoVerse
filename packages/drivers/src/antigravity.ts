@@ -100,7 +100,8 @@ export const antigravity: DriverPlugin = {
   decoder() {
     let stepText = "", stepIndex: unknown, failedTool: string | undefined;
     return record => {
-      if (record.event === "init") return [{ type: "session", id: string(record.conversation_id) }];
+      if (record.event === "init") return [{ type: "session", id: string(record.conversation_id) },
+        ...(isRecord(record.init) && typeof record.init.model === "string" ? [{type:"model" as const,model:record.init.model}] : [])];
       if (record.event === "step_update") {
         const step = object(record.step_update);
         const events: DriverEvent[] = [{ type: "session", id: string(step.conversation_id) }];

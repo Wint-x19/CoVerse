@@ -144,13 +144,21 @@ export const claude: DriverPlugin = {
   },
   decoder() {
     let textStreamed = false, messageText = "";
+    const thinkingBlocks = new Map<number,string>();
     const calls = new Map<string,string>();
     return record => {
       if (record.parent_tool_use_id) return [];
-      if (record.type === "system" && record.subtype === "init") return [{ type: "session", id: string(record.session_id) }];
+      if (record.type === "system" && record.subtype === "init") return [{ type: "session", id: string(record.session_id) },
+        ...(typeof record.model === "string" ? [{type:"model" as const,model:record.model}] : [])];
       if (record.type === "stream_event") {
         const event = object(record.event);
-        if (event.type === "message_start") { textStreamed = false; messageText = ""; }
+        if (event.type === "message_start") { textStreamed = false; messageText = ""; thinkingBlocks.clear(); }
+        if (event.type === "content_block_delta" && isRecord(event.delta) && event.delta.type === "thinking_delta" &&
+            typeof event.delta.thinking === "string") {
+          const index = typeof event.index === "number" ? event.index : 0;
+          thinkingBlocks.set(index,(thinkingBlocks.get(index) ?? "") + event.delta.thinking);
+          return [{type:"reasoning",text:event.delta.thinking}];
+        }
         if (event.type === "content_block_delta" && isRecord(event.delta) && event.delta.type === "text_delta") {
           const text = string(event.delta.text);
           textStreamed = true;
@@ -162,8 +170,16 @@ export const claude: DriverPlugin = {
       if (record.type === "assistant" || record.type === "user") {
         const events: DriverEvent[] = [];
         const message = object(record.message);
-        if (Array.isArray(message.content)) for (const block of message.content) {
+        if (record.type === "assistant" && typeof message.model === "string") events.push({type:"model",model:message.model});
+        if (Array.isArray(message.content)) for (const [index,block] of message.content.entries()) {
           if (!isRecord(block)) continue;
+          if (record.type === "assistant" && block.type === "thinking" && typeof block.thinking === "string") {
+            const prior = thinkingBlocks.get(index) ?? "";
+            const suffix = block.thinking.startsWith(prior) ? block.thinking.slice(prior.length) : "\n\n" + block.thinking;
+            if (suffix) events.push({type:"reasoning",text:suffix});
+            if (block.thinking) events.push({type:"reasoning",text:"\n\n"});
+            thinkingBlocks.delete(index);
+          }
           if (record.type === "assistant" && block.type === "text" && !textStreamed) {
             const text = string(block.text);
             messageText += text;

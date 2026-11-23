@@ -15,6 +15,8 @@ export interface RunOptions {
 export type DriverEvent =
   | { type: "session"; id: string }
   | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
+  | { type: "model"; model: string }
   | ({ type: "tool" } & RecordedTool)
   | { type: "usage"; usage: ProtocolUsage; nativeUsage: WireRecord; scope?: "message" | "request" | "session" }
   | { type: "done" };
@@ -213,7 +215,7 @@ export class AgentDriver {
             if (session) continue;
             session = event.id;
           }
-          if (event.type === "tool" || (event.type === "text" && event.text.trim())) hasOutput = true;
+          if (event.type === "tool" || ((event.type === "text" || event.type === "reasoning") && event.text.trim())) hasOutput = true;
           if (event.type === "done") complete = true;
           else yield event;
         }

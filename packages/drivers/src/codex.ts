@@ -163,6 +163,8 @@ export const codex: DriverPlugin = {
       case "item.updated":
       case "item.completed": {
         const item = object(record.item);
+        if (item.type === "reasoning" && record.type === "item.completed" && typeof item.text === "string")
+          return [{type:"reasoning",text:item.text + "\n\n"}];
         if (item.type === "agent_message" && record.type === "item.completed") return [{ type: "text", text: string(item.text) }];
         if (item.type === "todo_list" && Array.isArray(item.items)) return [{type:"tool",name:"todo_list",
           ...(typeof item.id === "string" ? {id:item.id} : {}),state:String(record.type),argumentsText:wireText({items:item.items})}];
@@ -188,7 +190,7 @@ export const codex: DriverPlugin = {
         if (/^Reconnecting\.\.\./i.test(message)) return [];
         throw targetFailure(message);
       }
-      case "turn.started":
+      case "turn.started": return typeof record.model === "string" ? [{type:"model",model:record.model}] : [];
       case "thread.updated":
       case "turn.updated":
         return [];

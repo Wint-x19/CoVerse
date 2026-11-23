@@ -89,6 +89,7 @@ function createFakeDriverPlugin(id: string): DriverPlugin {
     decoder: () => (record) => {
       if (record.event === "session") return [{ type: "session", id: String(record.id) }];
       if (record.event === "tool") return [
+        {type:"model",model:"actual-test-model"}, {type:"reasoning",text:"Visible thought"},
         {type:"tool",id:"read-1",name:String(record.name),state:"started",argumentsText:'{"path":"live.txt"}'},
         {type:"tool",id:"read-1",name:String(record.name),state:String(record.state),results:[{text:"live result body"}]},
       ];
@@ -681,6 +682,8 @@ describe("CoVerse M4 desktop IPC & service", () => {
       expect(done1.session.bundlePending).toBe(false);
       expect(done1.session.targetSessionId).toBe("11111111-2222-4333-8444-555555555555");
       expect(done1.session.messages.at(-1)?.content).toBe("echo:claude-code:injected:claude-sonnet-4-6");
+      expect(done1.session.messages.at(-1)).toMatchObject({reasoning:"Visible thought",model:"actual-test-model"});
+      expect(events1).toContainEqual({type:"reasoning",text:"Visible thought"});
       expect(done1.session.messages.at(-1)?.tools).toMatchObject([{id:"read-1",argumentsText:'{"path":"live.txt"}',results:[{text:"live result body"}]}]);
     }
 

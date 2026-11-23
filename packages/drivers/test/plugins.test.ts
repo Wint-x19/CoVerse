@@ -47,6 +47,21 @@ it("streams Claude deltas once, ignores nested text, and exposes terminal errors
   expect(decode({ type: "result", subtype: "success", is_error: false, result: "你好", session_id: "id" })).toEqual([{ type: "session", id: "id" }, { type: "done" }]);
   expect(() => decode({ type: "result", subtype: "error", errors: ["prompt too long"] })).toThrow("prompt too long");
 });
+it("streams only readable reasoning, deduplicates the Claude snapshot, and reports the actual model", () => {
+  const claude = registry.get("claude-code").plugin.decoder();
+  const events = [
+    ...claude({type:"stream_event",event:{type:"content_block_delta",index:0,delta:{type:"thinking_delta",thinking:"part"}}}),
+    ...claude({type:"assistant",message:{model:"resolved",content:[
+      {type:"thinking",thinking:"part rest"},{type:"redacted_thinking",data:"ciphertext"},{type:"text",text:"answer"},
+    ]}}),
+  ];
+  expect(events.flatMap(e => e.type === "reasoning" ? [e.text] : []).join("").trim()).toBe("part rest");
+  expect(events).toContainEqual({type:"model",model:"resolved"});
+  expect(events).toContainEqual({type:"text",text:"answer"});
+  const codex = registry.get("codex").plugin.decoder();
+  expect(codex({type:"item.completed",item:{type:"reasoning",text:"readable"}})[0]).toEqual({type:"reasoning",text:"readable\n\n"});
+  expect(codex({type:"item.completed",item:{type:"reasoning",encrypted_content:"cipher"}})).toEqual([]);
+});
 it("maps Codex and Antigravity tool and terminal records", () => {
   const codex = registry.get("codex").plugin.decoder(), agy = registry.get("antigravity").plugin.decoder();
   expect(codex({ type: "item.started", item: { type: "command_execution", status: "in_progress" } })[0]?.type).toBe("tool");

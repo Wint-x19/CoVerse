@@ -9,6 +9,8 @@ import {conversationBranches, visibleBranch} from "@/lib/branches";
 
 interface StreamingState {
   text: string;
+  reasoning:string;
+  model?:string;
   tools: ToolActivity[];
 }
 
@@ -260,7 +262,7 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
 
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [session.messages.length, streaming?.text.length, streaming?.tools.length]);
+  }, [session.messages.length, streaming?.text.length, streaming?.reasoning.length, streaming?.tools.length]);
 
   const handoff = session.handoff;
   const historicalMessages = session.messages.filter((m) => m.historical);
@@ -343,9 +345,10 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
             <div className="flex items-center gap-2 text-[11.5px] text-[var(--text-secondary)]">
               <AgentGlyph agent={session.agent} className="h-3.5 w-3.5 text-[#5e6ad2] animate-pulse" />
               <span className="font-medium text-[var(--text-primary)]">{agentLabel(session.agent)}</span>
-              {session.model && <span className="font-mono text-[11px] text-[var(--text-tertiary)]">{session.model}</span>}
+              {(streaming.model ?? session.model) && <span className="font-mono text-[11px] text-[var(--text-tertiary)]">{streaming.model ?? session.model}</span>}
             </div>
             <div className="pl-[22px]">
+              {streaming.reasoning && <ReasoningTrace text={streaming.reasoning} t={t}/>}
               {streaming.tools.length > 0 && <ToolTrace tools={streaming.tools} t={t} />}
               <ToolPlans tools={streaming.tools} t={t}/>
               {streaming.text ? (
