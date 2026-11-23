@@ -103,6 +103,23 @@ function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFil
   </div>;
 }
 
+function PlanCard({plan,t}: {plan: NonNullable<ChatMessage["plan"]>; t:I18nMessages}) {
+  return <section className="my-2 rounded-lg border border-[var(--border-subtle)] p-3">
+    <h3 className="mb-2 text-sm font-semibold">{t.plan}</h3>
+    {plan.text && <div className="cv-prose"><MessageMarkdown text={plan.text}/></div>}
+    <ol className="space-y-2 text-sm">{plan.steps.map((step,i) => <li key={i}>
+      <div className="flex items-baseline justify-between gap-3"><span>{step.title}</span>
+        {step.status && <span className="shrink-0 text-xs text-[var(--text-secondary)]">{Object.hasOwn(t.taskStates,step.status)
+          ? t.taskStates[step.status as keyof typeof t.taskStates] : step.status}</span>}</div>
+      {step.detail && <p className="whitespace-pre-wrap text-xs text-[var(--text-secondary)]">{step.detail}</p>}
+    </li>)}</ol>
+  </section>;
+}
+
+function ToolPlans({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages}) {
+  return tools?.map((tool,i) => tool.plan ? <PlanCard key={i} plan={tool.plan} t={t}/> : null);
+}
+
 function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMessages}) {
   return reviews?.map((review, index) => <section key={index} className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-sm">
     <FileLink target={{path:review.path}}>{review.path}</FileLink>
@@ -141,8 +158,9 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
       <div className="pl-[22px]">
         {message.reasoning && <ReasoningTrace text={message.reasoning} t={t} durationMs={message.durationMs} />}
         {message.tools && message.tools.length > 0 && <ToolTrace tools={message.tools} t={t} />}
-
-        {message.content && (
+        <ToolPlans tools={message.tools} t={t}/>
+        {message.plan && <PlanCard plan={message.plan} t={t}/>}
+        {message.content && message.plan?.text !== message.content && (
           <div className="cv-prose">
             <MessageMarkdown text={message.content}/>
           </div>
@@ -258,6 +276,7 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
             </div>
             <div className="pl-[22px]">
               {streaming.tools.length > 0 && <ToolTrace tools={streaming.tools} t={t} />}
+              <ToolPlans tools={streaming.tools} t={t}/>
               {streaming.text ? (
                 <div className="cv-prose">
                   <MessageMarkdown text={streaming.text}/>

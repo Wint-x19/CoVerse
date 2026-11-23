@@ -44,6 +44,8 @@ try {
       tools:[{id:"call",name:"Read",state:"completed",argumentsText:'{"path":"two lines.md"}',
         results:[{text:"Recorded tool output"}],timestamp:at}],
       changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
+    {id:"p",role:"assistant",agent:"codex",createdAt:at,content:"Review the change",
+      plan:{text:"Review the change",steps:[{title:"Run tests",status:"completed"}]}},
   ]});
   registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => []});
   win = new BrowserWindow({show: false, webPreferences: {
@@ -70,6 +72,10 @@ try {
   }
   assert.match(await exercise("user-u"), /second line/);
   assert.match(await exercise("assistant-a"), /second line/);
+  const plan = await win.webContents.executeJavaScript('document.querySelector(\'[data-testid="message-assistant-p"]\').innerText');
+  assert.match(plan,/Run tests/);
+  assert.match(plan,/已完成/);
+  assert.equal(plan.split("Review the change").length,2);
   const finding = await win.webContents.executeJavaScript('(' + (async () => {
     const card = document.querySelector('[data-testid="message-assistant-a"] section');
     if (!card?.textContent.includes("Recorded finding")) throw new Error("Missing review finding");

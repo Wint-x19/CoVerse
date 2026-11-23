@@ -1,5 +1,6 @@
 import { blockAsset, stringifyWireJson, type RecordedAsset } from "@coverse/core";
 import { recordedEdit } from "./file-edit.js";
+import {readToolPlan} from "./plan.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "transcript-sdk-0_3_326";
@@ -66,6 +67,7 @@ function blocks(content: JsonValue | undefined, at: string): ContentBlock[] {
   });
 }
 const adapter: SessionAdapter = {
+  readToolPlan,
   id: "claude-code", displayName: "Claude Code", status: "ready", supportedVersions: [formatVersion],
   capabilities: { import: true, export: true, nativeResume: false, importFormats: ["transcript-jsonl"], exportFormats: ["injection-bundle"] },
   detect: files => { try { load(files); return { confidence: 1, formatVersion }; } catch (e) { return { confidence: 0, ...(e instanceof SessionError ? { diagnostics: [e.diagnostic] } : {}) }; } },
@@ -141,6 +143,8 @@ const adapter: SessionAdapter = {
             throw new SessionError("INVALID_INPUT", turn.id, "Duplicate tool call ID on the same ancestry");
           }
           localCalls.add(block.id);
+          const plan = readToolPlan(block.name,block.arguments);
+          if (plan) turn.plan = plan;
         }
         if (block.type === "tool_result") {
           const parent = ancestors(turn.id).map(id => byId.get(id)).find(t =>
@@ -150,6 +154,10 @@ const adapter: SessionAdapter = {
           block.callTurnId = parent!.id;
           if (!block.isError) {
             const uniqueResult = turn.content.filter(b => b.type === "tool_result").length === 1;
+            if (uniqueResult && isRecord(turn.raw) && turn.raw.toolUseResult !== undefined) {
+              const plan = readToolPlan(call.name,call.arguments,turn.raw.toolUseResult);
+              if (plan && parent) parent.plan = plan;
+            }
             const file = recordedEdit(call, uniqueResult && isRecord(turn.raw) ? turn.raw.toolUseResult : undefined);
             if (file) (turn.changedFiles ??= []).push(file);
           }

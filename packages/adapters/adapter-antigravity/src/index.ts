@@ -129,12 +129,13 @@ const adapter: SessionAdapter = {
         const decoded = decodeWire("Step", row.step_payload, at), step = decoded.value;
         if (decoded.unknown.length) throw new SessionError("UNINTERPRETED_CONTENT", decoded.unknown[0]!, "Unknown protobuf field may contain conversation context");
         if (step.type !== row.step_type || step.status !== row.status) throw new SessionError("INVALID_INPUT", at, "SQLite and protobuf step type/status disagree");
-        const contentFields: Record<number, string> = { 14: "user_input", 15: "planner_response", 17: "error_message", 23: "checkpoint", 101: "system_message", 132: "generic" };
+        const contentFields: Record<number, string> = { 14: "user_input", 15: "planner_response", 17: "error_message", 23: "checkpoint", 81:"task_boundary", 101: "system_message", 132: "generic" };
         if (Object.values(contentFields).filter(key => step[key] !== undefined).join() !== contentFields[Number(step.type)]) throw new SessionError("INVALID_INPUT", at, "Step discriminator and payload variant disagree");
         if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12].includes(Number(step.status))) throw new SessionError("UNSUPPORTED_VERSION", at, "Unknown step status");
         const content: ContentBlock[] = [];
         const changedFiles: RecordedFileChange[] = [];
         let reviews: Turn["reviews"];
+        let plan: Turn["plan"];
         let role: Turn["role"] = "system", kind: NonNullable<Turn["origin"]>["kind"] = "message";
         const recordCall = (value: JsonValue, inPlanner: boolean) => {
           const block = callBlock(value, at), old = calls.get(block.id);
@@ -188,6 +189,15 @@ const adapter: SessionAdapter = {
             else content.push({ type: "text", text: `Historical tool step has no result; native status=${String(step.status)}` });
             break;
           }
+          case 81: {
+            const task = object(step.task_boundary,at);
+            const title = task.task_name ?? task.task_summary ?? task.delta_summary;
+            if (typeof title === "string") plan = {steps:[{title,
+              ...(typeof task.task_status === "string" ? {status:task.task_status} : {}),
+              ...(typeof task.task_summary === "string" ? {detail:task.task_summary} : {})}]};
+            content.push({type:"text",text:"Historical task boundary:\n" + stringifyWireJson(task,null,2)});
+            break;
+          }
           case 101: {
             const system = object(step.system_message, at);
             if (typeof system.message === "string") content.push({ type: "text", text: system.message });
@@ -232,7 +242,17 @@ const adapter: SessionAdapter = {
               content.push({type:"text", text:"Historical file change:\n" + stringifyWireJson(diff, null, 2)});
             }
             readArtifactSnapshots(checkpoint, content, files, at);
-            opaqueFields(content, checkpoint, opaqueKeys.filter(key => key !== "trajectory_file_diffs" && key !== "artifact_snapshots")); break;
+            if (Array.isArray(checkpoint.running_task_snapshots)) for (const bytes of checkpoint.running_task_snapshots) {
+              const task = nestedRecord("TaskSnapshot",bytes,at);
+              const title = task?.description ?? task?.tool_summary ?? task?.task_id;
+              if (!task || typeof title !== "string") {
+                content.push({type:"opaque",source:"antigravity:running_task_snapshots",value:bytes});
+                continue;
+              }
+              (plan ??= {steps:[]}).steps.push({title,status:"in_progress"});
+              content.push({type:"text",text:"Historical running task:\n" + stringifyWireJson(task,null,2)});
+            }
+            opaqueFields(content, checkpoint, opaqueKeys.filter(key => !["trajectory_file_diffs","artifact_snapshots","running_task_snapshots"].includes(key))); break;
           }
           default: throw new SessionError("UNSUPPORTED_VERSION", at, "Unverified Antigravity step type");
         }
@@ -240,6 +260,7 @@ const adapter: SessionAdapter = {
         session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step,
           ...(changedFiles.length ? {changedFiles} : {}),
           ...(reviews?.length ? {reviews} : {}),
+          ...(plan ? {plan} : {}),
           origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind } });
       }
       validateToolLinks(session.turns);

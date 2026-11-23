@@ -36,6 +36,7 @@ export interface Turn {
   raw?: JsonValue;
   /** Presentation details derived from the original record, separate from continuation content. */
   changedFiles?: TranscriptMessage["changedFiles"];
+  plan?: RecordedPlan;
   reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
   origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
@@ -65,6 +66,7 @@ export interface RecordedAsset {
 }
 
 export interface RecordedTool {
+  plan?: RecordedPlan;
   id?: string;
   name: string;
   state: string;
@@ -73,12 +75,18 @@ export interface RecordedTool {
   details?: string;
 }
 
+export interface RecordedPlan {
+  text?: string;
+  steps: {title: string; status?: string; detail?: string}[];
+}
+
 export interface TranscriptMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   createdAt?: string;
   activity?: string;
+  plan?: RecordedPlan;
   assets?: RecordedAsset[];
   tools?: RecordedTool[];
   durationMs?: number;
@@ -152,6 +160,7 @@ export interface SessionAdapter {
   readonly status: "scaffold" | "ready";
   readonly supportedVersions: readonly string[];
   readonly capabilities: Readonly<AdapterCapabilities>;
+  readToolPlan?(name: string, args: JsonValue, result?: JsonValue): RecordedPlan | undefined;
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
   prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>): Promise<FileSet>;

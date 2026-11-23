@@ -113,6 +113,7 @@ export type FilePreview =
   | { kind: "directory"; path: string; entries: string[] };
 
 export interface ChatMessage {
+  plan?: import("@coverse/core").RecordedPlan;
   assets?: import("@coverse/core").RecordedAsset[];
   reviews?: import("@coverse/core").RecordedReview[];
   changedFiles?: import("@coverse/core").TranscriptMessage["changedFiles"];

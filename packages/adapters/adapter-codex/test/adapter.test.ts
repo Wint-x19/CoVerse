@@ -28,6 +28,15 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("labels native plans and preserves individual task states from plan tool inputs", async () => {
+  const {session} = await adapter.import(encode([header,
+    completed("t",{id:"u",type:"UserMessage",content:[{type:"text",text:"Plan it"}]}),
+    completed("t",{id:"p",type:"Plan",text:"**Verify** the output"}),
+    response({type:"function_call",name:"update_plan",call_id:"p",arguments:'{"plan":[{"step":"Test","status":"in_progress"}]}'}),
+  ]));
+  expect(session.transcript?.at(-1)?.plan?.text).toBe("**Verify** the output");
+  expect(session.turns.at(-1)?.plan?.steps).toEqual([{title:"Test",status:"in_progress"}]);
+});
 it("keeps image-only native messages in both roles and resolves local images against their project", async () => {
   const {session} = await adapter.import(encode([header,
     completed("t",{id:"u",type:"UserMessage",content:[{type:"localImage",path:"shot.png"}]}),

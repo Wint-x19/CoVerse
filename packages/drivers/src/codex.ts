@@ -164,6 +164,8 @@ export const codex: DriverPlugin = {
       case "item.completed": {
         const item = object(record.item);
         if (item.type === "agent_message" && record.type === "item.completed") return [{ type: "text", text: string(item.text) }];
+        if (item.type === "todo_list" && Array.isArray(item.items)) return [{type:"tool",name:"todo_list",
+          ...(typeof item.id === "string" ? {id:item.id} : {}),state:String(record.type),argumentsText:wireText({items:item.items})}];
         if (["command_execution", "mcp_tool_call", "file_change", "web_search", "collab_tool_call", "dynamic_tool_call"].includes(String(item.type))) {
           const args = item.arguments ?? item.command ?? item.query;
           const output = item.error ?? item.result ?? item.aggregated_output;

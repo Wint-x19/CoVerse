@@ -1130,6 +1130,7 @@ export class UiService {
           role: message.role,
           content,
           ...(message.reviews?.length ? {reviews:message.reviews} : {}),
+          ...(message.plan ? {plan:message.plan} : {}),
           origin: { artifact: "coverse-desktop/sessions.json", record: index + 1, kind: "message" },
         });
       }
@@ -1156,6 +1157,7 @@ export class UiService {
         ...(m.reviews ? {reviews:m.reviews} : {}),
         ...(m.tools?.length ? {tools:m.tools} : {}),
         ...(m.assets?.length ? {assets:m.assets} : {}),
+        ...(m.plan ? {plan:m.plan} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {
@@ -1336,7 +1338,16 @@ export class UiService {
           emit({ type: "text", text: event.text });
         } else if (event.type === "tool") {
           const {type, ...fields} = event;
-          const update = {...fields,timestamp:nowIso()};
+          const update: ToolActivity = {...fields,timestamp:nowIso()};
+          const readPlan = this.adapters.get(session.agent).readToolPlan;
+          const args = fields.argumentsText ?? (fields.id && tools.find(t => t.id === fields.id)?.argumentsText);
+          if (readPlan && args) {
+            try {
+              const result = fields.details && fields.results ? parseWireJson(fields.details) : undefined;
+              const plan = readPlan(fields.name,parseWireJson(args),result);
+              if (plan) update.plan = plan;
+            } catch { /* Plain text custom-tool inputs still appear verbatim in the trace. */ }
+          }
           tools = updateToolActivity(tools,update);
           emit({type,...update});
         } else if (event.type === "usage") {

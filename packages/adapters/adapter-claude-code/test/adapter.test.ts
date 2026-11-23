@@ -9,6 +9,11 @@ it("imports official-reader validated text, reasoning and tool chains", async ()
   expect(r.session.turns[1]!.content.map(b => b.type)).toEqual(["reasoning", "tool_call"]);
   expect((await adapter.export(r.session)).artifacts.map(f => f.path)).toContain("context.md");
 });
+it("keeps a TodoWrite list with its recorded status", async () => {
+  const rows = await fixture();
+  Object.assign(rows[1].message.content[1],{name:"TodoWrite",input:{todos:[{content:"Ship it",status:"completed"}]}});
+  expect((await adapter.import(input(rows))).session.turns[1]!.plan?.steps).toEqual([{title:"Ship it",status:"completed"}]);
+});
 it("preserves PDF and text documents as named previews", async () => {
   const rows = await fixture();
   rows[0].message.content = [

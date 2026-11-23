@@ -136,6 +136,7 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
       if (!text && !assets.length) continue;
       const role = item.type === "UserMessage" ? "user" : "assistant";
       const msg: TranscriptMessage = { id, role, text, ...(at ? {createdAt: at} : {}), ...(assets.length ? {assets} : {}) };
+      if (item.type === "Plan") msg.plan = {text,steps:[]};
       if (role === "assistant") {
         if (activity.length) msg.activity = activity.splice(0).join("\n\n");
         if (tools.length) msg.tools = tools.splice(0);

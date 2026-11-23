@@ -10,6 +10,16 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("displays a verified task-boundary step with its state and summary", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const type = wireRoot.lookupType("Step");
+    const step = {type:81,status:3,task_boundary:{task_name:"Check screenshots",task_status:"In review",task_summary:"Two screens captured"}};
+    db.run("UPDATE steps SET step_type=81,step_payload=? WHERE idx=6",[type.encode(type.fromObject(step)).finish()]);
+    const {session} = await adapter.import(files(db.export()));
+    expect(session.turns.at(-1)!.plan?.steps).toEqual([{title:"Check screenshots",status:"In review",detail:"Two screens captured"}]);
+  } finally {db.close();}
+});
 it("opens recorded artifact revisions and resolves supplied recording companions by unique name", async () => {
   const db = new (await sql).Database(await fixture());
   try {

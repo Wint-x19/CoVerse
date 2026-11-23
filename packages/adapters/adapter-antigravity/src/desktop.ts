@@ -192,6 +192,9 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
     for (const message of history) {
       const user = message.role === "user";
       let text = message.text;
+      if (message.plan?.text && message.plan.text !== text) text += (text ? "\n\n" : "") + message.plan.text;
+      if (message.plan?.steps.length) text += "\n\n" + message.plan.steps.map(step =>
+        "- " + step.title + (step.status ? " [" + step.status + "]" : "") + (step.detail ? "\n  " + step.detail : "")).join("\n");
       const media: Uint8Array[] = [];
       for (const asset of message.assets ?? []) {
         const prefix = "data:" + asset.mediaType + ";base64,";

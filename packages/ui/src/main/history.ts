@@ -46,6 +46,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     ...(m.role === "assistant" ? {agent:sourceAgent} : {}), ...(m.activity ? {reasoning:m.activity} : {}),
     ...(m.changedFiles ? {changedFiles:m.changedFiles} : {}), ...(m.reviews ? {reviews:m.reviews} : {}),
     ...(m.assets?.length ? {assets:m.assets} : {}),
+    ...(m.plan ? {plan:m.plan} : {}),
     ...(m.tools?.length ? {tools:m.tools.map(tool => ({...tool,timestamp:m.createdAt ?? timestamp}))} : {}),
     ...(m.durationMs !== undefined ? {durationMs:m.durationMs} : {}),
   }));
@@ -65,7 +66,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       if (block.type === "reasoning") reasoning.push(block.text);
     }
     const content = parts.join("\n\n");
-    if (!content && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
+    if (!content && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
     const base = {id:turn.id, content, createdAt:timestamp, historical:true};
     // A Claude user record can contain both an actual user message and the results of earlier work.
@@ -76,6 +77,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     messages.push({...base,role,...(assets.length ? {assets} : {}), ...(role === "assistant" ? {agent:sourceAgent,
       ...(tools?.length ? {tools} : {}), ...(turn.changedFiles?.length ? {changedFiles:turn.changedFiles} : {})} : {}),
       ...(reasoning.length ? {reasoning:reasoning.join("\n\n")} : {}),
+      ...(turn.plan ? {plan:turn.plan} : {}),
       ...(turn.reviews?.length ? {reviews:turn.reviews} : {})});
   }
   return messages;
