@@ -440,7 +440,8 @@ export class UiService {
       const relative = path.relative(root, p);
       return relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative);
     };
-    if (!inside(candidate)) throw new Error("File is outside this conversation's project");
+    // An absolute file URI may use a junction or a Windows short name for this project.
+    if (!path.isAbsolute(value) && !inside(candidate)) throw new Error("File is outside this conversation's project");
     const target = await fs.realpath(candidate);
     if (!inside(target)) throw new Error("File is outside this conversation's project");
     return {target,display:path.relative(root,target) || "."};
@@ -1345,14 +1346,21 @@ export class UiService {
   private async recoverRunChanges(agent:string, nativeId:string, cwd:string, prompt:string, answer:string) {
     try {
       const refs = (await this.listLocalSessions(agent)).filter(row => row.id === nativeId);
-      const ref = refs.find(row => row.cwd && sameLocalPath(row.cwd,cwd)) ?? (refs.length === 1 ? refs[0] : undefined);
+      const matches = [];
+      for (const row of refs) {
+        const directory = await resolveExistingDirectory(row.cwd);
+        if (directory && sameLocalPath(directory,cwd)) matches.push(row);
+      }
+      const ref = matches.length === 1 ? matches[0] : (refs.length === 1 && !refs[0]!.cwd ? refs[0] : undefined);
       if (!ref) return;
       const adapter = this.adapters.get(agent);
       const files = await this.prepareImport(adapter,await loadPathsAsFileSet([ref.path]),[ref.path]);
       const {session} = await adapter.import(files);
       if ((localResumeId(adapter,session,ref.path) ?? session.meta.id) !== nativeId) return;
-      const project = projectDirectory(session.meta.cwd);
-      if (project && !sameLocalPath(project,cwd)) return;
+      if (session.meta.cwd) {
+        const project = await resolveExistingDirectory(session.meta.cwd);
+        if (!project || !sameLocalPath(project,cwd)) return;
+      }
       const history = csrTurnsToChatMessages(session.turns,agent,"",session.transcript);
       let start = history.length - 1;
       while (start >= 0 && history[start]!.role !== "user") start--;

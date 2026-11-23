@@ -224,12 +224,16 @@ describe("CoVerse M4 desktop IPC & service", () => {
     expect(() => restoreHistory(old,[history("other","unrelated")],false)).toThrow("retained");
   });
   it("recovers status-only live file changes from the matching native turn and never substitutes another turn", async () => {
-    const root = await makeTempDir("coverse-live-diff-");
+    const parent = await makeTempDir("coverse-live-diff-");
+    const root = path.join(parent,"project");
+    const recordedRoot = path.join(parent,"project-alias");
+    await fs.mkdir(root);
+    await fs.symlink(root,recordedRoot,"junction");
     const id = "11111111-2222-4333-8444-555555555555";
     const file = path.join(root,"rollout-test.jsonl");
     const done = (item:object) => ({type:"event_msg",payload:{type:"item_completed",turn_id:"turn-1",item}});
     await fs.writeFile(file,[
-      {type:"session_meta",payload:{id,cli_version:"0.169.0-alpha.11.1",cwd:root}},
+      {type:"session_meta",payload:{id,cli_version:"0.169.0-alpha.11.1",cwd:recordedRoot}},
       done({type:"UserMessage",id:"u",content:[{type:"text",text:"edit it"}]}),
       done({type:"FileChange",id:"f",status:"completed",changes:{"note.txt":{type:"update",unified_diff:"@@ -1 +1 @@\n-old\n+written"}}}),
       done({type:"AgentMessage",id:"a",content:[{type:"text",text:"echo:codex:direct:default"}]}),
@@ -238,7 +242,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
     const decode = plugin.decoder();
     plugin.decoder = () => record => record.event === "tool" ? [{type:"tool",name:"file_change",state:"completed",
       changedFiles:[{path:"note.txt",added:null,removed:null}]}] : decode(record);
-    plugin.listLocalSessions = async () => [{id,agent:"codex",title:"fixture",cwd:root,path:file,size:100,updatedAt:new Date().toISOString()}];
+    plugin.listLocalSessions = async () => [{id,agent:"codex",title:"fixture",cwd:recordedRoot,path:file,size:100,updatedAt:new Date().toISOString()}];
     const drivers = new DriverRegistry().register(new AgentDriver(plugin,{command:process.execPath}));
     const service = new UiService(createAdapterRegistry(),drivers,new UiStore(path.join(root,"ui")),root);
     for (const prompt of ["edit it","different turn"]) {
@@ -297,6 +301,12 @@ describe("CoVerse M4 desktop IPC & service", () => {
     const preview = (ref: string, scope = "project") => invoke(IPC_CHANNELS.previewFile, session.id, ref, scope);
     expect(await preview("two lines.md")).toMatchObject({ok: true, data: {content: "one\ntwo"}});
     expect(await preview(pathToFileURL(path.join(workspace, "two lines.md")).href)).toMatchObject({ok: true});
+    const alias = path.join(root,"workspace-alias");
+    await fs.symlink(workspace,alias,"junction");
+    expect(await preview(pathToFileURL(path.join(alias,"two lines.md")).href)).toMatchObject({ok:true,data:{content:"one\ntwo"}});
+    await fs.symlink(root,path.join(workspace,"outside"),"junction");
+    expect(await preview("outside/relocated.md")).toMatchObject({ok:false});
+    await fs.unlink(path.join(workspace,"outside"));
     expect(await preview(".")).toMatchObject({ok: true, data: {entries: ["two lines.md"]}});
     expect(await preview("../settings.json")).toMatchObject({ok: false});
     expect(await preview("missing.md")).toMatchObject({ok: false});

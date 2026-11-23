@@ -100,6 +100,8 @@ Antigravity 的 CLI 文件以 `cascade_id` 命名，数据库内另有 `trajecto
 
 Windows 的 Antigravity 项目 URI 可能保留 8.3 短路径。匹配时对请求目录和登记目录都调用 `realpath`，命中后沿用已登记的 ID 与原始 URI。GitHub Windows runner 的 `RUNNER~1` 与 `runneradmin` 触发过重复建项目；回归用例用指向同一目录的两条路径验证该行为。
 
+桌面文件预览和实时 diff 恢复也会同时遇到原生记录中的路径与系统解析后的路径。文件预览用最终文件的真实路径检查项目边界，实时 diff 恢复用真实目录比对目录列表、原生记录和运行项目。桌面测试用目录联接稳定复现两种拼写，并覆盖联接指向项目外文件时的拒绝结果。[桌面回归](../packages/ui/test/desktop.test.ts)
+
 ### Codex 桌面页面上下文可跨 writer 复用同一记录形状
 
 2026-11-22 在 `0.169.0-alpha.11.1` 的一份原生 rollout 中复现缺少调用 ID 的导入错误。此前仅在 `0.171.0-alpha.13` 中识别桌面注入的页面上下文。修复后按记录结构识别，两种 writer 共享回归用例，普通工具结果继续校验调用关联。[Codex 适配器](../packages/adapters/adapter-codex/src/index.ts)
