@@ -1,5 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { it, expect } from "vitest";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { it, expect, vi } from "vitest";
 import adapter from "../src/index.js";
 const fixture = async () => (await readFile(new URL("../../../../fixtures/claude-code/transcript-sdk-0_3_326/sample.jsonl", import.meta.url), "utf8")).trim().split("\n").map(s => JSON.parse(s));
 const input = (rows: unknown[]) => [{ path: "sample.jsonl", bytes: new TextEncoder().encode(rows.map(r => JSON.stringify(r)).join("\n")) }];
@@ -68,6 +69,40 @@ it("preserves forks and subagent branches without selecting only the last leaf",
   expect(r.session.turns).toHaveLength(6);
   expect(r.session.turns[3]!.origin!.branchId).not.toEqual(r.session.turns[4]!.origin!.branchId);
   expect(r.session.turns[5]!.origin!.kind).toBe("subsession");
+});
+it("compares two archived file checkpoints on the same ancestry without reading the present worktree", async () => {
+  const rows = await fixture();
+  const names = ["0123456789abcdef@v1","0123456789abcdef@v2"];
+  const snapshot = (id:string,i:number) => ({type:"file-history-snapshot",messageId:id,snapshot:{
+    messageId:id,trackedFileBackups:{"sample.js":{backupFileName:names[i],version:i+1}},
+  }});
+  const log = input([rows[0],snapshot(rows[0].uuid,0),...rows.slice(1),snapshot(rows[3].uuid,1)]);
+  const backups = names.map((name,i) => ({path:"file-history/" + name,bytes:new TextEncoder().encode(i ? "new\n" : "old\n")}));
+  const {session} = await adapter.import([...log,...backups]);
+  const last = session.turns.at(-1)!;
+  expect(last.assets).toMatchObject([{value:"new\n",label:"sample.js · v2"}]);
+  expect(last.changedFiles).toMatchObject([{path:"sample.js",added:1,removed:1,patches:["@@ -1,1 +1,1 @@\n-old\n+new"]}]);
+  const missing = (await adapter.import(log)).session.turns.at(-1)!;
+  expect(missing.changedFiles?.[0]).toEqual({path:"sample.js",added:null,removed:null});
+  expect(missing.event?.text).toContain("backup unavailable");
+});
+it("loads only the selected native session's named backups", async () => {
+  const tmp = path.resolve(import.meta.dirname,"../../../../.tmp");
+  await mkdir(tmp,{recursive:true});
+  const root = await mkdtemp(path.join(tmp,"checkpoint-"));
+  try {
+    vi.stubEnv("CLAUDE_CONFIG_DIR",root);
+    const rows = await fixture(), id = rows[0].sessionId, name = "0123456789abcdef@v1";
+    const dir = path.join(root,"projects","fixture"), backups = path.join(root,"file-history",id);
+    await mkdir(dir,{recursive:true}); await mkdir(backups,{recursive:true});
+    await writeFile(path.join(backups,name),"recorded");
+    rows.push({type:"file-history-snapshot",snapshot:{trackedFileBackups:{"code.ts":{backupFileName:name}}}});
+    const files = [{...input(rows)[0]!,path:id+".jsonl"}];
+    const resolve = async () => {throw new Error("Unexpected lookup");};
+    const result = await adapter.prepareLocalImport!(files,resolve,path.join(dir,id+".jsonl"));
+    expect(result.map(file => file.path)).toEqual([id+".jsonl","file-history/"+name]);
+    expect(await adapter.prepareLocalImport!(files,resolve,path.join(root,"elsewhere",id+".jsonl"))).toEqual(files);
+  } finally {vi.unstubAllEnvs(); await rm(root,{recursive:true,force:true});}
 });
 it("rejects missing parents, cycles, unknown writers and sibling tool results", async () => {
   const rows = await fixture();

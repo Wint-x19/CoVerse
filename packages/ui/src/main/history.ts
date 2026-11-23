@@ -73,7 +73,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     const tools = toolsByTurn.get(turn);
     const displayOnly = turn.role === "system" || turn.role === "developer" || turn.role === "tool";
     const parts: string[] = [], reasoning: string[] = [];
-    const assets: RecordedAsset[] = [];
+    const assets: RecordedAsset[] = [...turn.assets ?? []];
     let event = turn.event;
     if (!event && (turn.role === "system" || turn.role === "developer" || turn.origin?.kind === "compaction")) {
       const text = turn.content.flatMap(b => b.type === "text" ? [b.text] : []).join("\n\n");

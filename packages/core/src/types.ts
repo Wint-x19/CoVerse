@@ -48,6 +48,7 @@ export interface Turn extends MessageMetadata {
   plan?: RecordedPlan;
   event?: HistoryEvent;
   childTrajectory?: {id:string;turns:Turn[]};
+  assets?: RecordedAsset[];
   reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
   origin?: { artifact: string; record: number; parentId?: string; parentTurnId?: string; branchId?: string; subsession?:boolean; reverted?: boolean; kind?: "message" | "compaction" | "reverted" | "subsession" };
@@ -96,7 +97,7 @@ export interface HistoryEvent extends MessageMetadata {
   id: string;
   anchorId?: string;
   sourceRole?: Turn["role"];
-  kind: "system" | "developer" | "context" | "progress" | "attachment" | "compaction" | "error" | "rollback" | "opaque";
+  kind: "system" | "developer" | "context" | "progress" | "attachment" | "compaction" | "checkpoint" | "error" | "rollback" | "opaque";
   text: string;
 }
 
@@ -192,7 +193,7 @@ export interface SessionAdapter {
   readToolChanges?(name:string, args:JsonValue, result?:JsonValue): RecordedFileChange[] | undefined;
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
-  prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>): Promise<FileSet>;
+  prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>, sourcePath?: string): Promise<FileSet>;
   /** Resolve a CLI-resumable identity when the native store distinguishes sessions from trajectories. */
   localResumeId?(session: CSR, sourcePath: string): string | undefined;
   /** Publish a separate, resumable snapshot when the desktop and CLI have separate native stores. */

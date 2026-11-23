@@ -581,7 +581,7 @@ export class UiService {
       const matches = catalog.filter(row => row.id === id);
       if (matches.length !== 1) throw new SessionError("MISSING_RELATED_RECORD", "/input", "Cannot uniquely locate parent session " + id);
       return loadPathsAsFileSet([matches[0]!.path]);
-    });
+    },paths[0]);
   }
 
   async inspectSource(input: {

@@ -1,6 +1,7 @@
 import { blockAsset, recordedUsage, stringifyWireJson, type RecordedAsset } from "@coverse/core";
 import { recordedEdit } from "./file-edit.js";
 import {readToolPlan} from "./plan.js";
+import {SnapshotHistory,supplyNativeBackups} from "./snapshots.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "transcript-sdk-0_3_326";
@@ -67,6 +68,7 @@ function blocks(content: JsonValue | undefined, at: string): ContentBlock[] {
   });
 }
 const adapter: SessionAdapter = {
+  prepareLocalImport:supplyNativeBackups,
   readToolPlan,
   readToolChanges(name,args,result) {
     const file = recordedEdit({type:"tool_call",id:"",name,arguments:args},result);
@@ -104,6 +106,7 @@ const adapter: SessionAdapter = {
       return result;
     };
     const rendered = new Set<string>(); const byId = new Map<string, Turn>();
+    const snapshots = new SnapshotHistory(files);
     for (const e of entries) {
       const r = e.value, at = `${e.artifact}:${e.line}`, id = typeof r.uuid === "string" ? r.uuid : `${e.artifact}:${e.line}`;
       if (rendered.has(id)) continue; rendered.add(id);
@@ -126,6 +129,16 @@ const adapter: SessionAdapter = {
             cacheWrite:u.cache_creation_input_tokens,reasoning:u.thinking_tokens});
           if (usage) {turn.usage = usage;turn.usageScope = "message";}
         }
+      } else if (r.type === "file-history-snapshot") {
+        const anchor = isRecord(r.snapshot) && typeof r.snapshot.messageId === "string" ? r.snapshot.messageId : r.messageId;
+        const associated = typeof anchor === "string" ? byId.get(anchor) : undefined;
+        if (associated?.origin && typeof anchor === "string") {
+          origin.parentId = anchor;
+          if (associated.origin.branchId) origin.branchId = associated.origin.branchId;
+        }
+        turn = {id,role:"system",content:[],origin,raw:r};
+        snapshots.read(turn,r,typeof anchor === "string" && nodes.has(anchor) ? ancestors(anchor) : []);
+        ledger.downgraded.push({code:"FILE_CHECKPOINT_ARCHIVED",path:at,reason:"File versions remain in the archive and are available for read-only inspection"});
       } else if (["system", "attachment", "progress", "summary"].includes(String(r.type)) ||
           (r.type === "ai-title" && r.sessionId === session.meta.id && typeof r.aiTitle === "string" &&
             Object.keys(r).every(key => ["type", "sessionId", "aiTitle"].includes(key)))) {
@@ -134,7 +147,7 @@ const adapter: SessionAdapter = {
         const kind = origin.kind === "compaction" ? "compaction" : r.type === "progress" ? "progress" : r.type === "attachment" ? "attachment" : "system";
         turn.event = {id,kind,text:typeof r.summary === "string" ? r.summary : stringifyWireJson(r,null,2)};
         ledger.downgraded.push({ code: "NATIVE_CONTEXT_AS_HISTORY", path: at, reason: "Native context, progress and compaction data are labeled history, not target runtime state" });
-      } else if (!["file-history-snapshot", "queue-operation", "last-prompt", "custom-title", "tag", "agent-name", "agent-color", "agent-setting", "pr-link"].includes(String(r.type))) {
+      } else if (!["queue-operation", "last-prompt", "custom-title", "tag", "agent-name", "agent-color", "agent-setting", "pr-link"].includes(String(r.type))) {
         turn = { id, role: "system", content: [{ type: "opaque", source: "claude-code:record", value: r }], raw: r, origin };
       }
       if (turn) {
