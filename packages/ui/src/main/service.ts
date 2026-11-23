@@ -42,7 +42,8 @@ import type {
   UploadedFilePayload,
 } from "../shared/types.js";
 import { UiStore } from "./store.js";
-import { csrTurnsToChatMessages } from "./history.js";
+import { csrTurnsToChatMessages,restoreHistory } from "./history.js";
+import {historyVersion,needsHistoryRefresh} from "../shared/history-version.js";
 import { updateToolActivity } from "../shared/tool-activity.js";
 
 const SESSION_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -467,20 +468,62 @@ export class UiService {
   async getSession(id: string, refreshLegacyDisplay = false): Promise<UiSession> {
     const session = await this.store.getSession(id);
     if (!session) throw new SessionError("NOT_FOUND", `/sessions/${id}`, `Session not found: ${id}`);
+    if (!refreshLegacyDisplay || !needsHistoryRefresh(session)) return session;
     const ref = session.reference;
-    if (refreshLegacyDisplay && ref && ref.displayVersion !== 2 && session.messages.every(m => m.historical)) {
+    let history:ChatMessage[];
+    if (ref) {
       const adapter = this.adapters.get(ref.agent);
       const paths = [ref.sourcePath];
       const imported = await adapter.import(await this.prepareImport(adapter, await loadPathsAsFileSet(paths), paths));
       if (imported.session.meta.id !== (ref.sourceSessionId ?? session.targetSessionId)) throw new SessionError("INVALID_INPUT", "/reference", "The file now belongs to a different conversation.");
-      const messages = csrTurnsToChatMessages(imported.session.turns, ref.agent, session.createdAt, imported.session.transcript);
-      return this.store.mutateSession(id, current => {
-        if (current.reference?.sourcePath !== ref.sourcePath || current.reference.displayVersion === 2 || current.targetSessionId !== session.targetSessionId ||
-            !current.messages.every(m => m.historical)) return current;
-        return {...current, messages, reference: {...current.reference, displayVersion: 2}};
+      history = csrTurnsToChatMessages(imported.session.turns, ref.agent, session.createdAt, imported.session.transcript);
+    } else if (session.handoff) {
+      history = await this.restoreBundleHistory(session,session.handoff);
+    } else return session;
+    return this.store.mutateSession(id,current => {
+      if (!needsHistoryRefresh(current) || current.reference?.sourcePath !== ref?.sourcePath ||
+          current.handoff?.bundleId !== session.handoff?.bundleId) return current;
+      return {...current,historyVersion,messages:restoreHistory(current.messages,history,!!session.handoff)};
+    });
+  }
+
+  private async restoreBundleHistory(session:UiSession,handoff:HandoffMetadata) {
+    const bundle = await this.store.loadBundleFiles(handoff.bundleId);
+    verifyInjectionBundle(bundle,handoff.to);
+    const saved = parseWireJson(new TextDecoder().decode(bundle.find(f => f.path === "session.json")!.bytes)) as unknown as CSR;
+    const sources = bundle.filter(f => f.path.startsWith("source/")).map(f => ({path:f.path.slice(7),bytes:f.bytes}));
+    const project = (csr:CSR) => csrTurnsToChatMessages(csr.turns,csr.meta.agent,session.createdAt,csr.transcript);
+    const savedDisplay = () => {
+      const previous = new Map(session.messages.filter(m => m.historical).map(m => [m.id,m]));
+      return project(saved).map(m => {
+        const old = previous.get(m.id) ?? (m.id.startsWith("ui-") ? previous.get(m.id.slice(3)) : undefined);
+        // Early desktop-only bundles synthesized {} and a status string for tool pairs.
+        // Use the actual recorded activity in that case rather than promoting placeholders to output.
+        return old && saved.meta.agentFormatVersion === "coverse-desktop-1.0"
+          ? {...old,...m,id:old.id,...(old.tools ? {tools:old.tools} : {}),...(old.agent ? {agent:old.agent} : {})} : m;
       });
+    };
+    if (!sources.length) return savedDisplay();
+    const adapter = this.adapters.list().find(a => a.id === saved.meta.agent && a.supportedVersions.includes(saved.meta.agentFormatVersion));
+    if (adapter) {
+      const fresh = await adapter.import(sources);
+      if (fresh.session.meta.id !== saved.meta.id) throw new SessionError("INVALID_BUNDLE","/history","Archived source identity differs from the saved conversation");
+      return project(fresh.session);
     }
-    return session;
+    // Repeated handoffs can contain an older native prefix followed by desktop-created turns.
+    const nativeTurns = saved.turns.filter(t => t.origin?.artifact !== "coverse-desktop/sessions.json");
+    if (nativeTurns.length) for (const candidate of this.adapters.list()) {
+      if (!(await candidate.detect(sources)).confidence) continue;
+      const {session:original} = await candidate.import(sources);
+      if (!nativeTurns.every((t,i) => t.id === original.turns[i]?.id)) continue;
+      const local = saved.turns.filter(t => t.origin?.artifact === "coverse-desktop/sessions.json");
+      const extras = csrTurnsToChatMessages(local,handoff.from,session.createdAt).map(m => {
+        const previous = session.messages.find(old => old.historical && "ui-"+old.id === m.id);
+        return previous ? {...m,id:previous.id,...(previous.agent ? {agent:previous.agent} : {})} : m;
+      });
+      return [...project(original),...extras];
+    }
+    return savedDisplay();
   }
 
   async createSession(input: {
@@ -765,6 +808,7 @@ export class UiService {
       bundlePending: true,
       handoff,
       messages: input.initialMessages ?? [],
+      historyVersion,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -864,7 +908,8 @@ export class UiService {
             formatVersion: imported.session.meta.agentFormatVersion,
             originalCwd: effectiveCwd,
           },
-          messages,
+          messages:existingRef ? restoreHistory(existingRef.messages,messages,false) : messages,
+          historyVersion,
           createdAt: existingRef?.createdAt ?? imported.session.meta.createdAt ?? timestamp,
           updatedAt: timestamp,
         };

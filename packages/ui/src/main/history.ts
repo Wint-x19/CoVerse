@@ -1,5 +1,27 @@
-import { blockAsset, stringifyWireJson, type CSR, type HistoryEvent, type RecordedAsset, type Turn } from "@coverse/core";
+import { blockAsset, SessionError, stringifyWireJson, type CSR, type HistoryEvent, type RecordedAsset, type Turn } from "@coverse/core";
 import type { ChatMessage, ToolActivity } from "../shared/types.js";
+
+export function restoreHistory(existing:ChatMessage[], recorded:ChatMessage[], frozen:boolean) {
+  const live = existing.filter(m => !m.historical);
+  if (frozen || !live.length) return [...recorded,...live];
+  const prior = existing.filter(m => m.historical);
+  const last = prior.at(-1);
+  let boundary = last ? recorded.findIndex(m => m.id === last.id && m.role === last.role) : -1;
+  if (last && boundary < 0) {
+    // Early desktop versions generated random history IDs and merged tool-only messages.
+    // Match their visible text in order. A changed source must not erase locally appended turns.
+    for (const old of prior.filter(m => m.content.trim())) {
+      const next = recorded.findIndex((m,i) => i > boundary && m.role === old.role && m.content.trim() === old.content.trim());
+      if (next < 0) throw new SessionError("HISTORY_BOUNDARY_UNKNOWN","/history","Source history changed. The saved conversation has been retained.");
+      boundary = next;
+    }
+  }
+  const nextUser = recorded.findIndex((m,i) => i > boundary && m.role === "user");
+  const firstLive = live.find(m => m.role === "user");
+  const stop = nextUser >= 0 && firstLive && recorded[nextUser]!.content.trim() === firstLive.content.trim() ? nextUser : boundary + 1;
+  if (last && stop === 0) throw new SessionError("HISTORY_BOUNDARY_UNKNOWN","/history","Cannot identify the original import boundary.");
+  return [...recorded.slice(0,stop),...live];
+}
 
 function historicalTools(turns: readonly Turn[], timestamp: string) {
   const byTurn = new Map<Turn, ToolActivity[]>();

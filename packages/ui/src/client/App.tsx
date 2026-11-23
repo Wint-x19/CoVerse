@@ -25,6 +25,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { ThreadView } from "@/components/ThreadView";
 import { FileViewer } from "@/components/FileViewer";
 import {updateToolActivity} from "../shared/tool-activity.js";
+import {needsHistoryRefresh} from "../shared/history-version.js";
 import { TopBar } from "@/components/TopBar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -317,8 +318,8 @@ export function App() {
     setSettingsOpen(false);
     setActiveSessionId(id);
     setBannerError(null);
-    const ref = sessions.find(row => row.id === id)?.reference;
-    if (ref && ref.displayVersion !== 2) {
+    const selected = sessions.find(row => row.id === id);
+    if (selected && needsHistoryRefresh(selected)) {
       void api.getSession(id).then(upsertLocalSession).catch(e => setBannerError(e instanceof Error ? e.message : String(e)));
     }
   };

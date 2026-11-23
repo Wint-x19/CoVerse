@@ -2,13 +2,14 @@ import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SessionError, type SessionAdapter } from "@coverse/core";
+import { buildInjectionBundle, SessionError, type SessionAdapter } from "@coverse/core";
 import { AgentDriver, createDriverRegistry, DriverRegistry, type DriverPlugin } from "@coverse/drivers";
 import { pathToFileURL } from "node:url";
 import { groupByProject } from "../src/client/lib/projects.js";
 import {fileReference, fileTokens, locateQuote} from "../src/client/lib/file-references.js";
 import {reviewSegments} from "../src/client/lib/review-directives.js";
 import {visibleBranch} from "../src/client/lib/branches.js";
+import {restoreHistory} from "../src/main/history.js";
 import {
   createAdapterRegistry,
   csrTurnsToChatMessages,
@@ -162,6 +163,46 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("upgrades an old archive from original bytes while retaining later local messages and the original packet",async () => {
+    const root = await makeTempDir("coverse-history-upgrade-"), store = new UiStore(path.join(root,"state"));
+    const registry = createAdapterRegistry(), service = new UiService(registry,createFakeDrivers(),store,root);
+    const source = path.join(root,"rollout.jsonl");
+    const item = (value:object) => ({type:"event_msg",payload:{type:"item_completed",turn_id:"t",item:value}});
+    const text = [
+      {type:"session_meta",payload:{id:"sample",cli_version:"0.169.0-alpha.11.1",cwd:root}},
+      {type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"change"}]}},
+      item({id:"u",type:"UserMessage",content:[{type:"text",text:"change"}]}),
+      item({id:"edit",type:"FileChange",status:"completed",changes:{"test.ts":{type:"update",unified_diff:"@@ -1 +1 @@\n-old\n+new"}}}),
+      item({id:"a",type:"AgentMessage",content:[{type:"text",text:"changed"}]}),
+    ].map(r => JSON.stringify(r)).join("\n");
+    await fs.writeFile(source,text);
+    const session = await service.convertSource({from:"codex",to:"claude-code",paths:[source],materialize:false});
+    const {session:csr} = await registry.get("codex").import([{path:"rollout.jsonl",bytes:new TextEncoder().encode(text)}]);
+    delete csr.transcript!.at(-1)!.changedFiles![0]!.patches;
+    const packet = buildInjectionBundle(csr,"claude-code").artifacts;
+    const folder = await store.saveBundle("legacy",packet);
+    const live = {id:"local",role:"user" as const,content:"later",createdAt:"now"};
+    await store.mutateSession(session.id,current => {
+      delete current.historyVersion;
+      current.handoff = {...current.handoff!,bundleId:"legacy",bundlePath:folder};
+      current.messages = [...csrTurnsToChatMessages(csr.turns,"codex","now",csr.transcript),live];
+      return current;
+    });
+    const manifest = await fs.readFile(path.join(folder,"manifest.json"));
+    const updated = await service.getSession(session.id,true);
+    expect(updated.messages.find(m => m.id === "a")?.changedFiles?.[0]?.patches).toEqual(["@@ -1 +1 @@\n-old\n+new"]);
+    expect(updated.messages.at(-1)).toEqual(live);
+    expect(await service.getSession(session.id,true)).toEqual(updated);
+    expect(await fs.readFile(path.join(folder,"manifest.json"))).toEqual(manifest);
+  });
+  it("does not append a native copy of an already recorded live turn when upgrading old reference IDs", () => {
+    const history = (id:string,content:string,role:"user"|"assistant"="user") => ({id,content,role,historical:true,createdAt:"old"});
+    const live = {...history("live","new turn"),historical:false};
+    const old = [history("random1","ask"),history("random2","answer","assistant"),live];
+    const fresh = [history("native1","ask"),history("native2","answer","assistant"),history("native3","new turn")];
+    expect(restoreHistory(old,fresh,false).map(m=>m.id)).toEqual(["native1","native2","live"]);
+    expect(() => restoreHistory(old,[history("other","unrelated")],false)).toThrow("retained");
+  });
   it("recovers status-only live file changes from the matching native turn and never substitutes another turn", async () => {
     const root = await makeTempDir("coverse-live-diff-");
     const id = "11111111-2222-4333-8444-555555555555";
@@ -561,7 +602,9 @@ describe("CoVerse M4 desktop IPC & service", () => {
     await store.mutateSession(source.id, current => {
       const reference = {...current.reference!};
       delete reference.displayVersion;
-      return {...current, reference, messages:[]};
+      const legacy = {...current, reference, messages:[]};
+      delete legacy.historyVersion;
+      return legacy;
     });
     const refreshed = await service.getSession(source.id, true);
     expect(refreshed.messages.map(m=>[m.role,m.content])).toEqual([["user","Original question\n"],["assistant","**Original reply**"]]);

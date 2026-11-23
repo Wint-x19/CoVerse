@@ -140,6 +140,7 @@ export interface ChatMessage {
 }
 
 export interface UiSession {
+  historyVersion?: number;
   id: string;
   title: string;
   agent: string;
