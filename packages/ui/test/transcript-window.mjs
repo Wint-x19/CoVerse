@@ -24,6 +24,8 @@ try {
       reviews:[{path:"two lines.md",comment:"Recheck this line",selections:[{side:"modified",text:"second line",start:1}]}]},
     {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)\n\n" +
       '::code-comment{title="Check line" body="Recorded finding" file="two lines.md" start=2 end=2}',
+      tools:[{id:"call",name:"Read",state:"completed",argumentsText:'{"path":"two lines.md"}',
+        results:[{text:"Recorded tool output"}],timestamp:at}],
       changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
   ]});
   registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => []});
@@ -68,13 +70,25 @@ try {
   assert.match(finding, /second line/);
   console.log("Verified file and line navigation from both message roles in Electron");
   const diff = await win.webContents.executeJavaScript('(' + (() => {
-    const details = document.querySelector('[data-testid="message-assistant-a"] details');
+    const details = [...document.querySelectorAll('[data-testid="message-assistant-a"] details')].find(el => el.querySelector("pre"));
     details.querySelector("summary").click();
     if (!details.open) throw new Error("Diff remained collapsed");
     return details.querySelector("pre").innerText;
   }).toString() + ')()');
   assert.match(diff, /-deleted historical line\n\+added historical line/);
   console.log("Verified opening the historical patch in Electron");
+  const tool = await win.webContents.executeJavaScript('(' + (async () => {
+    const row = document.querySelector('[data-testid="message-assistant-a"]');
+    [...row.querySelectorAll("button")].find(el => el.querySelector("svg.lucide-terminal")).click();
+    for (let i=0; i<100; i++) {
+      const entry = [...row.querySelectorAll("summary")].find(el => el.textContent.includes("Read"));
+      if (entry) {entry.click(); return entry.parentElement.querySelector("dl").innerText;}
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    throw new Error("Tool details did not open");
+  }).toString() + ')()');
+  assert.match(tool, /two lines\.md/);
+  assert.match(tool, /Recorded tool output/);
   const reviewed = await win.webContents.executeJavaScript('(' + (async () => {
     const review = document.querySelector('[data-testid="message-user-u"] section');
     if (!review.innerText.includes("Recheck this line")) throw new Error("Review body missing");

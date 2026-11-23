@@ -456,6 +456,9 @@ describe("CoVerse M4 desktop IPC & service", () => {
       // Converted conversation must populate readable historical user & assistant messages
       expect(convertRes.data.messages.some((m) => m.role === "user" && m.historical)).toBe(true);
       expect(convertRes.data.messages.some((m) => m.role === "assistant" && m.historical)).toBe(true);
+      const read = convertRes.data.messages.flatMap(m => m.tools ?? []).find(tool => /read/i.test(tool.name));
+      expect(read).toMatchObject({state:"completed",argumentsText:expect.stringContaining("example.txt"),
+        results:[{text:"Hello from the sample."}]});
 
       const bundleRes = await invoke<BundleDetailResponse>(IPC_CHANNELS.getBundle, convertRes.data.handoff!.bundleId);
       expect(bundleRes.ok).toBe(true);

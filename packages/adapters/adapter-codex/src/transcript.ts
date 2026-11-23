@@ -1,4 +1,4 @@
-import { isRecord, SessionError, type JsonValue, type TranscriptMessage } from "@coverse/core";
+import { isRecord, SessionError, stringifyWireJson, type JsonValue, type RecordedTool, type TranscriptMessage } from "@coverse/core";
 
 type Row = Record<string, JsonValue>;
 type Changes = { lines: boolean[]; removed: number; patches: string[] };
@@ -74,6 +74,21 @@ function textParts(content: JsonValue | undefined) {
   }).join("");
 }
 
+function nativeTool(item: Row): RecordedTool | undefined {
+  if (!["CommandExecution","McpToolCall","DynamicToolCall","CollabAgentToolCall","WebSearch","Extension"].includes(String(item.type))) return;
+  const name = typeof item.tool === "string" ? item.tool : String(item.type);
+  const args = item.arguments ?? item.command ?? item.query;
+  const output = item.error ?? item.result ?? item.aggregated_output;
+  const failed = item.error != null || (typeof item.exit_code === "number" && item.exit_code !== 0) || item.status === "failed";
+  const details = Object.fromEntries(Object.entries(item).filter(([key]) => ![
+    "id","type","tool","status","arguments","command","query","error","result","aggregated_output",
+  ].includes(key)));
+  return {name, id:String(item.id), state:typeof item.status === "string" ? item.status : failed ? "failed" : "completed",
+    ...(args !== undefined ? {argumentsText:typeof args === "string" ? args : stringifyWireJson(args,null,2)} : {}),
+    ...(output !== undefined ? {results:[{text:typeof output === "string" ? output : stringifyWireJson(output,null,2), ...(failed ? {failed:true} : {})}]} : {}),
+    ...(Object.keys(details).length ? {details:stringifyWireJson(details,null,2)} : {})};
+}
+
 export function nativeTranscript(records: { value: Row }[], cwd?: string): TranscriptMessage[] | undefined {
   // Only use the structured surface when actual native chat items are present.
   if (!records.some(({value}) => value.type === "event_msg" && isRecord(value.payload) &&
@@ -98,6 +113,7 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
   const transcript: TranscriptMessage[] = [];
   for (const [turnId, items] of groups) {
     const activity: string[] = [];
+    const tools: RecordedTool[] = [];
     const files = new Map<string, Changes>();
     let lastAnswer: TranscriptMessage | undefined;
     for (const [id, { item, at }] of items) {
@@ -105,9 +121,8 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
         collectChanges(files, item.changes);
       }
       if (item.type === "Reasoning" && Array.isArray(item.summary_text)) activity.push(...item.summary_text.filter((s): s is string => typeof s === "string"));
-      if (item.type === "CommandExecution" && Array.isArray(item.command)) activity.push(item.command.join(" ") +
-        (typeof item.aggregated_output === "string" ? "\n" + item.aggregated_output : ""));
-      if (item.type === "Extension" && typeof item.query === "string") activity.push(item.query);
+      const tool = nativeTool(item);
+      if (tool) tools.push(tool);
       if (!["UserMessage", "AgentMessage", "Plan"].includes(String(item.type))) continue;
       const text = item.type === "Plan" && typeof item.text === "string" ? item.text : textParts(item.content);
       if (item.type === "AgentMessage" && item.phase === "commentary") { activity.push(text); continue; }
@@ -116,16 +131,18 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
       const msg: TranscriptMessage = { id, role, text, ...(at ? {createdAt: at} : {}) };
       if (role === "assistant") {
         if (activity.length) msg.activity = activity.splice(0).join("\n\n");
+        if (tools.length) msg.tools = tools.splice(0);
         lastAnswer = msg;
       }
       transcript.push(msg);
     }
-    if (activity.length || files.size) {
+    if (activity.length || files.size || tools.length) {
       if (!lastAnswer) {
         lastAnswer = { id: turnId + ":activity", role: "assistant", text: "" };
         transcript.push(lastAnswer);
       }
       if (activity.length) lastAnswer.activity = [lastAnswer.activity, ...activity].filter(Boolean).join("\n\n");
+      if (tools.length) lastAnswer.tools = [...(lastAnswer.tools ?? []), ...tools];
       if (files.size) lastAnswer.changedFiles = fileRows(files, cwd);
     }
     const duration = durations.get(turnId);

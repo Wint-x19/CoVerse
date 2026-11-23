@@ -28,6 +28,14 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("retains native command arguments, failure output and exit code on tool-only turns", async () => {
+  const { session } = await adapter.import(encode([header,
+    completed("turn", {id:"u",type:"UserMessage",content:[{type:"text",text:"run tests"}]}),
+    completed("turn", {id:"cmd",type:"CommandExecution",command:["test","one file"],exit_code:1,aggregated_output:"assertion failed"}),
+  ]));
+  expect(session.transcript?.at(-1)?.tools).toEqual([{id:"cmd",name:"CommandExecution",state:"failed",
+    argumentsText:'[\n  "test",\n  "one file"\n]',results:[{text:"assertion failed",failed:true}],details:'{\n  "exit_code": 1\n}'}]);
+});
 it("keeps the recorded patch on successful legacy changes, including deleted text and missing terminal newline", async () => {
   const changes = {"/sample/gone.txt": {type:"delete", content:"old"}};
   const event = (success: boolean) => ({type:"event_msg", payload:{type:"patch_apply_end", success, changes}});

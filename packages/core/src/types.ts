@@ -22,7 +22,7 @@ export interface LossLedger {
 export type ContentBlock =
   | { type: "text" | "reasoning"; text: string; displayAs?: "review" }
   | { type: "tool_call"; id: string; name: string; arguments: JsonValue; argumentsText?: string }
-  | { type: "tool_result"; callId: string; content: JsonValue; isError?: boolean }
+  | { type: "tool_result"; callId: string; callTurnId?: string; content: JsonValue; isError?: boolean }
   | { type: "attachment"; path: string; mediaType: string }
   | { type: "image"; url: string; detail?: string }
   | { type: "opaque"; source: string; value: JsonValue; requiredForContinuation?: boolean }
@@ -54,12 +54,22 @@ export interface RecordedReview {
   selections: {side: "original" | "modified" | "file"; text?: string; start?: number; end?: number}[];
 }
 
+export interface RecordedTool {
+  id?: string;
+  name: string;
+  state: string;
+  argumentsText?: string;
+  results?: {text: string; failed?: boolean}[];
+  details?: string;
+}
+
 export interface TranscriptMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   createdAt?: string;
   activity?: string;
+  tools?: RecordedTool[];
   durationMs?: number;
   changedFiles?: RecordedFileChange[];
   reviews?: RecordedReview[];

@@ -130,6 +130,7 @@ const adapter: SessionAdapter = {
             t?.content.some(b => b.type === "tool_call" && b.id === block.callId));
           const call = parent?.content.find(b => b.type === "tool_call" && b.id === block.callId);
           if (call?.type !== "tool_call") throw new SessionError("BROKEN_TOOL_REFERENCE", turn.id, "Tool result has no call in its parent chain");
+          block.callTurnId = parent!.id;
           if (!block.isError) {
             const uniqueResult = turn.content.filter(b => b.type === "tool_result").length === 1;
             const file = recordedEdit(call, uniqueResult && isRecord(turn.raw) ? turn.raw.toolUseResult : undefined);

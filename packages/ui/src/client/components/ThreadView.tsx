@@ -36,10 +36,20 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
       {open && (
         <div className="mt-1.5 flex flex-col gap-1 border-l border-[var(--border-subtle)] pl-3">
           {tools.map((tool, index) => (
-            <div key={`${tool.name}-${index}`} className="flex items-center gap-2 font-mono text-[11.5px]">
+            <details key={`${tool.name}-${index}`} className="font-mono text-[11.5px]">
+              <summary className="cursor-pointer">
               <span className="text-[var(--text-primary)]">{tool.name}</span>
-              <span className="text-[var(--text-tertiary)]">{tool.state}</span>
-            </div>
+              <span className="ml-2 text-[var(--text-tertiary)]">{tool.state}</span>
+              </summary>
+              <dl className="ml-3 space-y-1 py-2">
+                <dt>{t.toolInput}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap">{tool.argumentsText ?? t.unrecorded}</pre></dd>
+                <dt>{t.toolOutput}</dt><dd>{tool.results?.length ? tool.results.map((result, i) =>
+                  <pre key={i} className={cn("max-h-80 overflow-auto whitespace-pre-wrap",result.failed && "text-red-500")}>
+                    {result.text || t.emptyOutput}
+                  </pre>) : t.unrecorded}</dd>
+                {tool.details && <><dt>{t.toolDetails}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap">{tool.details}</pre></dd></>}
+              </dl>
+            </details>
           ))}
         </div>
       )}

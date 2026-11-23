@@ -42,6 +42,7 @@ import type {
   UploadedFilePayload,
 } from "../shared/types.js";
 import { UiStore } from "./store.js";
+import { csrTurnsToChatMessages } from "./history.js";
 
 const SESSION_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -139,138 +140,7 @@ async function existsLstat(filename: string) {
   }
 }
 
-/**
- * Convert CSR turns into clean historical user/assistant ChatMessages so converted
- * sessions immediately display readable conversation history in the main thread.
- */
-export function csrTurnsToChatMessages(
-  turns: readonly Turn[],
-  sourceAgent: string,
-  timestampFallback: string,
-  transcript?: CSR["transcript"],
-): ChatMessage[] {
-  if (transcript) return transcript.map(m => ({
-    id: m.id, role: m.role, content: m.text, createdAt: m.createdAt ?? timestampFallback, historical: true,
-    ...(m.role === "assistant" ? {agent: sourceAgent} : {}), ...(m.activity ? {reasoning: m.activity} : {}),
-    ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
-    ...(m.reviews ? {reviews:m.reviews} : {}),
-    ...(m.durationMs !== undefined ? {durationMs: m.durationMs} : {}),
-  }));
-  const messages: ChatMessage[] = [];
-  const toolCallIndex = new Map<string, { message: ChatMessage; toolIdx: number }>();
-
-  const appendAssistant = (
-    textParts: string[],
-    reasoningParts: string[],
-    tools: ToolActivity[],
-    callIds: string[],
-  ) => {
-    const text = textParts.join("\n\n").trim();
-    const reasoning = reasoningParts.join("\n\n").trim();
-    if (!text && !reasoning && tools.length === 0) return;
-
-    // Merge consecutive tool-only or text-after-tool assistant records cleanly
-    const prev = messages.at(-1);
-    if (prev && prev.role === "assistant" && prev.historical && !prev.content && prev.tools && text && tools.length === 0) {
-      prev.content = text;
-      if (reasoning) prev.reasoning = prev.reasoning ? `${prev.reasoning}\n\n${reasoning}` : reasoning;
-      return;
-    }
-
-    const msg: ChatMessage = {
-      id: makeId("hist"),
-      role: "assistant",
-      content: text,
-      createdAt: timestampFallback,
-      agent: sourceAgent,
-      historical: true,
-      ...(reasoning ? { reasoning } : {}),
-      ...(tools.length > 0 ? { tools } : {}),
-    };
-    messages.push(msg);
-    if (msg.tools) {
-      callIds.forEach((callId, idx) => {
-        if (callId) toolCallIndex.set(callId, { message: msg, toolIdx: idx });
-      });
-    }
-  };
-
-  for (const turn of turns) {
-    if (turn.changedFiles?.length) {
-      messages.push({id: turn.id + ":changes", role: "assistant", agent: sourceAgent, historical: true,
-        content: "", createdAt: timestampFallback, changedFiles: turn.changedFiles});
-    }
-    if (turn.role === "system" || turn.role === "developer") continue;
-
-    if (turn.role === "user") {
-      const parts: string[] = [];
-      for (const block of turn.content) {
-        if (block.type === "text" && block.text.trim() && !(block.displayAs === "review" && turn.reviews?.length)) parts.push(block.text.trim());
-        else if (block.type === "attachment") parts.push(`[${block.path}]`);
-        else if (block.type === "image") parts.push(`[image: ${block.url}]`);
-      }
-      const text = parts.join("\n\n").trim();
-      if (text || turn.reviews?.length) {
-        messages.push({
-          id: makeId("hist"),
-          role: "user",
-          content: text,
-          ...(turn.reviews?.length ? {reviews:turn.reviews} : {}),
-          createdAt: timestampFallback,
-          historical: true,
-        });
-      }
-      continue;
-    }
-
-    if (turn.role === "assistant") {
-      const textParts: string[] = [];
-      const reasoningParts: string[] = [];
-      const tools: ToolActivity[] = [];
-      const callIds: string[] = [];
-
-      for (const block of turn.content) {
-        if (block.type === "text" && block.text.trim()) {
-          textParts.push(block.text.trim());
-        } else if (block.type === "reasoning" && block.text.trim()) {
-          reasoningParts.push(block.text.trim());
-        } else if (block.type === "tool_call") {
-          tools.push({ name: block.name, state: "called", timestamp: timestampFallback });
-          callIds.push(block.id);
-        } else if (block.type === "tool_result") {
-          const linked = toolCallIndex.get(block.callId);
-          if (linked && linked.message.tools?.[linked.toolIdx]) {
-            linked.message.tools[linked.toolIdx]!.state = block.isError ? "failed" : "completed";
-          } else {
-            tools.push({
-              name: block.callId,
-              state: block.isError ? "failed" : "completed",
-              timestamp: timestampFallback,
-            });
-            callIds.push("");
-          }
-        } else if (block.type === "attachment") {
-          textParts.push(`[${block.path}]`);
-        }
-      }
-      appendAssistant(textParts, reasoningParts, tools, callIds);
-      continue;
-    }
-
-    if (turn.role === "tool") {
-      for (const block of turn.content) {
-        if (block.type === "tool_result") {
-          const linked = toolCallIndex.get(block.callId);
-          if (linked && linked.message.tools?.[linked.toolIdx]) {
-            linked.message.tools[linked.toolIdx]!.state = block.isError ? "failed" : "completed";
-          }
-        }
-      }
-    }
-  }
-
-  return messages;
-}
+export { csrTurnsToChatMessages } from "./history.js";
 
 export async function loadPathsAsFileSet(inputPaths: readonly string[]): Promise<FileSet> {
   if (!Array.isArray(inputPaths) || inputPaths.length === 0) {
@@ -1219,15 +1089,19 @@ export class UiService {
       if (message.tools && message.tools.length > 0) {
         for (const [ti, tool] of message.tools.entries()) {
           const callId = `ui-tool-${index}-${ti}`;
-          content.push({ type: "tool_call", id: callId, name: tool.name, arguments: {} });
-          content.push({
-            type: "tool_result",
-            callId,
-            content: tool.state,
-            ...(tool.state.toLowerCase().includes("fail") || tool.state.toLowerCase().includes("error")
-              ? { isError: true }
-              : {}),
-          });
+          if (tool.argumentsText === undefined) {
+            content.push({type:"text",text:"Historical tool " + tool.name + " (" + tool.state + "): arguments were not recorded."});
+          } else {
+            let args: import("@coverse/core").JsonValue = tool.argumentsText;
+            try { args = parseWireJson(tool.argumentsText); } catch { /* Native custom tools accept plain text. */ }
+            content.push({type:"tool_call",id:callId,name:tool.name,arguments:args,argumentsText:tool.argumentsText});
+          }
+          for (const result of tool.results ?? []) {
+            if (tool.argumentsText === undefined) content.push({type:"text",text:"Historical tool result for " + tool.name + ":\n" + result.text});
+            else content.push({type:"tool_result",callId,content:result.text,...(result.failed ? {isError:true} : {})});
+          }
+          if (!tool.results?.length) content.push({type:"text",text:"Historical tool " + tool.name + " (" + tool.state + "): result body was not recorded."});
+          if (tool.details) content.push({type:"text",text:tool.details});
         }
       }
       if (message.content) content.push({ type: "text", text: message.content });
@@ -1263,6 +1137,7 @@ export class UiService {
         id: m.id, role: m.role, text: m.content, createdAt: m.createdAt,
         ...(m.reasoning ? {activity: m.reasoning} : {}), ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
         ...(m.reviews ? {reviews:m.reviews} : {}),
+        ...(m.tools?.length ? {tools:m.tools} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {

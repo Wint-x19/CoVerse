@@ -1,4 +1,4 @@
-import type { AdapterCapabilities, LossLedger, ProtocolUsage, SessionDiagnostic } from "@coverse/core";
+import type { AdapterCapabilities, LossLedger, ProtocolUsage, RecordedTool, SessionDiagnostic } from "@coverse/core";
 
 export type ThemeMode = "light" | "dark";
 export type LanguageCode = "zh-CN" | "en";
@@ -102,9 +102,7 @@ export interface SessionReference {
   originalCwd: string;
 }
 
-export interface ToolActivity {
-  name: string;
-  state: string;
+export interface ToolActivity extends RecordedTool {
   timestamp: string;
 }
 
