@@ -1167,6 +1167,7 @@ export class UiService {
         ...(m.assets?.length ? {assets:m.assets} : {}),
         ...(m.plan ? {plan:m.plan} : {}),
         ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
+        ...(m.lineage ? {lineage:m.lineage} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {

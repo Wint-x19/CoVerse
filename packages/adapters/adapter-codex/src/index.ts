@@ -75,9 +75,12 @@ const adapter: SessionAdapter = {
       mirrors.set(key, (mirrors.get(key) ?? 0) + 1);
     }
     let destination = session.turns;
+    const turnGroups = new Map<string,Turn[]>();
+    let activeTurn: string | undefined;
     let artifact = file.path;
     const add = (role: Turn["role"], content: ContentBlock[], raw: JsonValue, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
       destination.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact, record: line, ...(kind ? { kind } : {}) } });
+      if (activeTurn && destination === session.turns) turnGroups.get(activeTurn)?.push(destination.at(-1)!);
     };
     if (isRecord(meta.base_instructions) && typeof meta.base_instructions.text === "string") add("system", [{ type: "text", text: meta.base_instructions.text }], meta.base_instructions, 1);
     const item = (p: Record<string, JsonValue>, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
@@ -124,6 +127,10 @@ const adapter: SessionAdapter = {
       artifact = sourceArtifact;
       if (!isRecord(r.payload)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Expected record payload");
       const p = r.payload;
+      if (typeof p.turn_id === "string" && (r.type === "turn_context" || (r.type === "event_msg" && p.type === "task_started"))) {
+        activeTurn = p.turn_id;
+        if (!turnGroups.has(activeTurn)) turnGroups.set(activeTurn,[]);
+      }
       switch (r.type) {
         case "session_meta": throw new SessionError("AMBIGUOUS_INPUT", `${file.path}:${line}`, "Multiple sessions in one rollout");
         case "response_item": item(p, line); break;
@@ -189,9 +196,17 @@ const adapter: SessionAdapter = {
             }
             ledger.downgraded.push({ code: "TOOL_EVENT_AS_HISTORY", path: `${file.path}:${line}`, reason: "Native tool telemetry is quoted as recorded, without inferring a new executable call" });
           } else if (p.type === "thread_rolled_back") {
+            if (typeof p.num_turns === "number" && Number.isSafeInteger(p.num_turns) && p.num_turns >= 0) {
+              for (const key of [...turnGroups.keys()].reverse().slice(0,p.num_turns)) {
+                for (const turn of turnGroups.get(key)!) if (turn.origin) turn.origin.reverted = true;
+                turnGroups.delete(key);
+              }
+            }
+            activeTurn = undefined;
+            const anchor = session.turns.slice().reverse().find(t => !t.origin?.reverted && (t.role === "assistant" || t.role === "user"));
             add("system", [{type:"text",text:"Historical rollback:\n" + stringifyWireJson(p)}],p,line,"reverted");
             const turn = destination.at(-1)!;
-            turn.event = {id:turn.id,kind:"rollback",text:stringifyWireJson(p,null,2)};
+            turn.event = {id:turn.id,kind:"rollback",text:stringifyWireJson(p,null,2),...(anchor ? {anchorId:anchor.id} : {})};
           }
           else if ((p.type === "error" && typeof p.message === "string") || p.type === "task_aborted" || p.type === "turn_aborted") {
             const text = typeof p.message === "string" ? p.message : stringifyWireJson(p,null,2);

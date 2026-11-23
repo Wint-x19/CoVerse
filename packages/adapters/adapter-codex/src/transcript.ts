@@ -95,7 +95,7 @@ function nativeTool(item: Row): RecordedTool | undefined {
     ...(Object.keys(details).length ? {details:stringifyWireJson(details,null,2)} : {})};
 }
 
-export function nativeTranscript(records: { value: Row }[], cwd?: string): TranscriptMessage[] | undefined {
+export function nativeTranscript(records: { value: Row; artifact?:string }[], cwd?: string): TranscriptMessage[] | undefined {
   // Only use the structured surface when actual native chat items are present.
   if (!records.some(({value}) => value.type === "event_msg" && isRecord(value.payload) &&
       value.payload.type === "item_completed" && isRecord(value.payload.item) && value.payload.item.type === "UserMessage")) return;
@@ -180,10 +180,18 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
     if (lastAnswer && duration !== undefined) lastAnswer.durationMs = duration;
   }
   let next = 0;
+  let previousSource: string | undefined;
+  for (const [i,message] of transcript.entries()) {
+    const position = positions.get(message.id);
+    const source = position !== undefined ? records[position]?.artifact : undefined;
+    if (source && previousSource && source !== previousSource && i > 0) message.lineage = {parentId:transcript[i-1]!.id};
+    if (source) previousSource = source;
+  }
   for (const {position,turn,event} of events) {
     if (turn && removed.has(turn)) continue;
     while (next < transcript.length && (positions.get(transcript[next]!.id) ?? -1) < position) next++;
     const message = transcript[next];
+    if (event.kind === "rollback" && next > 0) event.anchorId = transcript[next-1]!.id;
     if (message) (message.before ??= []).push(event);
     else if (transcript.length) (transcript.at(-1)!.after ??= []).push(event);
     else transcript.push({id:"history-events",role:"assistant",text:"",after:[event]});

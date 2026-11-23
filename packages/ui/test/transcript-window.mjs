@@ -32,6 +32,9 @@ try {
   const at = new Date().toISOString();
   const session = {id: "test-session", agent: "codex", cwd: root, title: "Window fixture", createdAt: at, updatedAt: at};
   await store.upsertSession({...session, messages: [
+    {id:"parent",role:"user",content:"Choose a path",createdAt:at,historical:true,lineage:{branchId:"main"}},
+    {id:"left",role:"assistant",content:"First fork",createdAt:at,historical:true,lineage:{branchId:"left",parentId:"parent"}},
+    {id:"right",role:"assistant",content:"Second fork",createdAt:at,historical:true,lineage:{branchId:"right",parentId:"parent"}},
     {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>)",
       reviews:[{path:"two lines.md",comment:"Recheck this line",selections:[{side:"modified",text:"second line",start:1}]}],
       assets:[{location:"embedded",value:pixel,label:"Screenshot",mediaType:"image/png"},
@@ -73,6 +76,16 @@ try {
   }
   assert.match(await exercise("user-u"), /second line/);
   assert.match(await exercise("assistant-a"), /second line/);
+  const branch = await win.webContents.executeJavaScript('(' + (async () => {
+    if (document.getElementById("timeline-left") || !document.getElementById("timeline-right")) throw new Error("Wrong initial branch");
+    const picker = document.querySelector('[aria-label="浏览历史分支"]');
+    picker.value = "left"; picker.dispatchEvent(new Event("change",{bubbles:true}));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    document.getElementById("timeline-left").querySelector("button").click();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    return [document.activeElement.id,!!document.getElementById("timeline-right")];
+  }).toString() + ')()');
+  assert.deepEqual(branch,["timeline-parent",false]);
   const plan = await win.webContents.executeJavaScript('document.querySelector(\'[data-testid="message-assistant-p"]\').innerText');
   assert.match(plan,/Run tests/);
   assert.match(plan,/已完成/);

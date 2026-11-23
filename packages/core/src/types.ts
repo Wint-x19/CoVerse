@@ -40,7 +40,7 @@ export interface Turn {
   event?: HistoryEvent;
   reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
-  origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
+  origin?: { artifact: string; record: number; parentId?: string; parentTurnId?: string; branchId?: string; reverted?: boolean; kind?: "message" | "compaction" | "reverted" | "subsession" };
 }
 
 /** Native conversation surface, independent of the model's compacted input window. */
@@ -83,9 +83,17 @@ export interface RecordedPlan {
 
 export interface HistoryEvent {
   id: string;
+  anchorId?: string;
   sourceRole?: Turn["role"];
   kind: "system" | "developer" | "context" | "progress" | "attachment" | "compaction" | "error" | "rollback" | "opaque";
   text: string;
+}
+
+export interface MessageLineage {
+  branchId?: string;
+  parentId?: string;
+  subsession?: boolean;
+  reverted?: boolean;
 }
 
 export interface TranscriptMessage {
@@ -96,6 +104,7 @@ export interface TranscriptMessage {
   activity?: string;
   plan?: RecordedPlan;
   before?: HistoryEvent[];
+  lineage?: MessageLineage;
   after?: HistoryEvent[];
   assets?: RecordedAsset[];
   tools?: RecordedTool[];

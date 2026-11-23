@@ -113,6 +113,7 @@ export type FilePreview =
   | { kind: "directory"; path: string; entries: string[] };
 
 export interface ChatMessage {
+  lineage?: import("@coverse/core").MessageLineage;
   before?: import("@coverse/core").HistoryEvent[];
   after?: import("@coverse/core").HistoryEvent[];
   plan?: import("@coverse/core").RecordedPlan;

@@ -23,11 +23,22 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
     {id:"u",role:"user",text:"first question\n"},
     {id:"a",role:"assistant",text:"| A | B |\n|---|---|\n| x | y |",changedFiles:[{path:"test.md",added:2,removed:0,
       patches:["@@ -0,0 +1,2 @@\n+a\n+b","@@ -2,1 +2,1 @@\n-b\n+c"]}]},
-    {id:"u2",role:"user",text:"on fork"}]);
+    {id:"u2",role:"user",text:"on fork",lineage:{parentId:"a"}}]);
   expect(files.some(f => new TextDecoder().decode(f.bytes).includes("excluded sibling"))).toBe(false);
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("marks only the rolled-back source group and links the marker to the retained answer",async () => {
+  const rows:unknown[] = [header];
+  for (const key of ["keep","undo"]) rows.push({type:"event_msg",payload:{type:"task_started",turn_id:key}},
+    response({type:"message",role:"user",content:[{type:"input_text",text:key}]}),
+    completed(key,{type:"UserMessage",id:key,content:[{type:"text",text:key}]}));
+  rows.push({type:"event_msg",payload:{type:"thread_rolled_back",num_turns:1}});
+  const {session} = await adapter.import(encode(rows));
+  expect(session.transcript).toHaveLength(1);
+  expect(session.transcript![0]!.after?.[0]).toMatchObject({kind:"rollback",anchorId:"keep"});
+  expect(session.turns.filter(t => t.origin?.reverted).map(t => t.content[0])).toEqual([{type:"text",text:"undo"}]);
+});
 it("locates a compaction boundary and page context around the selected native messages", async () => {
   const {session} = await adapter.import(encode([header,
     completed("t",{id:"u",type:"UserMessage",content:[{type:"text",text:"continue"}]}),

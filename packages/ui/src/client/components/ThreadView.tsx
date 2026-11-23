@@ -5,6 +5,7 @@ import type { ChatMessage, ToolActivity, UiSession } from "../../shared/types.js
 import type { I18nMessages } from "@/lib/i18n";
 import { agentLabel, cn } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
+import {conversationBranches, visibleBranch} from "@/lib/branches";
 
 interface StreamingState {
   text: string;
@@ -205,7 +206,10 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
   );
 }
 
+const JumpContext = React.createContext<(id:string) => void>(() => {});
+
 function HistoryEvents({events,t}: {events:ChatMessage["before"];t:I18nMessages}) {
+  const jump = React.useContext(JumpContext);
   if (!events?.length) return null;
   return <div className="my-2 space-y-1 border-l border-[var(--border-subtle)] pl-3 text-xs">
     {events.map((event,i) => <details key={event.id + i}>
@@ -213,15 +217,25 @@ function HistoryEvents({events,t}: {events:ChatMessage["before"];t:I18nMessages}
         {t.historyKinds[event.kind]}{event.kind === "error" && <span className="ml-2 text-red-500">{event.text.split("\n")[0]}</span>}
       </summary>
       <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words">{event.text}</pre>
+      {event.anchorId && <button type="button" className="cursor-pointer text-[var(--accent-text)]" onClick={() => jump(event.anchorId!)}>{t.jumpParent}</button>}
     </details>)}
   </div>;
 }
 
 function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
+  const jump = React.useContext(JumpContext);
   const visible = message.content || message.tools?.length || message.reasoning || message.plan || message.changedFiles?.length ||
     message.assets?.length || message.reviews?.length || message.error || message.usage;
   return <MessageOrigin.Provider value={message.id}>
-    <div><HistoryEvents events={message.before} t={t}/>
+    <div id={"timeline-" + message.id} tabIndex={-1} className="outline-none focus-visible:ring-1">
+      <HistoryEvents events={message.before} t={t}/>
+      {message.lineage && <div className="mb-1 flex flex-wrap gap-2 text-xs text-[var(--text-tertiary)]">
+        {message.lineage.subsession && <span>{t.subsession}</span>}
+        {message.lineage.reverted && <span>{t.reverted}</span>}
+        {message.lineage.branchId && <span title={message.lineage.branchId}>{message.lineage.branchId}</span>}
+        {message.lineage.parentId && <button type="button" className="cursor-pointer text-[var(--accent-text)]"
+          onClick={() => jump(message.lineage!.parentId!)}>{t.jumpParent}</button>}
+      </div>}
       {(visible || !(message.before || message.after)) && <MessageRow message={message} t={t}/>}
       <HistoryEvents events={message.after} t={t}/></div>
   </MessageOrigin.Provider>;
@@ -237,6 +251,18 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
   const handoff = session.handoff;
   const historicalMessages = session.messages.filter((m) => m.historical);
   const liveMessages = session.messages.filter((m) => !m.historical);
+  const branches = conversationBranches(historicalMessages);
+  const [selection,setSelection] = React.useState<{sessionId:string; id:string} | null>(null);
+  const recent = historicalMessages.slice().reverse().find(m => m.lineage?.branchId && !m.lineage.subsession)?.lineage?.branchId;
+  const branchId = selection?.sessionId === session.id ? selection.id : recent ?? branches[0]?.id;
+  const jump = (id:string) => {
+    if (!session.messages.some(m => m.id === id)) return;
+    if (!document.getElementById("timeline-" + id)) setSelection({sessionId:session.id,id:""});
+    requestAnimationFrame(() => {
+      const element = document.getElementById("timeline-" + id);
+      element?.focus({preventScroll:true}); element?.scrollIntoView({block:"center"});
+    });
+  };
 
   const handoffStrip = handoff ? (
     <button
@@ -277,9 +303,17 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
   ) : null;
 
   return (
+    <JumpContext.Provider value={jump}>
     <div className="flex-1 overflow-y-auto" data-testid="thread-view">
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
-        {historicalMessages.map((message) => (
+        {branches.length > 1 && <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">{t.browseBranch}
+          <select aria-label={t.browseBranch} className="max-w-[75%] rounded border bg-[var(--bg-surface)] p-1"
+            value={branchId} onChange={e => setSelection({sessionId:session.id,id:e.target.value})}>
+            <option value="">{t.allBranches}</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.subsession ? t.subsession : b.id} · {b.sample}</option>)}
+          </select>
+        </label>}
+        {visibleBranch(historicalMessages,branchId).map((message) => (
           <TimelineMessage key={message.id} message={message} t={t}/>
         ))}
 
@@ -317,5 +351,6 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
         <div ref={bottomRef} />
       </div>
     </div>
+    </JumpContext.Provider>
   );
 }

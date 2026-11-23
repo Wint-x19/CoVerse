@@ -138,6 +138,8 @@ const adapter: SessionAdapter = {
     }
     // A tool result may refer to a shared ancestor of a fork, but not to a sibling branch.
     for (const turn of session.turns) {
+      const nearest = ancestors(turn.id).find(id => byId.has(id));
+      if (nearest && turn.origin && nearest !== turn.origin.parentId) turn.origin.parentTurnId = nearest;
       const localCalls = new Set<string>();
       for (const block of turn.content) {
         if (block.type === "tool_call") {

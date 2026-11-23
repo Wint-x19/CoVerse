@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import { groupByProject } from "../src/client/lib/projects.js";
 import {fileReference, fileTokens, locateQuote} from "../src/client/lib/file-references.js";
 import {reviewSegments} from "../src/client/lib/review-directives.js";
+import {visibleBranch} from "../src/client/lib/branches.js";
 import {
   createAdapterRegistry,
   IPC_CHANNELS,
@@ -159,6 +160,17 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("keeps common ancestors and excludes sibling and subagent replies from a selected branch", () => {
+    const messages: UiSession["messages"] = [
+      {id:"root",role:"user",content:"ask",createdAt:"now",lineage:{branchId:"main"}},
+      {id:"left",role:"assistant",content:"left",createdAt:"now",lineage:{branchId:"A",parentId:"root"}},
+      {id:"right",role:"assistant",content:"right",createdAt:"now",lineage:{branchId:"B",parentId:"root"}},
+      {id:"child",role:"assistant",content:"child",createdAt:"now",lineage:{branchId:"sub",parentId:"left",subsession:true}},
+    ];
+    expect(visibleBranch(messages,"B").map(m=>m.id)).toEqual(["root","right"]);
+    expect(visibleBranch(messages,"sub").map(m=>m.id)).toEqual(["root","left","child"]);
+    expect(visibleBranch(messages,"")).toEqual(messages);
+  });
   it("renders standalone code-review directives without interpreting quoted examples and malformed directives", () => {
     const review = '::code-comment{title="[P1] Check range" body="First \\"note\\"." file="src/a.ts" start=3 end=4 priority=1}';
     const first = "~~~md\n" + review + "\n~~~\n\n";

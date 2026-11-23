@@ -48,12 +48,15 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     ...(m.assets?.length ? {assets:m.assets} : {}),
     ...(m.plan ? {plan:m.plan} : {}),
     ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
+    ...(m.lineage ? {lineage:m.lineage} : {}),
     ...(m.tools?.length ? {tools:m.tools.map(tool => ({...tool,timestamp:m.createdAt ?? timestamp}))} : {}),
     ...(m.durationMs !== undefined ? {durationMs:m.durationMs} : {}),
   }));
   const toolsByTurn = historicalTools(turns, timestamp);
   const messages: ChatMessage[] = [];
   const pending: HistoryEvent[] = [];
+  const branches = new Set(turns.map(t => t.origin?.branchId).filter(Boolean));
+  const byId = new Map(turns.map(t => [t.id,t]));
   for (const turn of turns) {
     const tools = toolsByTurn.get(turn);
     const displayOnly = turn.role === "system" || turn.role === "developer" || turn.role === "tool";
@@ -81,6 +84,13 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     if (!content && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
     const base = {id:turn.id, content, createdAt:timestamp, historical:true, ...(pending.length ? {before:pending.splice(0)} : {})};
+    const origin = turn.origin;
+    const lineage = origin && {
+      ...(origin.branchId && (branches.size > 1 || origin.kind === "subsession") ? {branchId:origin.branchId} : {}),
+      ...(origin.parentTurnId || origin.parentId ? {parentId:origin.parentTurnId ?? origin.parentId!} : {}),
+      ...(origin.kind === "subsession" ? {subsession:true} : {}),
+      ...(origin.reverted || origin.kind === "reverted" ? {reverted:true} : {}),
+    };
     // A Claude user record can contain both an actual user message and the results of earlier work.
     if (role === "user" && (turn.changedFiles?.length || tools?.length)) {
       messages.push({id:turn.id + ":activity",createdAt:timestamp,historical:true,role:"assistant",agent:sourceAgent,content:"",
@@ -90,7 +100,21 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       ...(tools?.length ? {tools} : {}), ...(turn.changedFiles?.length ? {changedFiles:turn.changedFiles} : {})} : {}),
       ...(reasoning.length ? {reasoning:reasoning.join("\n\n")} : {}),
       ...(turn.plan ? {plan:turn.plan} : {}),
+      ...(lineage && Object.keys(lineage).length ? {lineage} : {}),
       ...(turn.reviews?.length ? {reviews:turn.reviews} : {})});
+  }
+  const visible = new Set(messages.map(m => m.id));
+  for (const message of messages) {
+    if (!message.lineage?.parentId) continue;
+    let parent: string | undefined = message.lineage.parentId;
+    const seen = new Set<string>([message.id]);
+    while (parent && !visible.has(parent) && !seen.has(parent)) {
+      seen.add(parent);
+      const origin: Turn["origin"] = byId.get(parent)?.origin;
+      parent = origin?.parentTurnId ?? origin?.parentId;
+    }
+    if (parent && visible.has(parent) && !seen.has(parent)) message.lineage.parentId = parent;
+    else delete message.lineage.parentId;
   }
   if (pending.length) {
     const last = messages.at(-1);
