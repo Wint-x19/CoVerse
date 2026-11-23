@@ -462,6 +462,11 @@ describe("CoVerse M4 desktop IPC & service", () => {
       const read = convertRes.data.messages.flatMap(m => m.tools ?? []).find(tool => /read/i.test(tool.name));
       expect(read).toMatchObject({state:"completed",argumentsText:expect.stringContaining("example.txt"),
         results:[{text:"Hello from the sample."}]});
+      if (route.expectedFrom === "antigravity") {
+        const events = convertRes.data.messages.flatMap(m => [...m.before ?? [],...m.after ?? []]);
+        expect(events.map(e => e.kind)).toEqual(["system","compaction","error"]);
+        expect(events.at(-1)?.text).toContain("synthetic diagnostic");
+      }
 
       const bundleRes = await invoke<BundleDetailResponse>(IPC_CHANNELS.getBundle, convertRes.data.handoff!.bundleId);
       expect(bundleRes.ok).toBe(true);

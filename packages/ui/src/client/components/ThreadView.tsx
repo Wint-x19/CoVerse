@@ -205,6 +205,28 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
   );
 }
 
+function HistoryEvents({events,t}: {events:ChatMessage["before"];t:I18nMessages}) {
+  if (!events?.length) return null;
+  return <div className="my-2 space-y-1 border-l border-[var(--border-subtle)] pl-3 text-xs">
+    {events.map((event,i) => <details key={event.id + i}>
+      <summary className="cursor-pointer text-[var(--text-secondary)]">
+        {t.historyKinds[event.kind]}{event.kind === "error" && <span className="ml-2 text-red-500">{event.text.split("\n")[0]}</span>}
+      </summary>
+      <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words">{event.text}</pre>
+    </details>)}
+  </div>;
+}
+
+function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
+  const visible = message.content || message.tools?.length || message.reasoning || message.plan || message.changedFiles?.length ||
+    message.assets?.length || message.reviews?.length || message.error || message.usage;
+  return <MessageOrigin.Provider value={message.id}>
+    <div><HistoryEvents events={message.before} t={t}/>
+      {(visible || !(message.before || message.after)) && <MessageRow message={message} t={t}/>}
+      <HistoryEvents events={message.after} t={t}/></div>
+  </MessageOrigin.Provider>;
+}
+
 export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadViewProps) {
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
@@ -258,13 +280,13 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
     <div className="flex-1 overflow-y-auto" data-testid="thread-view">
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
         {historicalMessages.map((message) => (
-          <MessageOrigin.Provider key={message.id} value={message.id}><MessageRow message={message} t={t}/></MessageOrigin.Provider>
+          <TimelineMessage key={message.id} message={message} t={t}/>
         ))}
 
         {handoffStrip}
 
         {liveMessages.map((message) => (
-          <MessageOrigin.Provider key={message.id} value={message.id}><MessageRow message={message} t={t}/></MessageOrigin.Provider>
+          <TimelineMessage key={message.id} message={message} t={t}/>
         ))}
 
         {streaming && (

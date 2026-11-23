@@ -188,8 +188,17 @@ const adapter: SessionAdapter = {
               destination.at(-1)!.changedFiles = patchEventFiles(p.changes, session.meta.cwd);
             }
             ledger.downgraded.push({ code: "TOOL_EVENT_AS_HISTORY", path: `${file.path}:${line}`, reason: "Native tool telemetry is quoted as recorded, without inferring a new executable call" });
-          } else if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${stringifyWireJson(p)}` }], p, line, "reverted");
-          else if (!operationalEvents.has(String(p.type))) add("system", [{ type: "opaque", source: "codex:event", value: p }], p, line);
+          } else if (p.type === "thread_rolled_back") {
+            add("system", [{type:"text",text:"Historical rollback:\n" + stringifyWireJson(p)}],p,line,"reverted");
+            const turn = destination.at(-1)!;
+            turn.event = {id:turn.id,kind:"rollback",text:stringifyWireJson(p,null,2)};
+          }
+          else if ((p.type === "error" && typeof p.message === "string") || p.type === "task_aborted" || p.type === "turn_aborted") {
+            const text = typeof p.message === "string" ? p.message : stringifyWireJson(p,null,2);
+            add("system",[{type:"text",text:"Historical error or interruption:\n" + text}],p,line);
+            const turn = destination.at(-1)!;
+            turn.event = {id:turn.id,kind:"error",text};
+          } else if (!operationalEvents.has(String(p.type))) add("system", [{ type: "opaque", source: "codex:event", value: p }], p, line);
           break;
         case "world_state": case "retained_context":
           add("system", [{ type: "text", text: `Historical ${String(r.type)}:\n${stringifyWireJson(p, null, 2)}` }], p, line);

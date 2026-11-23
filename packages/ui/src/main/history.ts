@@ -1,4 +1,4 @@
-import { blockAsset, stringifyWireJson, type CSR, type RecordedAsset, type Turn } from "@coverse/core";
+import { blockAsset, stringifyWireJson, type CSR, type HistoryEvent, type RecordedAsset, type Turn } from "@coverse/core";
 import type { ChatMessage, ToolActivity } from "../shared/types.js";
 
 function historicalTools(turns: readonly Turn[], timestamp: string) {
@@ -47,31 +47,43 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     ...(m.changedFiles ? {changedFiles:m.changedFiles} : {}), ...(m.reviews ? {reviews:m.reviews} : {}),
     ...(m.assets?.length ? {assets:m.assets} : {}),
     ...(m.plan ? {plan:m.plan} : {}),
+    ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
     ...(m.tools?.length ? {tools:m.tools.map(tool => ({...tool,timestamp:m.createdAt ?? timestamp}))} : {}),
     ...(m.durationMs !== undefined ? {durationMs:m.durationMs} : {}),
   }));
   const toolsByTurn = historicalTools(turns, timestamp);
   const messages: ChatMessage[] = [];
+  const pending: HistoryEvent[] = [];
   for (const turn of turns) {
     const tools = toolsByTurn.get(turn);
     const displayOnly = turn.role === "system" || turn.role === "developer" || turn.role === "tool";
     const parts: string[] = [], reasoning: string[] = [];
     const assets: RecordedAsset[] = [];
+    let event = turn.event;
+    if (!event && (turn.role === "system" || turn.role === "developer" || turn.origin?.kind === "compaction")) {
+      const text = turn.content.flatMap(b => b.type === "text" ? [b.text] : []).join("\n\n");
+      if (text) event = {id:turn.id,kind:turn.origin?.kind === "compaction" ? "compaction" : turn.role === "developer" ? "developer" : "system",text};
+    }
+    if (event) pending.push({...event,sourceRole:turn.role});
+    for (const block of turn.content) {
+      if (block.type === "opaque" || block.type === "unknown") pending.push({id:turn.id + ":opaque:" + pending.length,
+        kind:"opaque",text:block.type === "opaque" ? block.source : "Unknown source block"});
+    }
     for (const block of turn.content) {
       const asset = blockAsset(block);
       if (asset) assets.push(asset);
     }
     if (!displayOnly) for (const block of turn.content) {
-      if (block.type === "text" && !(block.displayAs === "review" && turn.reviews?.length)) parts.push(block.text);
+      if (block.type === "text" && event?.kind !== "compaction" && !(block.displayAs === "review" && turn.reviews?.length)) parts.push(block.text);
       if (block.type === "reasoning") reasoning.push(block.text);
     }
     const content = parts.join("\n\n");
     if (!content && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
-    const base = {id:turn.id, content, createdAt:timestamp, historical:true};
+    const base = {id:turn.id, content, createdAt:timestamp, historical:true, ...(pending.length ? {before:pending.splice(0)} : {})};
     // A Claude user record can contain both an actual user message and the results of earlier work.
     if (role === "user" && (turn.changedFiles?.length || tools?.length)) {
-      messages.push({...base,id:turn.id + ":activity",role:"assistant",agent:sourceAgent,content:"",
+      messages.push({id:turn.id + ":activity",createdAt:timestamp,historical:true,role:"assistant",agent:sourceAgent,content:"",
         ...(turn.changedFiles?.length ? {changedFiles:turn.changedFiles} : {}), ...(tools?.length ? {tools} : {})});
     }
     messages.push({...base,role,...(assets.length ? {assets} : {}), ...(role === "assistant" ? {agent:sourceAgent,
@@ -79,6 +91,11 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       ...(reasoning.length ? {reasoning:reasoning.join("\n\n")} : {}),
       ...(turn.plan ? {plan:turn.plan} : {}),
       ...(turn.reviews?.length ? {reviews:turn.reviews} : {})});
+  }
+  if (pending.length) {
+    const last = messages.at(-1);
+    if (last) last.after = pending;
+    else messages.push({id:pending[0]!.id + ":events",role:"assistant",agent:sourceAgent,content:"",historical:true,createdAt:timestamp,after:pending});
   }
   return messages;
 }

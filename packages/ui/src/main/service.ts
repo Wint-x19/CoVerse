@@ -1096,7 +1096,14 @@ export class UiService {
       ? sourceSession.messages.filter((m) => !m.historical)
       : sourceSession.messages;
 
+    const appendEvents = (events: ChatMessage["before"], record:number, prefix:string) => {
+      for (const [i,event] of (events ?? []).entries()) turns.push({
+        id:prefix + ":" + i,role:event.sourceRole ?? "system",content:[{type:"text",text:event.text}],event,
+        origin:{artifact:"coverse-desktop/sessions.json",record,kind:event.kind === "compaction" ? "compaction" : "message"},
+      });
+    };
     for (const [index, message] of messagesToAppend.entries()) {
+      appendEvents(message.before,index+1,message.id + ":before");
       const content: Turn["content"] = [];
       if (message.tools && message.tools.length > 0) {
         for (const [ti, tool] of message.tools.entries()) {
@@ -1134,6 +1141,7 @@ export class UiService {
           origin: { artifact: "coverse-desktop/sessions.json", record: index + 1, kind: "message" },
         });
       }
+      appendEvents(message.after,index+1,message.id + ":after");
     }
 
     if (turns.length === 0) {
@@ -1158,6 +1166,7 @@ export class UiService {
         ...(m.tools?.length ? {tools:m.tools} : {}),
         ...(m.assets?.length ? {assets:m.assets} : {}),
         ...(m.plan ? {plan:m.plan} : {}),
+        ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {

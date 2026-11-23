@@ -37,6 +37,7 @@ export interface Turn {
   /** Presentation details derived from the original record, separate from continuation content. */
   changedFiles?: TranscriptMessage["changedFiles"];
   plan?: RecordedPlan;
+  event?: HistoryEvent;
   reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
   origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
@@ -80,6 +81,13 @@ export interface RecordedPlan {
   steps: {title: string; status?: string; detail?: string}[];
 }
 
+export interface HistoryEvent {
+  id: string;
+  sourceRole?: Turn["role"];
+  kind: "system" | "developer" | "context" | "progress" | "attachment" | "compaction" | "error" | "rollback" | "opaque";
+  text: string;
+}
+
 export interface TranscriptMessage {
   id: string;
   role: "user" | "assistant";
@@ -87,6 +95,8 @@ export interface TranscriptMessage {
   createdAt?: string;
   activity?: string;
   plan?: RecordedPlan;
+  before?: HistoryEvent[];
+  after?: HistoryEvent[];
   assets?: RecordedAsset[];
   tools?: RecordedTool[];
   durationMs?: number;

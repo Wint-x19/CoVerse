@@ -1,4 +1,4 @@
-import { imageAsset, isRecord, SessionError, stringifyWireJson, type JsonValue, type RecordedAsset, type RecordedTool, type TranscriptMessage } from "@coverse/core";
+import { imageAsset, isRecord, SessionError, stringifyWireJson, type HistoryEvent, type JsonValue, type RecordedAsset, type RecordedTool, type TranscriptMessage } from "@coverse/core";
 
 type Row = Record<string, JsonValue>;
 type Changes = { lines: boolean[]; removed: number; patches: string[] };
@@ -99,30 +99,51 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
   // Only use the structured surface when actual native chat items are present.
   if (!records.some(({value}) => value.type === "event_msg" && isRecord(value.payload) &&
       value.payload.type === "item_completed" && isRecord(value.payload.item) && value.payload.item.type === "UserMessage")) return;
-  const groups = new Map<string, Map<string, { item: Row; at?: string }>>();
+  const groups = new Map<string, Map<string, { item: Row; position:number; at?: string }>>();
   const durations = new Map<string, number>();
-  for (const { value } of records) {
+  const events: {position:number; turn?:string; event:HistoryEvent}[] = [];
+  const removed = new Set<string>();
+  let activeTurn: string | undefined;
+  for (const [position,{ value }] of records.entries()) {
     const p = value.payload;
-    if (value.type !== "event_msg" || !isRecord(p)) continue;
+    if (!isRecord(p)) continue;
+    if (typeof p.turn_id === "string") activeTurn = p.turn_id;
+    const record = (kind:HistoryEvent["kind"], text:string) => events.push({position,
+      ...(activeTurn && kind !== "rollback" ? {turn:activeTurn} : {}),event:{id:"codex-event-" + position,kind,text}});
+    if (value.type === "compacted") record("compaction",typeof p.message === "string" ? p.message : "Source replaced the context window.");
+    if (value.type === "turn_context") record("context",stringifyWireJson(p,null,2));
+    if (value.type === "response_item" && p.type === "message" && (p.role === "system" || p.role === "developer")) {
+      const text = textParts(p.content,[]);
+      if (text) record(p.role,text);
+    }
+    if (value.type === "response_item" && p.namespace === "agent" && p.call_id === undefined &&
+      p.type === "function_call_output" && typeof p.output === "string") record("context",p.output);
+    if (value.type !== "event_msg") continue;
+    if (p.type === "error" || p.type === "turn_aborted" || p.type === "task_aborted") {
+      record("error",typeof p.message === "string" ? p.message : stringifyWireJson(p,null,2));
+    }
     if (p.type === "task_complete" && typeof p.turn_id === "string" && typeof p.duration_ms === "number" && Number.isSafeInteger(p.duration_ms) && p.duration_ms >= 0) durations.set(p.turn_id, p.duration_ms);
     if (p.type === "thread_rolled_back") {
       const n = p.num_turns;
       if (typeof n !== "number" || !Number.isInteger(n) || n < 0) throw new SessionError("INVALID_INPUT", "/transcript", "Invalid native rollback count");
-      for (const key of Array.from(groups.keys()).reverse().slice(0,n)) groups.delete(key);
+      for (const key of Array.from(groups.keys()).reverse().slice(0,n)) {groups.delete(key); removed.add(key);}
+      record("rollback",stringifyWireJson(p,null,2));
+      activeTurn = Array.from(groups.keys()).at(-1);
     }
     if (p.type !== "item_completed" || !isRecord(p.item) || typeof p.turn_id !== "string" || typeof p.item.id !== "string") continue;
     let group = groups.get(p.turn_id);
     if (!group) { group = new Map(); groups.set(p.turn_id, group); }
     const at = typeof value.timestamp === "string" ? value.timestamp : undefined;
-    group.set(p.item.id, { item: p.item, ...(at ? { at } : {}) });
+    group.set(p.item.id, { item: p.item, position, ...(at ? { at } : {}) });
   }
   const transcript: TranscriptMessage[] = [];
+  const positions = new Map<string,number>();
   for (const [turnId, items] of groups) {
     const activity: string[] = [];
     const tools: RecordedTool[] = [];
     const files = new Map<string, Changes>();
     let lastAnswer: TranscriptMessage | undefined;
-    for (const [id, { item, at }] of items) {
+    for (const [id, { item, at, position }] of items) {
       if (item.type === "FileChange" && item.status === "completed" && isRecord(item.changes)) {
         collectChanges(files, item.changes);
       }
@@ -143,11 +164,13 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
         lastAnswer = msg;
       }
       transcript.push(msg);
+      positions.set(id,position);
     }
     if (activity.length || files.size || tools.length) {
       if (!lastAnswer) {
         lastAnswer = { id: turnId + ":activity", role: "assistant", text: "" };
         transcript.push(lastAnswer);
+        positions.set(lastAnswer.id,Array.from(items.values()).at(-1)!.position);
       }
       if (activity.length) lastAnswer.activity = [lastAnswer.activity, ...activity].filter(Boolean).join("\n\n");
       if (tools.length) lastAnswer.tools = [...(lastAnswer.tools ?? []), ...tools];
@@ -155,6 +178,15 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
     }
     const duration = durations.get(turnId);
     if (lastAnswer && duration !== undefined) lastAnswer.durationMs = duration;
+  }
+  let next = 0;
+  for (const {position,turn,event} of events) {
+    if (turn && removed.has(turn)) continue;
+    while (next < transcript.length && (positions.get(transcript[next]!.id) ?? -1) < position) next++;
+    const message = transcript[next];
+    if (message) (message.before ??= []).push(event);
+    else if (transcript.length) (transcript.at(-1)!.after ??= []).push(event);
+    else transcript.push({id:"history-events",role:"assistant",text:"",after:[event]});
   }
   return transcript;
 }

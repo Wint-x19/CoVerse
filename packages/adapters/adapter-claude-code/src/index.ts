@@ -120,6 +120,8 @@ const adapter: SessionAdapter = {
             Object.keys(r).every(key => ["type", "sessionId", "aiTitle"].includes(key)))) {
         if (r.subtype === "compact_boundary" || r.type === "summary") origin.kind = "compaction";
         turn = { id, role: "system", content: [{ type: "text", text: `Historical ${String(r.type)} record:\n${stringifyWireJson(r, null, 2)}` }], raw: r, origin };
+        const kind = origin.kind === "compaction" ? "compaction" : r.type === "progress" ? "progress" : r.type === "attachment" ? "attachment" : "system";
+        turn.event = {id,kind,text:typeof r.summary === "string" ? r.summary : stringifyWireJson(r,null,2)};
         ledger.downgraded.push({ code: "NATIVE_CONTEXT_AS_HISTORY", path: at, reason: "Native context, progress and compaction data are labeled history, not target runtime state" });
       } else if (!["file-history-snapshot", "queue-operation", "last-prompt", "custom-title", "tag", "agent-name", "agent-color", "agent-setting", "pr-link"].includes(String(r.type))) {
         turn = { id, role: "system", content: [{ type: "opaque", source: "claude-code:record", value: r }], raw: r, origin };

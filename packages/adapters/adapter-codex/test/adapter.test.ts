@@ -28,6 +28,17 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("locates a compaction boundary and page context around the selected native messages", async () => {
+  const {session} = await adapter.import(encode([header,
+    completed("t",{id:"u",type:"UserMessage",content:[{type:"text",text:"continue"}]}),
+    {type:"compacted",payload:{message:"summary boundary"}},
+    completed("t",{id:"a",type:"AgentMessage",content:[{type:"text",text:"answer"}]}),
+    {type:"event_msg",payload:{type:"task_aborted",message:"stopped here"}},
+  ]));
+  expect(session.transcript!.map(m => m.text)).toEqual(["continue","answer"]);
+  expect(session.transcript![1]!.before).toMatchObject([{kind:"compaction",text:"summary boundary"}]);
+  expect(session.transcript![1]!.after).toMatchObject([{kind:"error",text:"stopped here"}]);
+});
 it("labels native plans and preserves individual task states from plan tool inputs", async () => {
   const {session} = await adapter.import(encode([header,
     completed("t",{id:"u",type:"UserMessage",content:[{type:"text",text:"Plan it"}]}),

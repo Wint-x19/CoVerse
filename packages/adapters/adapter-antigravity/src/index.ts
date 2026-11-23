@@ -136,6 +136,7 @@ const adapter: SessionAdapter = {
         const changedFiles: RecordedFileChange[] = [];
         let reviews: Turn["reviews"];
         let plan: Turn["plan"];
+        let event: Turn["event"];
         let role: Turn["role"] = "system", kind: NonNullable<Turn["origin"]>["kind"] = "message";
         const recordCall = (value: JsonValue, inPlanner: boolean) => {
           const block = callBlock(value, at), old = calls.get(block.id);
@@ -205,11 +206,19 @@ const adapter: SessionAdapter = {
             readMedia(system, content, at);
             opaqueFields(content, system, ["agent_message"]); break;
           }
-          case 17: content.push({ type: "text", text: `Historical error:\n${stringifyWireJson(object(step.error_message, at), null, 2)}` }); break;
+          case 17: {
+            const error = object(step.error_message,at);
+            content.push({type:"text",text:"Historical error:\n" + stringifyWireJson(error,null,2)});
+            const detail = isRecord(error.error) ? error.error : error;
+            const message = detail.user_error_message ?? detail.short_error ?? detail.full_error;
+            event = {id:at,kind:"error",text:(typeof message === "string" ? message + "\n\n" : "") + stringifyWireJson(error,null,2)};
+            break;
+          }
           case 23: {
             kind = "compaction"; const checkpoint = object(step.checkpoint, at);
             const opaqueKeys = ["edited_file_map", "artifact_snapshots", "trajectory_file_diffs", "subagent_snapshots", "running_task_snapshots", "accumulated_sections", "captured_user_requests", "captured_parent_messages"];
             const readable = Object.fromEntries(Object.entries(checkpoint).filter(([key]) => !opaqueKeys.includes(key)));
+            event = {id:at,kind:"compaction",text:stringifyWireJson(readable,null,2)};
             content.push({ type: "text", text: `Historical checkpoint:\n${stringifyWireJson(readable, null, 2)}` });
             if (step.status === 3) {
               const covered = new Set(Array.isArray(checkpoint.included_step_indices) ? checkpoint.included_step_indices : []);
@@ -257,10 +266,12 @@ const adapter: SessionAdapter = {
           default: throw new SessionError("UNSUPPORTED_VERSION", at, "Unverified Antigravity step type");
         }
         if (step.error) content.push({ type: "text", text: `Historical step error:\n${stringifyWireJson(step.error)}` });
+        if (!event && step.error) event = {id:at,kind:"error",text:stringifyWireJson(step.error,null,2)};
         session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step,
           ...(changedFiles.length ? {changedFiles} : {}),
           ...(reviews?.length ? {reviews} : {}),
           ...(plan ? {plan} : {}),
+          ...(event ? {event} : {}),
           origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind } });
       }
       validateToolLinks(session.turns);
