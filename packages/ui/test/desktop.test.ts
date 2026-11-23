@@ -6,6 +6,7 @@ import { SessionError, type SessionAdapter } from "@coverse/core";
 import { AgentDriver, createDriverRegistry, DriverRegistry, type DriverPlugin } from "@coverse/drivers";
 import { pathToFileURL } from "node:url";
 import { groupByProject } from "../src/client/lib/projects.js";
+import {fileReference, fileTokens} from "../src/client/lib/file-references.js";
 import {
   createAdapterRegistry,
   IPC_CHANNELS,
@@ -154,6 +155,27 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("opens file references relative to the selected project and limits archive access to listed files", async () => {
+    const root = await makeTempDir("coverse-preview-");
+    const workspace = path.join(root, "workspace");
+    await fs.mkdir(workspace);
+    await fs.writeFile(path.join(workspace, "two lines.md"), "one\ntwo");
+    const service = new UiService(createAdapterRegistry(), createFakeDrivers(), new UiStore(root), workspace);
+    const session = await service.createSession({agent: "codex", cwd: workspace});
+    const {invoke} = createMockIpc(service);
+    const preview = (ref: string, scope = "project") => invoke(IPC_CHANNELS.previewFile, session.id, ref, scope);
+    expect(await preview("two lines.md")).toMatchObject({ok: true, data: {content: "one\ntwo"}});
+    expect(await preview(pathToFileURL(path.join(workspace, "two lines.md")).href)).toMatchObject({ok: true});
+    expect(await preview(".")).toMatchObject({ok: true, data: {entries: ["two lines.md"]}});
+    expect(await preview("../settings.json")).toMatchObject({ok: false});
+    expect(await preview("missing.md")).toMatchObject({ok: false});
+    expect(await preview("two lines.md", "bundle")).toMatchObject({ok: false});
+    expect(fileReference("two%20lines.md#L2", true)).toEqual({path: "two lines.md", line: 2});
+    expect(fileReference("sample.ts:8:2")).toEqual({path: "sample.ts", line: 8});
+    expect(fileReference("C:\\project\\file.ts:18")).toEqual({path: "C:\\project\\file.ts", line: 18});
+    expect(fileTokens("see src/file.ts:3, then https://example.org/a.ts").filter(p => p.reference))
+      .toEqual([{text: "src/file.ts:3", reference: {path: "src/file.ts", line: 3}}]);
+  });
   it("restores only catalog metadata after restart and reconciles changed, renamed and deleted sessions", async () => {
     const home = await makeTempDir("coverse-incremental-");
     vi.stubEnv("CODEX_HOME", home);

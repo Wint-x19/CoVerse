@@ -1,6 +1,5 @@
 import * as React from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { FileLink, MessageMarkdown, UserText } from "./FileViewer";
 import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Sparkles, Terminal } from "lucide-react";
 import type { ChatMessage, ToolActivity, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
@@ -72,7 +71,7 @@ function ReasoningTrace({ text, t, durationMs }: { text: string; t: I18nMessages
 
 function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFiles"]>; t: I18nMessages }) {
   const row = (f: typeof files[number]) => <div key={f.path} className="mt-2 flex justify-between gap-4">
-    <code className="break-all">{f.path}</code><span className="shrink-0">+{f.added} −{f.removed}</span>
+    <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink><span className="shrink-0">+{f.added} −{f.removed}</span>
   </div>;
   return <div className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-xs">
     <span>{t.editedFiles(files.length)}　+{files.reduce((n, f) => n + f.added, 0)} −{files.reduce((n, f) => n + f.removed, 0)}</span>
@@ -86,7 +85,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
     return (
       <div data-testid={`message-user-${message.id}`} className="flex justify-end">
         <div className="max-w-[82%] rounded-xl border border-[var(--border-subtle)] bg-[var(--user-bubble)] px-3.5 py-2.5 text-[14px] leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
-          {message.content}
+          <UserText text={message.content}/>
         </div>
       </div>
     );
@@ -106,7 +105,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
 
         {message.content && (
           <div className="cv-prose">
-            <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+            <MessageMarkdown text={message.content}/>
           </div>
         )}
 
@@ -220,7 +219,7 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
               {streaming.tools.length > 0 && <ToolTrace tools={streaming.tools} t={t} />}
               {streaming.text ? (
                 <div className="cv-prose">
-                  <Markdown remarkPlugins={[remarkGfm]}>{streaming.text}</Markdown>
+                  <MessageMarkdown text={streaming.text}/>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 py-1.5">

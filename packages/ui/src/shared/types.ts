@@ -108,6 +108,11 @@ export interface ToolActivity {
   timestamp: string;
 }
 
+export type FileScope = "project" | "bundle";
+export type FilePreview =
+  | { kind: "text"; path: string; content: string }
+  | { kind: "directory"; path: string; entries: string[] };
+
 export interface ChatMessage {
   changedFiles?: import("@coverse/core").TranscriptMessage["changedFiles"];
   durationMs?: number;
@@ -236,6 +241,7 @@ export interface RunMessageInput {
 }
 
 export interface CoverseDesktopBridge {
+  previewFile(sessionId: string, path: string, scope: FileScope): Promise<IpcEnvelope<FilePreview>>;
   readonly platform: string;
   capabilities(refresh?: boolean): Promise<IpcEnvelope<CapabilitiesResponse>>;
   getSettings(): Promise<IpcEnvelope<AppSettings>>;

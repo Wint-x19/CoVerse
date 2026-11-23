@@ -23,6 +23,7 @@ import { InspectorDrawer } from "@/components/InspectorDrawer";
 import { SettingsView } from "@/components/SettingsView";
 import { Sidebar } from "@/components/Sidebar";
 import { ThreadView } from "@/components/ThreadView";
+import { FileViewer } from "@/components/FileViewer";
 import { TopBar } from "@/components/TopBar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -475,6 +476,7 @@ export function App() {
 
   return (
     <TooltipProvider delayDuration={250}>
+      <FileViewer sessionId={activeSession?.id} t={t}>
       {settingsOpen ? (
         <SettingsView
           settings={settings}
@@ -691,6 +693,7 @@ export function App() {
         onToggleInspector={() => setInspectorOpen((prev) => !prev)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
+      </FileViewer>
     </TooltipProvider>
   );
 }

@@ -50,6 +50,7 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<IpcEnvelo
 let runCounter = 0;
 
 const bridge: CoverseDesktopBridge = {
+  previewFile: (sessionId, path, scope) => invoke(IPC_CHANNELS.previewFile, sessionId, path, scope),
   platform: process.platform,
 
   capabilities: (refresh) => invoke<CapabilitiesResponse>(IPC_CHANNELS.capabilities, Boolean(refresh)),

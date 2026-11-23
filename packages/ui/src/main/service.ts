@@ -28,6 +28,7 @@ import type {
   CapabilitiesResponse,
   ChatMessage,
   ConvertRequest,
+  FilePreview,
   HandoffMetadata,
   InspectCandidate,
   InspectPreview,
@@ -538,6 +539,38 @@ export class UiService {
 
   listSessions(): Promise<UiSession[]> {
     return this.store.listSessions();
+  }
+
+  async previewFile(id: unknown, reference: unknown, scope: unknown): Promise<FilePreview> {
+    if (typeof id !== "string" || typeof reference !== "string" || !reference ||
+        (scope !== "project" && scope !== "bundle")) throw new Error("Invalid file reference");
+    const session = await this.getSession(id);
+    const bundle = session.handoff;
+    if (scope === "bundle" && !bundle?.files.some(file => file.path === reference)) {
+      throw new Error("File is not part of this conversation archive");
+    }
+    const root = await fs.realpath(scope === "project" ? session.cwd : this.store.bundlePath(bundle!.bundleId));
+    const value = normalizePathValue(reference);
+    if (!value) throw new Error("Invalid file path");
+    const candidate = path.resolve(root, value);
+    const inside = (p: string) => {
+      const relative = path.relative(root, p);
+      return relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative);
+    };
+    if (!inside(candidate)) throw new Error("File is outside this conversation's project");
+    const target = await fs.realpath(candidate);
+    if (!inside(target)) throw new Error("File is outside this conversation's project");
+    const stat = await fs.stat(target);
+    const display = path.relative(root, target) || ".";
+    if (stat.isDirectory()) {
+      const entries = await fs.readdir(target, {withFileTypes: true});
+      return {kind: "directory", path: display, entries: entries.map(entry => entry.name + (entry.isDirectory() ? "/" : "")).sort()};
+    }
+    if (!stat.isFile()) throw new Error("Cannot preview this file type");
+    if (stat.size > 8 * 1024 * 1024) throw new Error("File exceeds the 8 MiB preview limit");
+    const bytes = await fs.readFile(target);
+    if (bytes.includes(0)) throw new Error("Binary file has no text preview");
+    return {kind: "text", path: display, content: new TextDecoder("utf-8", {fatal: true}).decode(bytes)};
   }
 
   async getSession(id: string, refreshLegacyDisplay = false): Promise<UiSession> {

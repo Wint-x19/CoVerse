@@ -31,6 +31,7 @@ export interface DesktopDialogs {
 }
 
 export const IPC_CHANNELS = {
+  previewFile: "coverse:file:preview",
   capabilities: "coverse:capabilities",
   getSettings: "coverse:settings:get",
   updateSettings: "coverse:settings:update",
@@ -70,6 +71,9 @@ export function registerIpcHandlers(
   service: UiService,
   dialogs: DesktopDialogs,
 ): void {
+  ipc.handle(IPC_CHANNELS.previewFile, (_event, sessionId, path, scope) =>
+    wrap("/file/preview", () => service.previewFile(sessionId, path, scope)),
+  );
   ipc.handle(IPC_CHANNELS.capabilities, (_event, refresh) =>
     wrap("/capabilities", () => service.getCapabilities(Boolean(refresh))),
   );

@@ -56,6 +56,8 @@ async function unwrap<T>(
 }
 
 export const api = {
+  previewFile: (id: string, path: string, scope: import("../../shared/types.js").FileScope) =>
+    unwrap("/file/preview", (b) => b.previewFile(id, path, scope)),
   get platform(): string {
     return window.coverse?.platform ?? "win32";
   },

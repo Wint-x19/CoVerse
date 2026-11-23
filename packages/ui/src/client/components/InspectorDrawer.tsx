@@ -6,6 +6,7 @@ import type { I18nMessages } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { cn, formatBytes } from "@/lib/utils";
 import { Button } from "./ui/button";
+import { FileLink } from "./FileViewer";
 import { ScrollArea } from "./ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
@@ -283,7 +284,7 @@ export function InspectorDrawer({ open, session, t, onClose, onSessionUpdated }:
                       key={file.path}
                       className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-1.5 font-mono text-[11px]"
                     >
-                      <span className="truncate text-[var(--text-primary)]">{file.path}</span>
+                      <FileLink target={{path: file.path, scope: "bundle"}}>{file.path}</FileLink>
                       <span className="shrink-0 text-[var(--text-tertiary)]">{formatBytes(file.bytes)}</span>
                     </div>
                   ))}
