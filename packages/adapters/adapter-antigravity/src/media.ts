@@ -1,5 +1,6 @@
 import {isRecord, stringifyWireJson, type ContentBlock, type FileSet, type JsonValue, type RecordedAsset} from "@coverse/core";
 import {nestedRecord} from "./wire.js";
+import {companionForUri, linkedAssets} from "./companions.js";
 
 export function readMedia(source: Record<string,JsonValue>, blocks: ContentBlock[], at: string) {
   for (const field of ["images","media"]) {
@@ -44,13 +45,13 @@ export function readArtifactSnapshots(checkpoint: Record<string,JsonValue>, cont
     } else if (isRecord(snapshot.url_artifact_payload) && typeof snapshot.url_artifact_payload.url === "string") {
       asset = {...common,location:"remote",mediaType:"text/uri-list",value:snapshot.url_artifact_payload.url};
     } else {
-      let basename = uri.split(/[\\/]/).at(-1);
-      try { if (basename) basename = decodeURIComponent(basename); } catch { /* Retain literal names. */ }
-      const matches = files.filter(f => f.path.split("/").at(-1) === basename);
-      asset = {...common,location:matches.length === 1 ? "attachment" : "project",
-        mediaType:"application/octet-stream",value:matches.length === 1 ? matches[0]!.path : uri};
+      const file = companionForUri(uri,files);
+      asset = {...common,location:file ? "attachment" : "project",mediaType:"application/octet-stream",value:file?.path ?? uri};
     }
     content.push({type:"media",asset});
+    const markdown = snapshot.content ?? (/\.md$/i.test(uri) && asset.location === "attachment"
+      ? new TextDecoder().decode(files.find(f => f.path === asset.value)?.bytes) : undefined);
+    if (typeof markdown === "string") for (const linked of linkedAssets(markdown,files,uri)) content.push({type:"media",asset:linked});
     const {content:_text,...metadata} = snapshot;
     content.push({type:"text",text:"Historical artifact metadata:\n" + stringifyWireJson(metadata,null,2)});
   }

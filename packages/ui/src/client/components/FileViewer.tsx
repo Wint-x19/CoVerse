@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import type {RecordedAsset} from "@coverse/core";
 import {AssetPreview, imageMime} from "./AssetPreview";
 
-type Target = FileReference & {scope?: FileScope; asset?: RecordedAsset; messageId?: string};
+type Target = FileReference & {scope?: FileScope; asset?: RecordedAsset; messageId?: string; documentUri?:string};
 const FileContext = React.createContext<(target: Target) => void>(() => {});
 export const MessageOrigin = React.createContext<string | undefined>(undefined);
 
@@ -27,7 +27,7 @@ export function MessageAssets({assets}: {assets?: readonly RecordedAsset[] | und
     const label = asset.label || (local || asset.location === "remote" ? asset.value : asset.mediaType);
     const thumb = asset.location === "embedded" && imageMime(asset.mediaType) && asset.value.startsWith("data:" + asset.mediaType + ";base64,");
     return <div className="my-2" key={i}><FileLink target={local ?
-      {path:asset.value,scope:asset.location === "attachment" ? "attachment" : "project"} : {path:label,asset}}>
+      {path:asset.value,scope:asset.location === "attachment" ? "attachment" : "project",...(asset.sourceUri ? {documentUri:asset.sourceUri} : {})} : {path:label,asset}}>
       {thumb && <img loading="lazy" alt={label} src={asset.value} className="mb-1 max-h-44 max-w-full rounded object-contain"/>}
       {label}
     </FileLink>{asset.description && <p className="text-xs text-[var(--text-secondary)]">{asset.description}</p>}</div>;
@@ -96,6 +96,8 @@ function Preview({sessionId, target, open, t}: {
   if (result.kind === "directory") return <ul>{result.entries.map(entry => <li key={entry}>
     <button type="button" className="cursor-pointer hover:underline" onClick={() =>
       open({path: result.path + "/" + entry})}>{entry}</button></li>)}</ul>;
+  if (target.documentUri && /\.md$/i.test(target.path) && !target.line && !target.quote)
+    return <div className="cv-prose"><MessageMarkdown text={result.content}/></div>;
   return <HistoricalText text={result.content} target={target} t={t}/>;
 }
 
@@ -129,8 +131,9 @@ export function FileViewer({session, children, t}: {session:UiSession | null; ch
     if (!request.scope && !request.asset) {
       let uri = request.path;
       const parent = selection?.id === session.id ? selection.target : undefined;
-      if (parent?.asset?.sourceUri) {
-        try { uri = new URL(request.path,parent.asset.sourceUri).href; } catch { /* Plain project paths also appear in archives. */ }
+      const documentUri = parent?.asset?.sourceUri ?? parent?.documentUri;
+      if (documentUri) {
+        try { uri = new URL(request.path,documentUri).href; } catch { /* Plain project paths also appear in archives. */ }
       }
       const origin = request.messageId ?? parent?.messageId;
       const index = session.messages.findIndex(message => message.id === origin);
@@ -139,8 +142,8 @@ export function FileViewer({session, children, t}: {session:UiSession | null; ch
       const asset = messages.flatMap(m => m.assets ?? []).find(a => a.sourceUri && (a.sourceUri === uri || a.sourceUri === request.path));
       if (asset && (asset.location === "text" || asset.location === "embedded" || asset.location === "remote"))
         target = {...request,path:asset.label ?? uri,asset};
-      else if (asset) target = {...request,path:asset.value,scope:asset.location === "attachment" ? "attachment" : "project"};
-      else if (parent?.asset?.sourceUri && session.handoff?.files.some(f => f.path === "source/" + request.path))
+      else if (asset) target = {...request,path:asset.value,scope:asset.location === "attachment" ? "attachment" : "project",...(asset.sourceUri ? {documentUri:asset.sourceUri} : {})};
+      else if (documentUri && session.handoff?.files.some(f => f.path === "source/" + request.path))
         target = {...request,scope:"attachment"};
       else target = {...request,path:uri};
       if (origin) target.messageId = origin;

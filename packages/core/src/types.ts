@@ -197,6 +197,7 @@ export interface SessionAdapter {
   readToolChanges?(name:string, args:JsonValue, result?:JsonValue): RecordedFileChange[] | undefined;
   /** Catalog metadata for formats whose workspace is not available from the native session index. */
   readProjectDirectory?(input: FileSet): string | undefined | Promise<string | undefined>;
+  localArtifactPath?(sourcePath:string, resource:string): {root:string;relative:string} | undefined;
   prepareLocalImport?(input: FileSet, resolve: (sessionId: string) => Promise<FileSet>, sourcePath?: string): Promise<FileSet>;
   /** Resolve a CLI-resumable identity when the native store distinguishes sessions from trajectories. */
   localResumeId?(session: CSR, sourcePath: string): string | undefined;

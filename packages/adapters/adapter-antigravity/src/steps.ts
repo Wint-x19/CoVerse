@@ -4,6 +4,7 @@ import {decodeWire, nestedRecord} from "./wire.js";
 import {readReviews} from "./reviews.js";
 import {readArtifactSnapshots, readMedia} from "./media.js";
 import {stepMetadata} from "./metadata.js";
+import {companionForUri,linkedAssets} from "./companions.js";
 
 export type StepRow = Record<string,string | number | Uint8Array | null>;
 interface StepSource { file:{path:string}; files:FileSet; ledger:LossLedger }
@@ -94,10 +95,9 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
           content.push({ type: "tool_result", callId, content: typeof result.result === "string" ? result.result : "", isError: step.status === 7 });
           if (Array.isArray(result.metadata) || Array.isArray(result.data)) content.push({ type: "text", text: `Native tool result metadata:\n${stringifyWireJson({ metadata: result.metadata, data: result.data }, null, 2)}` });
           if (typeof result.full_output_uri === "string" && result.full_output_uri) {
-            const name = decodeURIComponent(result.full_output_uri.split(/[\\/]/).at(-1)!);
-            const candidates = files.filter(f => f.path === result.full_output_uri || f.path.split("/").at(-1) === name);
-            if (candidates.length !== 1) throw new SessionError("MISSING_ATTACHMENT", at, "Supply the uniquely named full tool output referenced by full_output_uri");
-            content.push({ type: "attachment", path: candidates[0]!.path, mediaType: "text/plain" });
+            const file = companionForUri(result.full_output_uri,files);
+            if (!file) throw new SessionError("MISSING_ATTACHMENT", at, "Supply the uniquely named full tool output referenced by full_output_uri");
+            content.push({ type: "attachment", path: file.path, mediaType: "text/plain" });
           }
           readMedia(result, content, at);
           opaqueFields(content, result, ["payload", "data", "tool_call_step", "tool_result_step", "result_struct", "result_value"]);
@@ -190,6 +190,10 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
       origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind,
         ...(previousId ? {parentId:previousId} : {}), ...(parent ? {subsession:true} : {}) } });
     const current = session.turns.at(-1)!;
+    if (role === "user" || role === "assistant") {
+      const assets = content.flatMap(b => b.type === "text" ? linkedAssets(b.text,files) : []);
+      if (assets.length) current.assets = assets;
+    }
     previousId = current.id;
     if (step.subtrajectory) {
       const child = nestedRecord("ChildTrajectory",step.subtrajectory,at);

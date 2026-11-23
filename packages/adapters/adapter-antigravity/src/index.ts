@@ -6,6 +6,7 @@ import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, emptyLedger, isRecord, requireString, SessionError, type CSR, type FileSet, type JsonValue, type SessionAdapter } from "@coverse/core";
 import { decodeWire } from "./wire.js";
 import {readSteps, type StepRow as Row} from "./steps.js";
+import {localArtifactPath,nativeCompanions} from "./companions.js";
 import { committedSnapshot } from "./wal.js";
 import { publishWhenDesktopClosed } from "./desktop.js";
 
@@ -66,6 +67,20 @@ function workspaceDirectory(metadata: Record<string, JsonValue> | undefined) {
 }
 
 const adapter: SessionAdapter = {
+  localArtifactPath,
+  async prepareLocalImport(files,_resolve,sourcePath) {
+    if (!sourcePath) return files;
+    const folder = path.dirname(sourcePath);
+    if (!["antigravity","antigravity-cli"].some(name => path.relative(path.join(os.homedir(),".gemini",name,"conversations"),folder) === "")) return files;
+    const {db,file} = await open(files);
+    try {
+      const id = rows(db,"SELECT cascade_id FROM trajectory_meta")[0]?.cascade_id;
+      if (typeof id !== "string") return files;
+      const steps = rows(db,"SELECT step_payload FROM steps ORDER BY idx").flatMap(row =>
+        row.step_payload instanceof Uint8Array ? [decodeWire("Step",row.step_payload,file.path).value] : []);
+      return await nativeCompanions(files,sourcePath,id,steps);
+    } finally {db.close();}
+  },
   id: "antigravity", displayName: "Antigravity", status: "ready", supportedVersions: [formatVersion],
   publishDesktopSession: async input => publishWhenDesktopClosed(input, await engine()),
   localResumeId(session, sourcePath) {

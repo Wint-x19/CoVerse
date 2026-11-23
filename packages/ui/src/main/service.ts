@@ -423,13 +423,16 @@ export class UiService {
         (scope !== "project" && scope !== "bundle" && scope !== "attachment")) throw new Error("Invalid file reference");
     const session = await this.getSession(id);
     const bundle = session.handoff;
+    const native = scope === "attachment" && session.reference && session.messages.some(m => m.assets?.some(a =>
+      a.location === "attachment" && a.value === reference)) ?
+      this.adapters.get(session.reference.agent).localArtifactPath?.(session.reference.sourcePath,reference) : undefined;
     const archived = scope === "bundle" || (scope === "attachment" && bundle !== undefined);
     const requested = archived && scope === "attachment" ? "source/" + reference : reference;
     if (archived && !bundle?.files.some(file => file.path === requested)) {
       throw new Error("File is not part of this conversation archive");
     }
-    const root = await fs.realpath(archived ? this.store.bundlePath(bundle!.bundleId) : session.cwd);
-    const value = normalizePathValue(requested);
+    const root = await fs.realpath(archived ? this.store.bundlePath(bundle!.bundleId) : native?.root ?? session.cwd);
+    const value = normalizePathValue(native?.relative ?? requested);
     if (!value) throw new Error("Invalid file path");
     const candidate = path.resolve(root, value);
     const inside = (p: string) => {
