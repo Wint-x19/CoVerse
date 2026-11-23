@@ -70,8 +70,19 @@ function ReasoningTrace({ text, t, durationMs }: { text: string; t: I18nMessages
 }
 
 function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFiles"]>; t: I18nMessages }) {
-  const row = (f: typeof files[number]) => <div key={f.path} className="mt-2 flex justify-between gap-4">
-    <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink><span className="shrink-0">+{f.added} −{f.removed}</span>
+  const row = (f: typeof files[number]) => <div key={f.path} className="mt-2">
+    <div className="flex justify-between gap-4">
+      <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink><span>+{f.added} −{f.removed}</span>
+    </div>
+    {f.patches?.length ? <details>
+      <summary className="cursor-pointer text-[var(--text-secondary)]">{t.viewDiff}</summary>
+      {f.patches.map((patch, index) => <pre key={index} className="my-2 max-h-96 overflow-auto rounded bg-[var(--bg-subtle)] p-2">
+        {patch.split("\n").map((line, number) => <span key={number} className={
+          line.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" :
+          line.startsWith("-") ? "text-red-600 dark:text-red-400" : undefined
+        }>{line}{"\n"}</span>)}
+      </pre>)}
+    </details> : <span className="text-[var(--text-tertiary)]">{t.diffUnavailable}</span>}
   </div>;
   return <div className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-xs">
     <span>{t.editedFiles(files.length)}　+{files.reduce((n, f) => n + f.added, 0)} −{files.reduce((n, f) => n + f.removed, 0)}</span>

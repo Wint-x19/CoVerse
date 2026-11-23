@@ -21,7 +21,8 @@ try {
   const session = {id: "test-session", agent: "codex", cwd: root, title: "Window fixture", createdAt: at, updatedAt: at};
   await store.upsertSession({...session, messages: [
     {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>)"},
-    {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)"},
+    {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)",
+      changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
   ]});
   registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => []});
   win = new BrowserWindow({show: false, webPreferences: {
@@ -49,6 +50,14 @@ try {
   assert.match(await exercise("user-u"), /second line/);
   assert.match(await exercise("assistant-a"), /second line/);
   console.log("Verified file and line navigation from both message roles in Electron");
+  const diff = await win.webContents.executeJavaScript('(' + (() => {
+    const details = document.querySelector('[data-testid="message-assistant-a"] details');
+    details.querySelector("summary").click();
+    if (!details.open) throw new Error("Diff remained collapsed");
+    return details.querySelector("pre").innerText;
+  }).toString() + ')()');
+  assert.match(diff, /-deleted historical line\n\+added historical line/);
+  console.log("Verified opening the historical patch in Electron");
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

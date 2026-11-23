@@ -95,7 +95,7 @@ export interface HandoffMetadata {
 
 export interface SessionReference {
   sourceSessionId?: string;
-  displayVersion?: 1;
+  displayVersion?: 1 | 2;
   sourcePath: string;
   agent: string;
   formatVersion: string;

@@ -33,6 +33,8 @@ export interface Turn {
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content: ContentBlock[];
   raw?: JsonValue;
+  /** Presentation details derived from the original record, separate from continuation content. */
+  changedFiles?: TranscriptMessage["changedFiles"];
   /** Stable provenance; parent/branch references must not be flattened away. */
   origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
 }
@@ -45,7 +47,7 @@ export interface TranscriptMessage {
   createdAt?: string;
   activity?: string;
   durationMs?: number;
-  changedFiles?: { path: string; added: number; removed: number }[];
+  changedFiles?: { path: string; added: number; removed: number; patches?: string[] }[];
 }
 export interface CSR {
   schemaVersion: "1.0";

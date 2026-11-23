@@ -1,9 +1,24 @@
 import { isRecord, SessionError, type JsonValue, type TranscriptMessage } from "@coverse/core";
 
 type Row = Record<string, JsonValue>;
-type Changes = { lines: boolean[]; removed: number };
+type Changes = { lines: boolean[]; removed: number; patches: string[] };
+function recordPatch(file: Changes, change: Row) {
+  if (typeof change.unified_diff === "string") {
+    file.patches.push(change.unified_diff);
+  } else if ((change.type === "add" || change.type === "delete") && typeof change.content === "string") {
+    const add = change.type === "add";
+    const lines = change.content.split("\n");
+    const terminalNewline = lines.at(-1) === "";
+    if (terminalNewline) lines.pop();
+    const header = add ? "@@ -0,0 +1," + lines.length + " @@" : "@@ -1," + lines.length + " +0,0 @@";
+    file.patches.push([header, ...lines.map(line => (add ? "+" : "-") + line),
+      ...(!terminalNewline ? ["\\ No newline at end of file"] : [])].join("\n"));
+  }
+  if (typeof change.move_path === "string") file.patches.push("rename to " + change.move_path);
+}
 // Track inserted lines across successive patches so later edits to those lines count only once.
 function updateFile(file: Changes, change: Row) {
+  recordPatch(file, change);
   const contentLines = typeof change.content === "string" ? change.content.split("\n").length - Number(change.content.endsWith("\n") || !change.content) : 0;
   if (change.type === "add") { file.lines = Array<boolean>(contentLines).fill(true); return; }
   if (change.type === "delete") {
@@ -25,6 +40,29 @@ function updateFile(file: Changes, change: Row) {
       else { file.lines.splice(cursor++, 0, true); }
     }
   }
+}
+
+function collectChanges(files: Map<string, Changes>, changes: Row) {
+  for (const [path, change] of Object.entries(changes)) {
+    if (!isRecord(change)) continue;
+    const file = files.get(path) ?? {lines: [], removed: 0, patches: []};
+    updateFile(file, change);
+    files.set(path, file);
+  }
+}
+
+function fileRows(files: Map<string, Changes>, cwd?: string): NonNullable<TranscriptMessage["changedFiles"]> {
+  return [...files].map(([file, changes]) => ({
+    path: cwd && file.startsWith(cwd + (cwd.includes("\\") ? "\\" : "/")) ? file.slice(cwd.length + 1).replaceAll("\\","/") : file,
+    added: changes.lines.filter(Boolean).length, removed: changes.removed,
+    ...(changes.patches.length ? {patches: changes.patches} : {}),
+  }));
+}
+
+export function patchEventFiles(changes: Row, cwd?: string) {
+  const files = new Map<string, Changes>();
+  collectChanges(files, changes);
+  return fileRows(files, cwd);
 }
 function textParts(content: JsonValue | undefined) {
   if (!Array.isArray(content)) return "";
@@ -64,12 +102,7 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
     let lastAnswer: TranscriptMessage | undefined;
     for (const [id, { item, at }] of items) {
       if (item.type === "FileChange" && item.status === "completed" && isRecord(item.changes)) {
-        for (const [path, change] of Object.entries(item.changes)) {
-          if (!isRecord(change)) continue;
-          const file = files.get(path) ?? { lines: [], removed: 0 };
-          updateFile(file, change);
-          files.set(path, file);
-        }
+        collectChanges(files, item.changes);
       }
       if (item.type === "Reasoning" && Array.isArray(item.summary_text)) activity.push(...item.summary_text.filter((s): s is string => typeof s === "string"));
       if (item.type === "CommandExecution" && Array.isArray(item.command)) activity.push(item.command.join(" ") +
@@ -93,10 +126,7 @@ export function nativeTranscript(records: { value: Row }[], cwd?: string): Trans
         transcript.push(lastAnswer);
       }
       if (activity.length) lastAnswer.activity = [lastAnswer.activity, ...activity].filter(Boolean).join("\n\n");
-      if (files.size) lastAnswer.changedFiles = [...files].map(([file, changes]) => ({
-        path: cwd && file.startsWith(cwd + (cwd.includes("\\") ? "\\" : "/")) ? file.slice(cwd.length + 1).replaceAll("\\","/") : file,
-        added: changes.lines.filter(Boolean).length, removed: changes.removed,
-      }));
+      if (files.size) lastAnswer.changedFiles = fileRows(files, cwd);
     }
     const duration = durations.get(turnId);
     if (lastAnswer && duration !== undefined) lastAnswer.durationMs = duration;

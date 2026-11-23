@@ -21,12 +21,21 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   const imported = await adapter.import(files);
   expect(imported.session.transcript).toEqual([
     {id:"u",role:"user",text:"first question\n"},
-    {id:"a",role:"assistant",text:"| A | B |\n|---|---|\n| x | y |",changedFiles:[{path:"test.md",added:2,removed:0}]},
+    {id:"a",role:"assistant",text:"| A | B |\n|---|---|\n| x | y |",changedFiles:[{path:"test.md",added:2,removed:0,
+      patches:["@@ -0,0 +1,2 @@\n+a\n+b","@@ -2,1 +2,1 @@\n-b\n+c"]}]},
     {id:"u2",role:"user",text:"on fork"}]);
   expect(files.some(f => new TextDecoder().decode(f.bytes).includes("excluded sibling"))).toBe(false);
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("keeps the recorded patch on successful legacy changes, including deleted text and missing terminal newline", async () => {
+  const changes = {"/sample/gone.txt": {type:"delete", content:"old"}};
+  const event = (success: boolean) => ({type:"event_msg", payload:{type:"patch_apply_end", success, changes}});
+  const result = await adapter.import(encode([header, event(false), event(true)]));
+  expect(result.session.turns.flatMap(turn => turn.changedFiles ?? [])).toEqual([{
+    path:"gone.txt", added:0, removed:1, patches:["@@ -1,1 +0,0 @@\n-old\n\\ No newline at end of file"],
+  }]);
+});
 const sample = [header,
   response({ type: "message", role: "user", content: [{ type: "input_text", text: "Read the sample." }] }),
   { type: "event_msg", payload: { type: "user_message", message: "Read the sample." } },

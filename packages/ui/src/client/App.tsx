@@ -315,7 +315,7 @@ export function App() {
     setActiveSessionId(id);
     setBannerError(null);
     const ref = sessions.find(row => row.id === id)?.reference;
-    if (ref && !ref.displayVersion) {
+    if (ref && ref.displayVersion !== 2) {
       void api.getSession(id).then(upsertLocalSession).catch(e => setBannerError(e instanceof Error ? e.message : String(e)));
     }
   };

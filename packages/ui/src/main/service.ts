@@ -195,6 +195,10 @@ export function csrTurnsToChatMessages(
   };
 
   for (const turn of turns) {
+    if (turn.changedFiles?.length) {
+      messages.push({id: turn.id + ":changes", role: "assistant", agent: sourceAgent, historical: true,
+        content: "", createdAt: timestampFallback, changedFiles: turn.changedFiles});
+    }
     if (turn.role === "system" || turn.role === "developer") continue;
 
     if (turn.role === "user") {
@@ -577,18 +581,16 @@ export class UiService {
     const session = await this.store.getSession(id);
     if (!session) throw new SessionError("NOT_FOUND", `/sessions/${id}`, `Session not found: ${id}`);
     const ref = session.reference;
-    if (refreshLegacyDisplay && ref && !ref.displayVersion && session.messages.every(m => m.historical)) {
+    if (refreshLegacyDisplay && ref && ref.displayVersion !== 2 && session.messages.every(m => m.historical)) {
       const adapter = this.adapters.get(ref.agent);
       const paths = [ref.sourcePath];
       const imported = await adapter.import(await this.prepareImport(adapter, await loadPathsAsFileSet(paths), paths));
       if (imported.session.meta.id !== (ref.sourceSessionId ?? session.targetSessionId)) throw new SessionError("INVALID_INPUT", "/reference", "The file now belongs to a different conversation.");
-      const messages = imported.session.transcript
-        ? csrTurnsToChatMessages(imported.session.turns, ref.agent, session.createdAt, imported.session.transcript)
-        : session.messages;
+      const messages = csrTurnsToChatMessages(imported.session.turns, ref.agent, session.createdAt, imported.session.transcript);
       return this.store.mutateSession(id, current => {
-        if (current.reference?.sourcePath !== ref.sourcePath || current.reference.displayVersion || current.targetSessionId !== session.targetSessionId ||
+        if (current.reference?.sourcePath !== ref.sourcePath || current.reference.displayVersion === 2 || current.targetSessionId !== session.targetSessionId ||
             !current.messages.every(m => m.historical)) return current;
-        return {...current, messages, reference: {...current.reference, displayVersion: 1}};
+        return {...current, messages, reference: {...current.reference, displayVersion: 2}};
       });
     }
     return session;
@@ -969,7 +971,7 @@ export class UiService {
           bundlePending: false,
           reference: {
             sourceSessionId: imported.session.meta.id,
-            displayVersion: 1,
+            displayVersion: 2,
             sourcePath,
             agent: source.id,
             formatVersion: imported.session.meta.agentFormatVersion,

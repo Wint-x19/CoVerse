@@ -1,7 +1,7 @@
 import { parseWireJson, stringifyWireJson } from "@coverse/core";
 import { decompress, Decompress } from "fzstd";
 import { ancestralRecords, prepareLineage, primaryLog, verifiedWriters } from "./lineage.js";
-import { nativeTranscript } from "./transcript.js";
+import { nativeTranscript, patchEventFiles } from "./transcript.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
@@ -170,6 +170,9 @@ const adapter: SessionAdapter = {
             add("assistant", [{ type: "reasoning", text }], p, line);
           } else if (typeof p.type === "string" && /^(?:mcp_tool_call|exec_command|patch_apply)_(?:begin|end|output_delta)$/.test(p.type)) {
             add("system", [{ type: "text", text: `Historical tool event:\n${stringifyWireJson(p)}` }], p, line);
+            if (p.type === "patch_apply_end" && p.success === true && isRecord(p.changes)) {
+              destination.at(-1)!.changedFiles = patchEventFiles(p.changes, session.meta.cwd);
+            }
             ledger.downgraded.push({ code: "TOOL_EVENT_AS_HISTORY", path: `${file.path}:${line}`, reason: "Native tool telemetry is quoted as recorded, without inferring a new executable call" });
           } else if (p.type === "thread_rolled_back") add("system", [{ type: "text", text: `Historical rollback marker (earlier records retained):\n${stringifyWireJson(p)}` }], p, line, "reverted");
           else if (!operationalEvents.has(String(p.type))) add("system", [{ type: "opaque", source: "codex:event", value: p }], p, line);
