@@ -16,6 +16,17 @@ function verifyChanges(value: JsonValue | undefined) {
   }
 }
 
+function verifyReviews(value: JsonValue | undefined) {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.some(r => !isRecord(r) || typeof r.path !== "string" ||
+    typeof r.comment !== "string" || !Array.isArray(r.selections) || r.selections.some(s =>
+      !isRecord(s) || !["file","original","modified"].includes(String(s.side)) ||
+      (s.text !== undefined && typeof s.text !== "string") || [s.start,s.end].some(n =>
+        n !== undefined && (typeof n !== "number" || !Number.isSafeInteger(n)))))) {
+    invalid("session.json", "Invalid historical review");
+  }
+}
+
 /** Validate the same bytes that will be injected. Source files may contain arbitrary binary data. */
 export function verifyInjectionBundle(files: FileSet, target: string) {
   try { validateFileSet(files); } catch { invalid("/manifest", "Invalid artifact paths"); }
@@ -67,6 +78,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
           (m.durationMs !== undefined && (typeof m.durationMs !== "number" || !Number.isSafeInteger(m.durationMs) || m.durationMs < 0))) invalid("session.json", "Invalid native message");
       seen.add(m.id);
       verifyChanges(m.changedFiles);
+      verifyReviews(m.reviews);
     }
   }
   const archived = new Set<string>();
@@ -88,6 +100,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
   for (const turn of [...session.turns, ...snapshotTurns]) {
     if (!isRecord(turn) || !Array.isArray(turn.content)) invalid("session.json", "Invalid turn content");
     verifyChanges(turn.changedFiles);
+    verifyReviews(turn.reviews);
     for (const block of turn.content) {
       if (isRecord(block) && block.type === "attachment") {
         if (typeof block.path !== "string" || !names.has("source/" + block.path)) invalid("session.json", "Missing required attachment");

@@ -114,6 +114,7 @@ export type FilePreview =
   | { kind: "directory"; path: string; entries: string[] };
 
 export interface ChatMessage {
+  reviews?: import("@coverse/core").RecordedReview[];
   changedFiles?: import("@coverse/core").TranscriptMessage["changedFiles"];
   durationMs?: number;
   id: string;

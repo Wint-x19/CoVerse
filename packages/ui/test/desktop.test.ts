@@ -6,7 +6,7 @@ import { SessionError, type SessionAdapter } from "@coverse/core";
 import { AgentDriver, createDriverRegistry, DriverRegistry, type DriverPlugin } from "@coverse/drivers";
 import { pathToFileURL } from "node:url";
 import { groupByProject } from "../src/client/lib/projects.js";
-import {fileReference, fileTokens} from "../src/client/lib/file-references.js";
+import {fileReference, fileTokens, locateQuote} from "../src/client/lib/file-references.js";
 import {
   createAdapterRegistry,
   IPC_CHANNELS,
@@ -155,6 +155,11 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("locates historical review selections after edits and detects missing or ambiguous text", () => {
+    expect(locateQuote("new\r\nline\r\nchosen\r\nlast", "chosen\nlast", 1)).toBe(3);
+    expect(locateQuote("a\nsame\nc\nsame","same")).toBeUndefined();
+    expect(locateQuote("changed","missing", 1)).toBeUndefined();
+  });
   it("opens file references relative to the selected project and limits archive access to listed files", async () => {
     const root = await makeTempDir("coverse-preview-");
     const workspace = path.join(root, "workspace");

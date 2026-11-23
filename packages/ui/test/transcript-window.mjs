@@ -20,7 +20,8 @@ try {
   const at = new Date().toISOString();
   const session = {id: "test-session", agent: "codex", cwd: root, title: "Window fixture", createdAt: at, updatedAt: at};
   await store.upsertSession({...session, messages: [
-    {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>)"},
+    {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>)",
+      reviews:[{path:"two lines.md",comment:"Recheck this line",selections:[{side:"modified",text:"second line",start:1}]}]},
     {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)",
       changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
   ]});
@@ -58,6 +59,19 @@ try {
   }).toString() + ')()');
   assert.match(diff, /-deleted historical line\n\+added historical line/);
   console.log("Verified opening the historical patch in Electron");
+  const reviewed = await win.webContents.executeJavaScript('(' + (async () => {
+    const review = document.querySelector('[data-testid="message-user-u"] section');
+    if (!review.innerText.includes("Recheck this line")) throw new Error("Review body missing");
+    review.querySelector(":scope > div button").click();
+    for (let i=0; i<100; i++) {
+      const highlighted = document.querySelector('[role="dialog"] [data-file-line="2"]');
+      if (highlighted) return highlighted.textContent;
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    throw new Error("Historical selection did not resolve to its new line");
+  }).toString() + ')()');
+  assert.match(reviewed, /second line/);
+  console.log("Verified jumping from a review selection after the cited line moved");
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

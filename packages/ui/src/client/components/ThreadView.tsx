@@ -93,12 +93,27 @@ function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFil
   </div>;
 }
 
+function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMessages}) {
+  return reviews?.map((review, index) => <section key={index} className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-sm">
+    <FileLink target={{path:review.path}}>{review.path}</FileLink>
+    <p className="my-1 whitespace-pre-wrap">{review.comment}</p>
+    {review.selections.map((selection, i) => <div key={i} className="mt-2 border-l pl-2">
+      <FileLink target={{path:review.path, ...(selection.text ? {quote:selection.text} : {}),
+        ...(selection.start !== undefined ? {line:Math.max(1, selection.start)} : {})}}>
+        {t.reviewSide[selection.side]} {selection.start}{selection.end !== undefined && selection.end !== selection.start ? "–" + selection.end : ""}
+      </FileLink>
+      {selection.text && <pre className="max-h-60 overflow-auto whitespace-pre-wrap">{selection.text}</pre>}
+    </div>)}
+  </section>);
+}
+
 function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
   if (message.role === "user") {
     return (
       <div data-testid={`message-user-${message.id}`} className="flex justify-end">
         <div className="max-w-[82%] rounded-xl border border-[var(--border-subtle)] bg-[var(--user-bubble)] px-3.5 py-2.5 text-[14px] leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
           <UserText text={message.content}/>
+          <ReviewCards reviews={message.reviews} t={t}/>
         </div>
       </div>
     );
@@ -123,6 +138,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
         )}
 
         {message.changedFiles?.length ? <ChangedFiles files={message.changedFiles} t={t} /> : null}
+        <ReviewCards reviews={message.reviews} t={t}/>
         {message.error && (
           <div
             role="alert"

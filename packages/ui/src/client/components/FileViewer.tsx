@@ -3,7 +3,7 @@ import Markdown, {defaultUrlTransform} from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { FilePreview, FileScope } from "../../shared/types.js";
 import { api } from "@/lib/api";
-import { fileReference, fileTokens, linkFilePaths, type FileReference } from "@/lib/file-references";
+import { fileReference, fileTokens, linkFilePaths, locateQuote, type FileReference } from "@/lib/file-references";
 import type { I18nMessages } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 
@@ -58,14 +58,18 @@ function Preview({sessionId, target, open, t}: {
     <button type="button" className="cursor-pointer hover:underline" onClick={() =>
       open({path: result.path + "/" + entry})}>{entry}</button></li>)}</ul>;
   const lines = result.content.split(/\r\n|\n|\r/);
-  const line = target.line ?? 1;
+  const located = target.quote ? locateQuote(result.content, target.quote, target.line) : target.line;
+  const line = located ?? 1;
   // Keep very large text previews selectable without mounting a DOM element for each line.
   const index = Math.min(line - 1, lines.length - 1);
   return <div className="font-mono text-xs whitespace-pre">
     {line > lines.length && <p role="status">{t.missingLine(line, lines.length)}</p>}
+    {target.quote && located === undefined && <aside className="my-2 whitespace-pre-wrap border-l pl-2">
+      <p role="status">{t.quoteMissing}</p><pre>{target.quote}</pre>
+    </aside>}
     {index > 0 && <pre>{lines.slice(0, index).join("\n") + "\n"}</pre>}
-    <div ref={selected} data-file-line={index + 1} className={target.line ? "bg-[var(--bg-hover)]" : undefined}>
-      {target.line && <span className="mr-2 select-none text-[var(--accent-text)]">{index + 1}</span>}{lines[index] || " "}
+    <div ref={selected} data-file-line={index + 1} className={located ? "bg-[var(--bg-hover)]" : undefined}>
+      {located && <span className="mr-2 select-none text-[var(--accent-text)]">{index + 1}</span>}{lines[index] || " "}
     </div>
     {index + 1 < lines.length && <pre>{lines.slice(index + 1).join("\n")}</pre>}
   </div>;

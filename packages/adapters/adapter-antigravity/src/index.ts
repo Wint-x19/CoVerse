@@ -5,6 +5,7 @@ import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, compareFileVersions, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type RecordedFileChange, type SessionAdapter, type Turn } from "@coverse/core";
 import { decodeWire, nestedRecord } from "./wire.js";
+import { readReviews } from "./reviews.js";
 import { committedSnapshot } from "./wal.js";
 import { publishWhenDesktopClosed } from "./desktop.js";
 
@@ -132,6 +133,7 @@ const adapter: SessionAdapter = {
         if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12].includes(Number(step.status))) throw new SessionError("UNSUPPORTED_VERSION", at, "Unknown step status");
         const content: ContentBlock[] = [];
         const changedFiles: RecordedFileChange[] = [];
+        let reviews: Turn["reviews"];
         let role: Turn["role"] = "system", kind: NonNullable<Turn["origin"]>["kind"] = "message";
         const recordCall = (value: JsonValue, inPlanner: boolean) => {
           const block = callBlock(value, at), old = calls.get(block.id);
@@ -151,7 +153,8 @@ const adapter: SessionAdapter = {
               const entry = object(item, at); if (!mirror && typeof entry.text === "string") content.push({ type: "text", text: entry.text });
               opaqueFields(content, entry, ["item"]);
             }
-            opaqueFields(content, user, ["active_user_state", "images", "artifact_comments", "media", "file_diff_comments", "file_comments", "side_channels"]);
+            reviews = readReviews(user, content, at);
+            opaqueFields(content, user, ["active_user_state", "images", "media", "side_channels"]);
             break;
           }
           case 15: {
@@ -230,6 +233,7 @@ const adapter: SessionAdapter = {
         if (step.error) content.push({ type: "text", text: `Historical step error:\n${stringifyWireJson(step.error)}` });
         session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step,
           ...(changedFiles.length ? {changedFiles} : {}),
+          ...(reviews?.length ? {reviews} : {}),
           origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind } });
       }
       validateToolLinks(session.turns);

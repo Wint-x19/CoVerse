@@ -153,6 +153,7 @@ export function csrTurnsToChatMessages(
     id: m.id, role: m.role, content: m.text, createdAt: m.createdAt ?? timestampFallback, historical: true,
     ...(m.role === "assistant" ? {agent: sourceAgent} : {}), ...(m.activity ? {reasoning: m.activity} : {}),
     ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
+    ...(m.reviews ? {reviews:m.reviews} : {}),
     ...(m.durationMs !== undefined ? {durationMs: m.durationMs} : {}),
   }));
   const messages: ChatMessage[] = [];
@@ -204,16 +205,17 @@ export function csrTurnsToChatMessages(
     if (turn.role === "user") {
       const parts: string[] = [];
       for (const block of turn.content) {
-        if (block.type === "text" && block.text.trim()) parts.push(block.text.trim());
+        if (block.type === "text" && block.text.trim() && !(block.displayAs === "review" && turn.reviews?.length)) parts.push(block.text.trim());
         else if (block.type === "attachment") parts.push(`[${block.path}]`);
         else if (block.type === "image") parts.push(`[image: ${block.url}]`);
       }
       const text = parts.join("\n\n").trim();
-      if (text) {
+      if (text || turn.reviews?.length) {
         messages.push({
           id: makeId("hist"),
           role: "user",
           content: text,
+          ...(turn.reviews?.length ? {reviews:turn.reviews} : {}),
           createdAt: timestampFallback,
           historical: true,
         });
@@ -1229,11 +1231,14 @@ export class UiService {
         }
       }
       if (message.content) content.push({ type: "text", text: message.content });
+      if (message.reviews?.length) content.push({type:"text",displayAs:"review",
+        text:"Historical review:\n" + JSON.stringify(message.reviews, null, 2)});
       if (content.length > 0) {
         turns.push({
           id: `ui-${message.id}`,
           role: message.role,
           content,
+          ...(message.reviews?.length ? {reviews:message.reviews} : {}),
           origin: { artifact: "coverse-desktop/sessions.json", record: index + 1, kind: "message" },
         });
       }
@@ -1257,6 +1262,7 @@ export class UiService {
       ...(priorTranscript ? {transcript: [...priorTranscript, ...messagesToAppend.map(m => ({
         id: m.id, role: m.role, text: m.content, createdAt: m.createdAt,
         ...(m.reasoning ? {activity: m.reasoning} : {}), ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
+        ...(m.reviews ? {reviews:m.reviews} : {}),
       }))]} : {}),
       ...(continuation ? { continuation } : {}),
       xExtensions: {

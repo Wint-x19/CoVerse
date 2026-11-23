@@ -8,6 +8,14 @@ const schema = `syntax = "proto3";
 message Timestamp { int64 seconds = 1; int32 nanos = 2; }
 // TrajectoryFileDiff fields verified against the 2.34.0 desktop descriptors.
 message TrajectoryFileDiff { string uri = 1; string original_content = 2; string modified_content = 3; bool is_artifact_file = 4; bool is_knowledge_file = 5; Timestamp last_modified_at = 6; bool has_model_edited = 7; uint32 first_touched_step_index = 8; uint32 last_touched_step_index = 9; bool is_noop = 10; bytes original_content_hash = 11; }
+message ReviewSelection { string content = 1; int32 start_line = 2; int32 end_line = 3; string before_text = 4; string after_text = 5; }
+message DiffCommentInfo { ReviewSelection original_selection = 1; ReviewSelection modified_selection = 2; string comment = 3; }
+message FileCommentInfo { string comment = 1; ReviewSelection selection = 2; bytes image_selection = 3; }
+message FileComment { string file_uri = 1; repeated FileCommentInfo file_comment_infos = 2; }
+message FileDiffComment { string file_uri = 1; repeated DiffCommentInfo diff_comment_infos = 3; }
+message ArtifactSelection { ReviewSelection text_selection = 1; bytes image_selection = 2; }
+message ArtifactSelections { repeated ArtifactSelection selections = 1; }
+message ArtifactComment { string artifact_uri = 1; string comment = 4; bytes full_file = 5; ArtifactSelections selections = 6; int32 approval_status = 7; string page_title = 8; }
 message Pair { string key = 1; string value = 2; }
 message DataPair { string key = 1; bytes value = 2; }
 message Call { string id = 1; string name = 2; string arguments_json = 3; string invalid_json_str = 4; string invalid_json_err = 5; string thought_signature = 6; bytes thinking_signature = 7; string original_arguments_json = 8; string original_name = 9; repeated bytes function_call_parts = 10; }

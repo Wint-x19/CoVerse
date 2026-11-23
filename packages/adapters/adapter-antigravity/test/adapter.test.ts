@@ -10,6 +10,27 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("retains both review sides, file comments and artifact selections on their original user turn", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const original = db.exec("SELECT step_payload FROM steps WHERE idx=0")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step", original, "test").value;
+    const encode = (type:string, value:object) => wireRoot.lookupType(type).encode(wireRoot.lookupType(type).fromObject(value)).finish();
+    const user = step.user_input as Record<string, unknown>;
+    const sel = {content:"alpha",start_line:2,end_line:2};
+    user.file_comments = [encode("FileComment",{file_uri:"a.md",file_comment_infos:[{comment:"file note",selection:sel}]})];
+    user.file_diff_comments = [encode("FileDiffComment",{file_uri:"a.md",diff_comment_infos:[
+      {comment:"review edit",original_selection:sel,modified_selection:{...sel,content:"beta"}}]})];
+    user.artifact_comments = [encode("ArtifactComment",{artifact_uri:"plan.md",comment:"plan note",selections:{selections:[{text_selection:sel}]}})];
+    db.run("UPDATE steps SET step_payload=? WHERE idx=0",[encode("Step",step)]);
+    const {session} = await adapter.import(files(db.export()));
+    expect(session.turns[0]!.reviews?.map(review => [review.path,review.comment,review.selections.map(s => [s.side,s.text])])).toEqual([
+      ["a.md","file note",[["file","alpha"]]],["a.md","review edit",[["original","alpha"],["modified","beta"]]],
+      ["plan.md","plan note",[["file","alpha"]]],
+    ]);
+    expect(session.turns[0]!.content.filter(b => b.type === "opaque")).toHaveLength(0);
+  } finally { db.close(); }
+});
 it("opens paired checkpoint snapshots as a historical diff, preserving hash-only and future records", async () => {
   const db = new (await sql).Database(await fixture());
   try {

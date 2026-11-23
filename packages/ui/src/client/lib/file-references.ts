@@ -1,6 +1,23 @@
 export interface FileReference {
   path: string;
   line?: number;
+  quote?: string;
+}
+
+export function locateQuote(content: string, quote: string, recordedLine?: number): number | undefined {
+  const text = content.replace(/\r\n?/g, "\n"), selected = quote.replace(/\r\n?/g, "\n");
+  if (!selected) return;
+  let match = text.indexOf(selected);
+  if (match < 0) return;
+  let offset = 0, line = 1, count = 0, first = 0;
+  const candidates = new Set<number>();
+  while (match >= 0) {
+    for (; offset < match; offset++) if (text[offset] === "\n") line++;
+    if (!count++) first = line;
+    if (recordedLine !== undefined && (line === recordedLine || line === recordedLine + 1)) candidates.add(line);
+    match = text.indexOf(selected, match + 1);
+  }
+  return count === 1 ? first : candidates.size === 1 ? [...candidates][0] : undefined;
 }
 
 export function fileReference(value: string, encoded = false): FileReference | undefined {

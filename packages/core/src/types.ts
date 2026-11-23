@@ -20,7 +20,7 @@ export interface LossLedger {
 }
 
 export type ContentBlock =
-  | { type: "text" | "reasoning"; text: string }
+  | { type: "text" | "reasoning"; text: string; displayAs?: "review" }
   | { type: "tool_call"; id: string; name: string; arguments: JsonValue; argumentsText?: string }
   | { type: "tool_result"; callId: string; content: JsonValue; isError?: boolean }
   | { type: "attachment"; path: string; mediaType: string }
@@ -35,6 +35,7 @@ export interface Turn {
   raw?: JsonValue;
   /** Presentation details derived from the original record, separate from continuation content. */
   changedFiles?: TranscriptMessage["changedFiles"];
+  reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
   origin?: { artifact: string; record: number; parentId?: string; branchId?: string; kind?: "message" | "compaction" | "reverted" | "subsession" };
 }
@@ -47,6 +48,12 @@ export interface RecordedFileChange {
   patches?: string[];
 }
 
+export interface RecordedReview {
+  path: string;
+  comment: string;
+  selections: {side: "original" | "modified" | "file"; text?: string; start?: number; end?: number}[];
+}
+
 export interface TranscriptMessage {
   id: string;
   role: "user" | "assistant";
@@ -55,6 +62,7 @@ export interface TranscriptMessage {
   activity?: string;
   durationMs?: number;
   changedFiles?: RecordedFileChange[];
+  reviews?: RecordedReview[];
 }
 export interface CSR {
   schemaVersion: "1.0";
