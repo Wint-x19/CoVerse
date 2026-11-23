@@ -6,6 +6,8 @@ import { SessionError, type JsonValue } from "@coverse/core";
  * Unknown wire fields are reported, including those nested in known messages. */
 const schema = `syntax = "proto3";
 message Timestamp { int64 seconds = 1; int32 nanos = 2; }
+// TrajectoryFileDiff fields verified against the 2.34.0 desktop descriptors.
+message TrajectoryFileDiff { string uri = 1; string original_content = 2; string modified_content = 3; bool is_artifact_file = 4; bool is_knowledge_file = 5; Timestamp last_modified_at = 6; bool has_model_edited = 7; uint32 first_touched_step_index = 8; uint32 last_touched_step_index = 9; bool is_noop = 10; bytes original_content_hash = 11; }
 message Pair { string key = 1; string value = 2; }
 message DataPair { string key = 1; bytes value = 2; }
 message Call { string id = 1; string name = 2; string arguments_json = 3; string invalid_json_str = 4; string invalid_json_err = 5; string thought_signature = 6; bytes thinking_signature = 7; string original_arguments_json = 8; string original_name = 9; repeated bytes function_call_parts = 10; }
@@ -30,6 +32,17 @@ message DesktopIndex { repeated DesktopEntry entries = 1; }
 message TrajectoryMetadata { repeated Workspace workspaces = 1; Timestamp created_at = 2; string initialization_state_id = 3; bytes agent_script = 4; string parent_conversation_id = 5; string root_conversation_id = 6; repeated string workspace_uris = 7; bytes subagent_spec = 8; bytes static_config = 10; bytes executable_spec = 11; bytes source_metadata = 12; repeated int32 mendel_experiment_ids = 15; bool is_battle_mode_fork = 16; int32 nesting_depth = 17; string project_id = 18; string environment_id = 19; repeated string tags = 20; repeated bytes replacements = 21; bytes battle_mode_metadata = 22; bytes remote_control_details = 23; }
 `;
 export const wireRoot = protobuf.parse(schema, { keepCase: true }).root.resolveAll();
+
+/** Decode an optional nested bytes field only when every wire field is recognized. */
+export function nestedRecord(type: string, bytes: JsonValue, at: string) {
+  if (typeof bytes !== "string") return;
+  try {
+    const decoded = decodeWire(type, Buffer.from(bytes, "base64"), at);
+    if (!decoded.unknown.length) return decoded.value;
+  } catch (error) {
+    if (!(error instanceof SessionError)) throw error;
+  }
+}
 export function decodeWire(name: string, bytes: Uint8Array, at: string): { value: Record<string, JsonValue>; unknown: string[] } {
   const unknown: string[] = [];
   function inspect(type: protobuf.Type, reader: protobuf.Reader, end: number, path: string, depth: number) {

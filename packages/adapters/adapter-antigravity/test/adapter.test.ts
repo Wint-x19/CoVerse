@@ -10,6 +10,29 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("opens paired checkpoint snapshots as a historical diff, preserving hash-only and future records", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const original = db.exec("SELECT step_payload FROM steps WHERE idx=5")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step", original, "test").value;
+    const checkpoint = step.checkpoint as Record<string, unknown>;
+    // Independent wire tags: uri, original_content, modified_content.
+    const uri = "file:///sample/workspace/old.txt";
+    const pair = Buffer.concat([Buffer.from([10,uri.length]), Buffer.from(uri), Buffer.from([18,4,111,108,100,10,26,4,110,101,119,10])]);
+    checkpoint.trajectory_file_diffs = [pair, Buffer.concat([Buffer.from([10,uri.length]),Buffer.from(uri),Buffer.from([90,1,65])]),
+      Buffer.from([0xf8, 7, 1])];
+    const type = wireRoot.lookupType("Step");
+    db.run("UPDATE steps SET step_payload=? WHERE idx=5",[type.encode(type.fromObject(step)).finish()]);
+    const {session} = await adapter.import(files(db.export()));
+    const turn = session.turns[5]!;
+    expect(turn.changedFiles).toEqual([{path:uri,added:1,removed:1,patches:["@@ -1,1 +1,1 @@\n-old\n+new"]},
+      {path:uri,added:null,removed:null}]);
+    expect(turn.content.filter(b => b.type === "opaque")).toHaveLength(1);
+    expect(() => adapter.export(session)).toThrow("Uninterpreted");
+    const output = await adapter.export(session,{lossPolicy:{omitOpaque:true}});
+    expect(new TextDecoder().decode(output.artifacts.find(f => f.path === "context.md")!.bytes)).toContain(uri);
+  } finally { db.close(); }
+});
 const sql = initSqlJs({ locateFile: () => require.resolve("sql.js/dist/sql-wasm.wasm") });
 async function mutate(statement: string) { const db = new (await sql).Database(await fixture()); try { db.run(statement); return db.export(); } finally { db.close(); } }
 it("decodes independently encoded SQLite/protobuf golden data and all six supported step types", async () => {

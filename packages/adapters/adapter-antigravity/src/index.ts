@@ -3,8 +3,8 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
-import { buildInjectionBundle, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
-import { decodeWire } from "./wire.js";
+import { buildInjectionBundle, compareFileVersions, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type RecordedFileChange, type SessionAdapter, type Turn } from "@coverse/core";
+import { decodeWire, nestedRecord } from "./wire.js";
 import { committedSnapshot } from "./wal.js";
 import { publishWhenDesktopClosed } from "./desktop.js";
 
@@ -131,6 +131,7 @@ const adapter: SessionAdapter = {
         if (Object.values(contentFields).filter(key => step[key] !== undefined).join() !== contentFields[Number(step.type)]) throw new SessionError("INVALID_INPUT", at, "Step discriminator and payload variant disagree");
         if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12].includes(Number(step.status))) throw new SessionError("UNSUPPORTED_VERSION", at, "Unknown step status");
         const content: ContentBlock[] = [];
+        const changedFiles: RecordedFileChange[] = [];
         let role: Turn["role"] = "system", kind: NonNullable<Turn["origin"]>["kind"] = "message";
         const recordCall = (value: JsonValue, inPlanner: boolean) => {
           const block = callBlock(value, at), old = calls.get(block.id);
@@ -210,12 +211,26 @@ const adapter: SessionAdapter = {
               if (!knownCoverage) ledger.approximated.push({ code: "UNVERIFIED_CHECKPOINT_COVERAGE", path: at,
                 reason: "Only the checkpoint and later steps are forwarded; earlier retained steps could not be verified" });
             }
-            opaqueFields(content, checkpoint, opaqueKeys); break;
+            for (const encoded of Array.isArray(checkpoint.trajectory_file_diffs) ? checkpoint.trajectory_file_diffs : []) {
+              const diff = nestedRecord("TrajectoryFileDiff", encoded, at);
+              if (!diff || typeof diff.uri !== "string") {
+                content.push({type:"opaque", source:"antigravity:trajectory_file_diffs", value:encoded});
+                continue;
+              }
+              // Hash-only checkpoints cannot establish that the original file was empty.
+              changedFiles.push(typeof diff.original_content === "string" && typeof diff.modified_content === "string"
+                ? compareFileVersions(diff.uri, diff.original_content, diff.modified_content)
+                : {path: diff.uri, added: null, removed: null});
+              content.push({type:"text", text:"Historical file change:\n" + stringifyWireJson(diff, null, 2)});
+            }
+            opaqueFields(content, checkpoint, opaqueKeys.filter(key => key !== "trajectory_file_diffs")); break;
           }
           default: throw new SessionError("UNSUPPORTED_VERSION", at, "Unverified Antigravity step type");
         }
         if (step.error) content.push({ type: "text", text: `Historical step error:\n${stringifyWireJson(step.error)}` });
-        session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step, origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind } });
+        session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step,
+          ...(changedFiles.length ? {changedFiles} : {}),
+          origin: { artifact: file.path, record: Number(row.idx), branchId: session.meta.id, kind: step.status === 5 ? "reverted" : kind } });
       }
       validateToolLinks(session.turns);
       ledger.downgraded.push({ code: "ARCHIVED_NATIVE_STATE", path: "/raw", reason: "Database generation, executor, rendering, configuration and permission state is archived; it is not restored in the target Agent" });
