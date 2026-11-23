@@ -97,6 +97,26 @@ it("retains native command arguments, failure output and exit code on tool-only 
   expect(session.transcript?.at(-1)?.tools).toEqual([{id:"cmd",name:"CommandExecution",state:"failed",
     argumentsText:'[\n  "test",\n  "one file"\n]',results:[{text:"assertion failed",failed:true}],details:'{\n  "exit_code": 1\n}'}]);
 });
+it("pairs raw tools with their originating native turn and deduplicates mirrored commands and reasoning",async () => {
+  const done = (turn:string) => completed(turn,{id:turn,type:"UserMessage",content:[{type:"text",text:turn}]});
+  const call = (id:string) => response({type:"function_call",call_id:id,name:"lookup",arguments:"{}"});
+  const result = (id:string,text:string) => response({type:"function_call_output",call_id:id,output:text});
+  const {session} = await adapter.import(encode([header,done("first"),call("one"),call("two"),
+    completed("first",{id:"item",call_id:"two",type:"CommandExecution",command:"check",exit_code:1,aggregated_output:"failed"}),
+    response({type:"reasoning",summary:[{type:"summary_text",text:"Once"}],content:[{type:"reasoning_text",text:"Extra"}]}),
+    completed("first",{id:"r",type:"Reasoning",summary_text:["Once"]}),
+    done("next"),result("one","late result"),result("two","failed"),
+    response({type:"custom_tool_call",call_id:"pending",name:"apply_patch",input:"original request"}),
+  ]));
+  const assistants = session.transcript!.filter(m => m.role === "assistant");
+  expect(assistants[0]?.activity).toBe("Once\n\nExtra");
+  expect(assistants[0]?.tools).toHaveLength(2);
+  expect(assistants[0]?.tools).toEqual(expect.arrayContaining([
+    expect.objectContaining({id:"one",state:"completed",results:[{text:"late result"}]}),
+    expect.objectContaining({id:"item",state:"failed",results:[{text:"failed",failed:true}]}),
+  ]));
+  expect(assistants[1]?.tools).toEqual([{id:"pending",name:"apply_patch",state:"called",argumentsText:"original request"}]);
+});
 it("keeps the recorded patch on successful legacy changes, including deleted text and missing terminal newline", async () => {
   const changes = {"/sample/gone.txt": {type:"delete", content:"old"}};
   const event = (success: boolean) => ({type:"event_msg", payload:{type:"patch_apply_end", success, changes}});

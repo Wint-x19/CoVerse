@@ -1,5 +1,6 @@
-import { imageAsset, isRecord, SessionError, stringifyWireJson, webSource, type HistoryEvent, type JsonValue, type RecordedAsset, type RecordedSource, type RecordedTool, type TranscriptMessage } from "@coverse/core";
+import { imageAsset, isRecord, parseWireJson, SessionError, stringifyWireJson, webSource, type HistoryEvent, type JsonValue, type RecordedAsset, type RecordedSource, type RecordedTool, type TranscriptMessage } from "@coverse/core";
 import {tokenMetadata} from "./metadata.js";
+import {readToolPlan} from "./plan.js";
 
 type Row = Record<string, JsonValue>;
 type Changes = { lines: boolean[]; removed: number; patches: string[] };
@@ -107,6 +108,9 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
   const durations = new Map<string, number>();
   const models = new Map<string,string>();
   const usages = new Map<string,ReturnType<typeof tokenMetadata>>();
+  const rawTools = new Map<string,Map<string,RecordedTool>>();
+  const calls = new Map<string,RecordedTool>();
+  const summaries = new Map<string,Set<string>>();
   const sources = new Map<string,RecordedSource[]>();
   const events: {position:number; turn?:string; event:HistoryEvent}[] = [];
   const removed = new Set<string>();
@@ -115,7 +119,40 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
     const p = value.payload;
     if (!isRecord(p)) continue;
     if (typeof p.turn_id === "string") activeTurn = p.turn_id;
+    if (value.type === "response_item" && typeof p.call_id === "string") {
+      if (activeTurn && (p.type === "function_call" || p.type === "custom_tool_call") && typeof p.name === "string") {
+        const input = p.type === "function_call" ? p.arguments : p.input;
+        const tool:RecordedTool = {id:p.call_id,name:p.name,state:"called"};
+        if (typeof input === "string") {
+          tool.argumentsText = input;
+          if (p.type === "function_call" && ["update_plan","functions.update_plan","todo_list"].includes(p.name)) {
+            try {
+              const plan = readToolPlan(p.name,parseWireJson(input) as JsonValue);
+              if (plan) tool.plan = plan;
+            }
+            catch { throw new SessionError("INVALID_INPUT","/transcript","Function arguments are not valid JSON"); }
+          }
+        }
+        const group = rawTools.get(activeTurn) ?? new Map<string,RecordedTool>();
+        group.set(p.call_id,tool);
+        rawTools.set(activeTurn,group);
+        calls.set(p.call_id,tool);
+      } else if ((p.type === "function_call_output" || p.type === "custom_tool_call_output") && p.output !== undefined) {
+        const tool = calls.get(p.call_id);
+        if (tool) {
+          tool.state = "completed";
+          (tool.results ??= []).push({text:typeof p.output === "string" ? p.output : stringifyWireJson(p.output,null,2)});
+        }
+      }
+    }
     if (activeTurn && value.type === "response_item") {
+      if (p.type === "reasoning") {
+        const texts = summaries.get(activeTurn) ?? new Set<string>();
+        for (const parts of [p.summary,p.content]) if (Array.isArray(parts)) for (const part of parts) {
+          if (isRecord(part) && typeof part.text === "string") texts.add(part.text);
+        }
+        summaries.set(activeTurn,texts);
+      }
       const listed = p.type === "web_search_call" && isRecord(p.action) && Array.isArray(p.action.sources) ? p.action.sources : [];
       const annotations = p.type === "message" && Array.isArray(p.content) ? p.content.flatMap(b =>
         isRecord(b) && Array.isArray(b.annotations) ? b.annotations : []) : [];
@@ -161,15 +198,29 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
   for (const [turnId, items] of groups) {
     const activity: string[] = [];
     const tools: RecordedTool[] = [];
+    const remaining = rawTools.get(turnId) ?? new Map<string,RecordedTool>();
+    const readable = summaries.get(turnId);
     const files = new Map<string, Changes>();
     let lastAnswer: TranscriptMessage | undefined;
     for (const [id, { item, at, position }] of items) {
       if (item.type === "FileChange" && item.status === "completed" && isRecord(item.changes)) {
         collectChanges(files, item.changes);
       }
-      if (item.type === "Reasoning" && Array.isArray(item.summary_text)) activity.push(...item.summary_text.filter((s): s is string => typeof s === "string"));
+      if (item.type === "Reasoning" && Array.isArray(item.summary_text)) for (const text of item.summary_text) {
+        if (typeof text === "string") { activity.push(text); readable?.delete(text); }
+      }
       const tool = nativeTool(item);
-      if (tool) tools.push(tool);
+      if (tool) {
+        const callId = typeof item.call_id === "string" ? item.call_id : id;
+        const raw = remaining.get(callId);
+        if (raw) {
+          if (raw.argumentsText !== undefined) tool.argumentsText ??= raw.argumentsText;
+          if (raw.results) tool.results ??= raw.results;
+          if (raw.plan) tool.plan ??= raw.plan;
+          remaining.delete(callId);
+        }
+        tools.push(tool);
+      }
       if (!["UserMessage", "AgentMessage", "Plan"].includes(String(item.type))) continue;
       const assets: RecordedAsset[] = [];
       const text = item.type === "Plan" && typeof item.text === "string" ? item.text : textParts(item.content, assets);
@@ -191,6 +242,8 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
       transcript.push(msg);
       positions.set(id,position);
     }
+    tools.push(...remaining.values());
+    activity.push(...readable ?? []);
     if (activity.length || files.size || tools.length) {
       if (!lastAnswer) {
         lastAnswer = { id: turnId + ":activity", role: "assistant", text: "" };
@@ -205,6 +258,10 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
     const refs = sources.get(turnId);
     if (lastAnswer && refs?.length) lastAnswer.sources = [...lastAnswer.sources ?? [],...refs];
     if (lastAnswer) Object.assign(lastAnswer,usages.get(turnId));
+    if (lastAnswer) {
+      const plan = lastAnswer.tools?.slice().reverse().find(t => t.plan)?.plan;
+      if (plan) lastAnswer.plan = {...plan,...(lastAnswer.plan?.text ? {text:lastAnswer.plan.text} : {})};
+    }
     if (lastAnswer && duration !== undefined) lastAnswer.durationMs = duration;
   }
   let next = 0;
