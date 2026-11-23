@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SessionError, verifyInjectionBundle } from "@coverse/core";
+import { SessionError, stringifyWireJson, verifyInjectionBundle } from "@coverse/core";
 import type { DriverRegistry } from "@coverse/drivers";
 import type { CliIO } from "./protocol-cli.js";
 import { loadInputs } from "./session-cli.js";
@@ -79,7 +79,7 @@ export async function runAgentCli(args: readonly string[], drivers: DriverRegist
         const resumeInTarget = { cwd, command: driver.plugin.command, args: driver.plugin.resumeArgs(sessionId) };
         if (options.json) await write(JSON.stringify({ ...event, resumeInTarget }) + "\n");
         else io.stderr(JSON.stringify({ resumeInTarget }));
-      } else if (options.json) await write(JSON.stringify(event) + "\n");
+      } else if (options.json) await write(stringifyWireJson(event) + "\n");
       else if (event.type === "text" && event.text) { await write(event.text); endsWithNewline = event.text.endsWith("\n"); }
       else if (event.type === "session") io.stderr(JSON.stringify(event));
     }

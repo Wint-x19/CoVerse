@@ -43,6 +43,7 @@ import type {
 } from "../shared/types.js";
 import { UiStore } from "./store.js";
 import { csrTurnsToChatMessages } from "./history.js";
+import { updateToolActivity } from "../shared/tool-activity.js";
 
 const SESSION_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -1295,7 +1296,7 @@ export class UiService {
 
     let acquiredSessionId = session.targetSessionId;
     let textBuffer = "";
-    const tools: ToolActivity[] = [];
+    let tools: ToolActivity[] = [];
     let latestUsage: ProtocolUsage | undefined;
 
     try {
@@ -1317,8 +1318,10 @@ export class UiService {
           textBuffer += event.text;
           emit({ type: "text", text: event.text });
         } else if (event.type === "tool") {
-          tools.push({ name: event.name, state: event.state, timestamp: nowIso() });
-          emit({ type: "tool", name: event.name, state: event.state });
+          const {type, ...fields} = event;
+          const update = {...fields,timestamp:nowIso()};
+          tools = updateToolActivity(tools,update);
+          emit({type,...update});
         } else if (event.type === "usage") {
           latestUsage = event.usage;
           emit({ type: "usage", usage: event.usage });

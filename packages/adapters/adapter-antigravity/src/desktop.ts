@@ -191,6 +191,11 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
     for (const message of history) {
       const user = message.role === "user";
       let text = message.text;
+      for (const tool of message.tools ?? []) {
+        const details = [tool.name + " (" + tool.state + ")", tool.argumentsText,
+          ...(tool.results ?? []).map(result => result.text), tool.details].filter(value => value !== undefined);
+        text += (text ? "\n\n" : "") + details.join("\n");
+      }
       if (message.changedFiles?.length) {
         const files = message.changedFiles;
         const list = files.map(f => "- `" + f.path.replaceAll("`", "\\`") + "`　" +

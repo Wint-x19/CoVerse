@@ -24,6 +24,7 @@ import { SettingsView } from "@/components/SettingsView";
 import { Sidebar } from "@/components/Sidebar";
 import { ThreadView } from "@/components/ThreadView";
 import { FileViewer } from "@/components/FileViewer";
+import {updateToolActivity} from "../shared/tool-activity.js";
 import { TopBar } from "@/components/TopBar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -435,7 +436,7 @@ export function App() {
               prev && prev.sessionId === sessionId
                 ? {
                     ...prev,
-                    tools: [...prev.tools, { name: event.name, state: event.state, timestamp: new Date().toISOString() }],
+                    tools: updateToolActivity(prev.tools, event),
                   }
                 : prev,
             );

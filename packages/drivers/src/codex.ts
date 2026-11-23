@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { driverError, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
+import { driverError, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, wireText, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
 
 function codexHome(): string {
   return process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(os.homedir(), ".codex");
@@ -165,7 +165,17 @@ export const codex: DriverPlugin = {
         const item = object(record.item);
         if (item.type === "agent_message" && record.type === "item.completed") return [{ type: "text", text: string(item.text) }];
         if (["command_execution", "mcp_tool_call", "file_change", "web_search", "collab_tool_call", "dynamic_tool_call"].includes(String(item.type))) {
-          return [{ type: "tool", name: String(item.tool ?? item.type), state: String(item.status ?? record.type) }];
+          const args = item.arguments ?? item.command ?? item.query;
+          const output = item.error ?? item.result ?? item.aggregated_output;
+          const failed = item.error != null || (typeof item.exit_code === "number" && item.exit_code !== 0) || item.status === "failed";
+          const rest = Object.fromEntries(Object.entries(item).filter(([k]) => ![
+            "type","id","status","tool","command","query","arguments","error","result","aggregated_output",
+          ].includes(k)));
+          return [{type:"tool", name:String(item.tool ?? item.type), state:failed ? "failed" : String(item.status ?? record.type),
+            ...(typeof item.id === "string" ? {id:item.id} : {}),
+            ...(args !== undefined ? {argumentsText:wireText(args)} : {}),
+            ...(output !== undefined ? {results:[{text:wireText(output),...(failed ? {failed:true} : {})}]} : {}),
+            ...(Object.keys(rest).length ? {details:wireText(rest)} : {})}];
         }
         return [];
       }

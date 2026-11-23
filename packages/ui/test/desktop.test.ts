@@ -86,7 +86,10 @@ function createFakeDriverPlugin(id: string): DriverPlugin {
     },
     decoder: () => (record) => {
       if (record.event === "session") return [{ type: "session", id: String(record.id) }];
-      if (record.event === "tool") return [{ type: "tool", name: String(record.name), state: String(record.state) }];
+      if (record.event === "tool") return [
+        {type:"tool",id:"read-1",name:String(record.name),state:"started",argumentsText:'{"path":"live.txt"}'},
+        {type:"tool",id:"read-1",name:String(record.name),state:String(record.state),results:[{text:"live result body"}]},
+      ];
       if (record.event === "text") return [{ type: "text", text: String(record.text) }];
       if (record.event === "usage") {
         return [
@@ -649,6 +652,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
       expect(done1.session.bundlePending).toBe(false);
       expect(done1.session.targetSessionId).toBe("11111111-2222-4333-8444-555555555555");
       expect(done1.session.messages.at(-1)?.content).toBe("echo:claude-code:injected:claude-sonnet-4-6");
+      expect(done1.session.messages.at(-1)?.tools).toMatchObject([{id:"read-1",argumentsText:'{"path":"live.txt"}',results:[{text:"live result body"}]}]);
     }
 
     // 2. Follow-up resumes by UUID without re-injecting bundle
@@ -673,6 +677,8 @@ describe("CoVerse M4 desktop IPC & service", () => {
     if (!handoff.ok) return;
     expect(handoff.data.agent).toBe("antigravity");
     expect(handoff.data.bundlePending).toBe(true);
+    const bundle = await invoke<BundleDetailResponse>(IPC_CHANNELS.getBundle, handoff.data.handoff!.bundleId);
+    expect(bundle).toMatchObject({ok:true,data:{context:expect.stringContaining("live result body")}});
 
     // 4. Abort hanging run cleanly
     const hangPromise = invoke(IPC_CHANNELS.runStart, "r3", {

@@ -58,6 +58,22 @@ it("maps Codex and Antigravity tool and terminal records", () => {
   expect(() => agy({ event: "result", result: { status: "WAITING" } })).toThrow();
 });
 
+it("preserves tool identities, exact arguments and real outputs across each CLI stream", () => {
+  const codex = registry.get("codex").plugin.decoder();
+  expect(codex({type:"item.completed",item:{id:"c",type:"command_execution",command:"read example",exit_code:1,aggregated_output:"missing"}})[0])
+    .toMatchObject({id:"c",argumentsText:"read example",results:[{text:"missing",failed:true}]});
+  const claude = registry.get("claude-code").plugin.decoder();
+  expect(claude({type:"assistant",message:{content:[{type:"tool_use",id:"r",name:"Read",input:{id:9007199254740993n}}]}})[0])
+    .toMatchObject({id:"r",argumentsText:expect.stringContaining("9007199254740993")});
+  expect(claude({type:"user",message:{content:[{type:"tool_result",tool_use_id:"r",content:"body"}]}})[0])
+    .toMatchObject({id:"r",name:"Read",results:[{text:"body"}]});
+  const agy = registry.get("antigravity").plugin.decoder();
+  expect(agy({event:"step_update",step_update:{step_index:4,conversation_id:"s",step_type:"tool",tool_name:"read",state:"DONE",
+    tool_info:{parameters:{path:"p"},output:"returned text"}}}).at(-1)).toMatchObject({
+      id:"step-4",argumentsText:expect.stringContaining('"p"'),results:[{text:"returned text"}],
+    });
+});
+
 it("emits a missing final suffix exactly once and rejects contradictory summaries", () => {
   const decode = registry.get("antigravity").plugin.decoder();
   decode({ event: "step_update", step_update: { conversation_id: "id", step_type: "agent_response", text_delta: "abc" } });

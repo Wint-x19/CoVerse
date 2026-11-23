@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { isRecord } from "@coverse/core";
-import { finalText, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, type DriverEvent, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
+import { finalText, ignoreMissingEntry, object, string, targetFailure, unchangedSession, usage, wireText, type DriverEvent, type DriverPlugin, type LocalSessionCache, type LocalSessionRef, type ModelOption } from "./driver.js";
 
 function claudeHome(): string {
   return process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : path.join(os.homedir(), ".claude");
@@ -144,6 +144,7 @@ export const claude: DriverPlugin = {
   },
   decoder() {
     let textStreamed = false, messageText = "";
+    const calls = new Map<string,string>();
     return record => {
       if (record.parent_tool_use_id) return [];
       if (record.type === "system" && record.subtype === "init") return [{ type: "session", id: string(record.session_id) }];
@@ -168,8 +169,18 @@ export const claude: DriverPlugin = {
             messageText += text;
             events.push({ type: "text", text });
           }
-          if (block.type === "tool_use") events.push({ type: "tool", name: string(block.name), state: "started" });
-          if (block.type === "tool_result") events.push({ type: "tool", name: string(block.tool_use_id), state: block.is_error ? "failed" : "completed" });
+          if (block.type === "tool_use") {
+            const name = string(block.name);
+            if (typeof block.id === "string") calls.set(block.id,name);
+            events.push({type:"tool",name,state:"started",...(typeof block.id === "string" ? {id:block.id} : {}),
+              ...(block.input !== undefined ? {argumentsText:wireText(block.input)} : {})});
+          }
+          if (block.type === "tool_result") {
+            const id = string(block.tool_use_id);
+            events.push({type:"tool",id,name:calls.get(id) ?? id,state:block.is_error ? "failed" : "completed",
+              ...(block.content !== undefined ? {results:[{text:wireText(block.content),...(block.is_error ? {failed:true} : {})}]} : {}),
+              ...(record.tool_use_result !== undefined ? {details:wireText(record.tool_use_result)} : {})});
+          }
         }
         if (record.error) throw targetFailure(String(record.error) + ": " + events.filter(e => e.type === "text").map(e => e.text).join(""));
         return events;

@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import {isRecord} from "@coverse/core";
 import {
   driverError,
   finalText,
@@ -11,6 +12,7 @@ import {
   string,
   targetFailure,
   usage,
+  wireText,
   type DriverEvent,
   type DriverPlugin,
   type Executable,
@@ -110,9 +112,23 @@ export const antigravity: DriverPlugin = {
         }
         if (step.step_type === "tool") {
           const name = string(step.tool_name), state = string(step.state);
-          if (state === "ERROR") failedTool = name;
-          if (state === "DONE") failedTool = undefined;
-          events.push({ type: "tool", name, state });
+          const info = isRecord(step.tool_info) ? step.tool_info : {};
+          const failed = state === "ERROR" || info.error != null;
+          if (failed) failedTool = name;
+          else if (state === "DONE") failedTool = undefined;
+          const results = [
+            ...(info.output !== undefined ? [{text:wireText(info.output), ...(failed ? {failed:true} : {})}] : []),
+            ...(info.error != null ? [{text:wireText(info.error),failed:true}] : []),
+          ];
+          const details = Object.fromEntries(Object.entries(step).filter(([key]) => ![
+            "conversation_id","step_type","step_index","tool_name","state","tool_info",
+          ].includes(key)));
+          const extra = Object.fromEntries(Object.entries(info).filter(([key]) => !["name","parameters","output","error"].includes(key)));
+          if (Object.keys(extra).length) details.tool_info = extra;
+          events.push({type:"tool",name,state:failed ? "ERROR" : state,...(typeof step.step_index === "number" ? {id:"step-" + step.step_index} : {}),
+            ...(info.parameters !== undefined ? {argumentsText:wireText(info.parameters)} : {}),
+            ...(results.length ? {results} : {}),
+            ...(Object.keys(details).length ? {details:wireText(details)} : {})});
         }
         return events;
       }

@@ -2,7 +2,7 @@ import { spawn, execFile } from "node:child_process";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
-import { isRecord, SessionError, type JsonValue, type ProtocolUsage } from "@coverse/core";
+import { isRecord, parseWireJson, stringifyWireJson, SessionError, type JsonValue, type ProtocolUsage, type RecordedTool } from "@coverse/core";
 
 export interface RunOptions {
   cwd: string;
@@ -15,7 +15,7 @@ export interface RunOptions {
 export type DriverEvent =
   | { type: "session"; id: string }
   | { type: "text"; text: string }
-  | { type: "tool"; name: string; state: string }
+  | ({ type: "tool" } & RecordedTool)
   | { type: "usage"; usage: ProtocolUsage; nativeUsage: WireRecord }
   | { type: "done" };
 
@@ -39,6 +39,7 @@ export interface LocalSessionRef {
 }
 
 export type WireRecord = Record<string, JsonValue>;
+export const wireText = (value: JsonValue) => typeof value === "string" ? value : stringifyWireJson(value,null,2);
 export type LocalSessionCache = ReadonlyMap<string, LocalSessionRef>;
 
 export function unchangedSession(cache: LocalSessionCache | undefined, file: string, size: number, updatedAt: string) {
@@ -201,7 +202,7 @@ export class AgentDriver {
         if (options.signal?.aborted) throw cancelled();
         if (!line.trim()) continue;
         let record: unknown;
-        try { record = JSON.parse(line); } catch { throw driverError("Invalid JSON line in agent stdout"); }
+        try { record = parseWireJson(line); } catch { throw driverError("Invalid JSON line in agent stdout"); }
         if (!isRecord(record)) throw driverError("Invalid agent event");
         for (const event of decode(record)) {
           if (complete) throw driverError("Agent emitted events after completion");

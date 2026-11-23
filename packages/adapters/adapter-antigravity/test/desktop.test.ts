@@ -79,7 +79,8 @@ it("exports the native display transcript locally even when compaction removed m
   const { cliSessionId: _cli, ...offline } = input;
   const transcript: CSR["transcript"] = [
     { id:"u", role:"user", text:"Before compaction", createdAt:"2026-01-01T00:00:00Z" },
-    { id:"a", role:"assistant", text:"| A | B |\n|---|---|\n| x | y |", activity:"Progress", changedFiles:[{path:"example.md",added:2,removed:1}] },
+    { id:"a", role:"assistant", text:"| A | B |\n|---|---|\n| x | y |", activity:"Progress", changedFiles:[{path:"example.md",added:2,removed:1}],
+      tools:[{name:"Read",state:"completed",argumentsText:"example.md",results:[{text:"recorded file output"}]}] },
   ];
   const id = await publishToStore({...offline, loadArtifacts: async () => buildInjectionBundle({...source,transcript},"antigravity").artifacts}, base, await sql);
   const db = new (await sql).Database(await fs.readFile(path.join(desktop,"conversations",id+".db")));
@@ -90,6 +91,7 @@ it("exports the native display transcript locally even when compaction removed m
     expect(native[0]!.user_input.user_response).toBe(transcript[0]!.text);
     expect(native[1]!.planner_response.response).toContain(transcript[1]!.text);
     expect(native[1]!.planner_response.response).toContain("example.md");
+    expect(native[1]!.planner_response.response).toContain("recorded file output");
     expect(native[1]!.planner_response.thinking).toBe("Progress");
   } finally { db.close(); }
 });

@@ -225,7 +225,7 @@ export type StreamEventPayload =
   | { type: "bundle"; report: string; losses: LossCounts }
   | { type: "session"; id: string }
   | { type: "text"; text: string }
-  | { type: "tool"; name: string; state: string }
+  | ({ type: "tool" } & ToolActivity)
   | { type: "usage"; usage: ProtocolUsage }
   | { type: "done"; session: UiSession }
   | { type: "error"; diagnostic: SessionDiagnostic; sessionId?: string; session?: UiSession };
