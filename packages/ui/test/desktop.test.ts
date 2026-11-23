@@ -163,6 +163,24 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("opens existing records when a companion is missing while keeping continuation on the complete import path",async () => {
+    const cwd = await makeTempDir("coverse-partial-"), store = new UiStore(cwd);
+    const all = createAdapterRegistry(), original = all.get("antigravity");
+    const db = path.join(REPO_ROOT,"fixtures/antigravity/sqlite-2_32_1-step0/sample.db");
+    const missing = new SessionError("MISSING_ATTACHMENT","/output","Missing companion test.log");
+    const {AdapterRegistry} = await import("@coverse/core");
+    const registry = new AdapterRegistry().register({...original,
+      import:() => {throw missing;},
+      readForDisplay:async files => ({...await original.import(files),diagnostics:[missing.diagnostic]}),
+    });
+    const service = new UiService(registry,createFakeDrivers(),store,cwd);
+    expect(await service.inspectSource({paths:[db]})).toMatchObject({canReadPartial:true,previewError:{code:"MISSING_ATTACHMENT"}});
+    const opened = await service.convertSource({from:"antigravity",to:"antigravity",paths:[db],cwd,viewOnly:true});
+    expect(opened.readOnly?.[0]?.message).toContain("test.log");
+    expect(opened.messages.some(m => m.content.includes("greeting"))).toBe(true);
+    await expect(service.runTurn(opened.id,{prompt:"continue"},() => {})).rejects.toMatchObject({code:"INCOMPLETE_HISTORY"});
+    await expect(service.handoffSession(opened.id,{to:"antigravity",materialize:false})).rejects.toMatchObject({code:"INCOMPLETE_HISTORY"});
+  });
   it("upgrades an old archive from original bytes while retaining later local messages and the original packet",async () => {
     const root = await makeTempDir("coverse-history-upgrade-"), store = new UiStore(path.join(root,"state"));
     const registry = createAdapterRegistry(), service = new UiService(registry,createFakeDrivers(),store,root);

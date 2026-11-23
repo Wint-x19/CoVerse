@@ -1,5 +1,5 @@
 import {compareFileVersions, isRecord, parseWireJson, requireString, SessionError, stringifyWireJson, validateToolLinks, webSource,
-  type ContentBlock, type CSR, type FileSet, type JsonValue, type LossLedger, type RecordedFileChange, type Turn} from "@coverse/core";
+  type ContentBlock, type CSR, type FileSet, type JsonValue, type LossLedger, type RecordedFileChange, type SessionDiagnostic, type Turn} from "@coverse/core";
 import {decodeWire, nestedRecord} from "./wire.js";
 import {readReviews} from "./reviews.js";
 import {readArtifactSnapshots, readMedia} from "./media.js";
@@ -7,7 +7,7 @@ import {stepMetadata} from "./metadata.js";
 import {companionForUri,linkedAssets} from "./companions.js";
 
 export type StepRow = Record<string,string | number | Uint8Array | null>;
-interface StepSource { file:{path:string}; files:FileSet; ledger:LossLedger }
+interface StepSource { file:{path:string}; files:FileSet; ledger:LossLedger; missing?:SessionDiagnostic[] }
 
 function object(value: JsonValue | undefined, at: string): Record<string, JsonValue> {
   if (!isRecord(value)) throw new SessionError("INVALID_INPUT", at, "Required protobuf message is missing");
@@ -36,7 +36,10 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
     if (!(row.step_payload instanceof Uint8Array)) throw new SessionError("INVALID_INPUT", at, "Missing step protobuf");
     const decoded = decodeWire("Step", row.step_payload, at), step = decoded.value;
     if (decoded.unknown.length) throw new SessionError("UNINTERPRETED_CONTENT", decoded.unknown[0]!, "Unknown protobuf field may contain conversation context");
-    if (row.has_subtrajectory && !step.subtrajectory) throw new SessionError("MISSING_RELATED_RECORD",at,"Subtrajectory payload is missing");
+    if (row.has_subtrajectory && !step.subtrajectory) {
+      if (!context.missing) throw new SessionError("MISSING_RELATED_RECORD",at,"Subtrajectory payload is missing");
+      context.missing.push({code:"MISSING_RELATED_RECORD",path:at,message:"Subtrajectory payload is missing",severity:"warning"});
+    }
     if (step.type !== row.step_type || step.status !== row.status) throw new SessionError("INVALID_INPUT", at, "SQLite and protobuf step type/status disagree");
     const contentFields: Record<number, string> = { 14: "user_input", 15: "planner_response", 17: "error_message", 23: "checkpoint", 81:"task_boundary", 101: "system_message", 132: "generic" };
     if (Object.values(contentFields).filter(key => step[key] !== undefined).join() !== contentFields[Number(step.type)]) throw new SessionError("INVALID_INPUT", at, "Step discriminator and payload variant disagree");
@@ -96,8 +99,13 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
           if (Array.isArray(result.metadata) || Array.isArray(result.data)) content.push({ type: "text", text: `Native tool result metadata:\n${stringifyWireJson({ metadata: result.metadata, data: result.data }, null, 2)}` });
           if (typeof result.full_output_uri === "string" && result.full_output_uri) {
             const file = companionForUri(result.full_output_uri,files);
-            if (!file) throw new SessionError("MISSING_ATTACHMENT", at, "Supply the uniquely named full tool output referenced by full_output_uri");
-            content.push({ type: "attachment", path: file.path, mediaType: "text/plain" });
+            if (file) content.push({ type: "attachment", path: file.path, mediaType: "text/plain" });
+            else {
+              const message = "Missing full tool output: " + result.full_output_uri;
+              if (!context.missing) throw new SessionError("MISSING_ATTACHMENT",at,message);
+              context.missing.push({code:"MISSING_ATTACHMENT",path:at,message,severity:"warning"});
+              content.push({type:"text",text:message});
+            }
           }
           readMedia(result, content, at);
           opaqueFields(content, result, ["payload", "data", "tool_call_step", "tool_result_step", "result_struct", "result_value"]);
@@ -203,7 +211,8 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
       if (ancestors.has(id) || ancestors.size >= 32) throw new SessionError("INVALID_INPUT",at,"Invalid subtrajectory ancestry");
       if (Array.isArray(child.parent_references) && child.parent_references.some(ref =>
         !isRecord(ref) || typeof ref.trajectory_id !== "string" || !ancestors.has(ref.trajectory_id))) {
-        throw new SessionError("MISSING_RELATED_RECORD",at,"Subtrajectory references a separate parent");
+        if (!context.missing) throw new SessionError("MISSING_RELATED_RECORD",at,"Subtrajectory references a separate parent");
+        context.missing.push({code:"MISSING_RELATED_RECORD",path:at,message:"Subtrajectory references a separate parent",severity:"warning"});
       }
       const childRows = (Array.isArray(child.steps) ? child.steps : []).map((entry,idx) => {
         if (typeof entry !== "string") throw new SessionError("INVALID_INPUT",at,"Invalid child step bytes");

@@ -127,6 +127,7 @@ export interface TranscriptMessage extends MessageMetadata {
   reviews?: RecordedReview[];
 }
 export interface CSR {
+  incomplete?: SessionDiagnostic[];
   schemaVersion: "1.0";
   meta: {
     id: string;
@@ -205,5 +206,6 @@ export interface SessionAdapter {
   publishDesktopSession?(input: DesktopPublication): Promise<string>;
   detect(input: FileSet): Detection | Promise<Detection>;
   import(input: FileSet): ImportResult | Promise<ImportResult>;
+  readForDisplay?(input: FileSet): ImportResult | Promise<ImportResult>;
   export(session: CSR, context?: ExportContext): ExportResult | Promise<ExportResult>;
 }

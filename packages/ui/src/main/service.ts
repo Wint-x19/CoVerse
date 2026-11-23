@@ -609,7 +609,11 @@ export class UiService {
     files?: readonly UploadedFilePayload[];
   }): Promise<FileSet> {
     if (input.paths && input.paths.length > 0) {
-      return loadPathsAsFileSet(input.paths);
+      const local = await loadPathsAsFileSet(input.paths);
+      if (!input.files?.length) return local;
+      const combined = [...local,...decodeUploadedFiles(input.files)];
+      validateFileSet(combined);
+      return combined;
     }
     if (input.files && input.files.length > 0) {
       return decodeUploadedFiles(input.files);
@@ -714,6 +718,7 @@ export class UiService {
       ambiguous,
       ...(preview ? { preview } : {}),
       ...(previewError ? { previewError } : {}),
+      ...(detected?.readForDisplay && previewError && ["MISSING_ATTACHMENT","MISSING_RELATED_RECORD"].includes(previewError.code) ? {canReadPartial:true} : {}),
     };
   }
 
@@ -843,6 +848,18 @@ export class UiService {
             return this.adapters.get(request.from);
           })();
 
+    if (request.viewOnly) {
+      if (!source.readForDisplay) throw new SessionError("UNSUPPORTED_CAPABILITY","/view","Adapter does not offer partial history");
+      const read = await source.readForDisplay(await this.prepareImport(source,files,request.paths));
+      const csr = read.session, createdAt = csr.meta.createdAt ?? nowIso();
+      const messages = csrTurnsToChatMessages(csr.turns,source.id,createdAt,csr.transcript);
+      const title = messages.find(m => m.role === "user" && m.content.trim())?.content ?? csr.meta.id;
+      const cwd = await resolveExistingDirectory(request.cwd) ?? await resolveExistingDirectory(csr.meta.cwd) ?? this.defaultCwd;
+      return this.store.upsertSession({id:makeId("ses"),title:summarizeTitle(title,csr.meta.id),agent:source.id,cwd,
+        historyVersion,messages,createdAt,updatedAt:nowIso(),readOnly:read.diagnostics ?? [],
+        ...(request.paths?.length === 1 ? {reference:{agent:source.id,sourcePath:path.resolve(request.paths[0]!),
+          sourceSessionId:csr.meta.id,formatVersion:csr.meta.agentFormatVersion,originalCwd:cwd}} : {})});
+    }
     const destination = (recordedCwd?: string) => {
       if (!request.useSourceProject) return request.cwd;
       const cwd = projectDirectory(recordedCwd ?? request.cwd, true);
@@ -850,7 +867,7 @@ export class UiService {
       return cwd;
     };
     // Reference-only import (zero copy, zero bundle) when format AND project path are unchanged
-    if (source.id === target.id && request.paths && request.paths.length === 1) {
+    if (source.id === target.id && !request.files?.length && request.paths && request.paths.length === 1) {
       const imported = await source.import(await this.prepareImport(source, files, request.paths));
       const sourceLocalCwd = await resolveExistingDirectory(imported.session.meta.cwd);
       const requestedCwd = destination(imported.session.meta.cwd);
@@ -1083,6 +1100,7 @@ export class UiService {
     options: { to: string; model?: string; cwd?: string; title?: string; materialize?: boolean; omitOpaque?: boolean },
   ): Promise<UiSession> {
     const sourceSession = await this.getSession(sessionId);
+    if (sourceSession.readOnly) throw new SessionError("INCOMPLETE_HISTORY","/handoff","Supply the missing source records before continuing this conversation");
     const settings = await this.store.getSettings();
     if (settings.disabledAdapters.includes(options.to)) {
       throw new SessionError("ADAPTER_DISABLED", `/adapters/${options.to}`, `Target adapter is disabled in settings: ${options.to}`);
@@ -1352,6 +1370,7 @@ export class UiService {
 
     const session = await this.getSession(sessionId);
     const registry = await this.ensureDriversConfigured();
+    if (session.readOnly) throw new SessionError("INCOMPLETE_HISTORY","/run","Supply the missing source records before continuing this conversation");
     const driver = registry.get(session.agent);
 
     const effectiveCwd = input.cwd?.trim() ? input.cwd.trim() : session.cwd;

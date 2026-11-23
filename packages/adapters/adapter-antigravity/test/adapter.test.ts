@@ -244,6 +244,10 @@ it("requires referenced full output files and refuses opaque native tool payload
     const stepType = wireRoot.lookupType("Step");
     db.run("UPDATE steps SET step_payload=? WHERE idx=2", [stepType.encode(stepType.fromObject(value)).finish()]);
     await expect(adapter.import(files(db.export()))).rejects.toThrow("full tool output");
+    const partial = await adapter.readForDisplay!(files(db.export()));
+    expect(partial.diagnostics).toMatchObject([{code:"MISSING_ATTACHMENT",message:expect.stringContaining("full-output.txt")}]);
+    expect(partial.session.turns[2]!.content[0]).toMatchObject({type:"tool_result",content:"Hello from the sample."});
+    expect(() => adapter.export(partial.session)).toThrow("Missing full tool output");
     const input = [...files(db.export()), { path: "full-output.txt", bytes: new TextEncoder().encode("entire output") }];
     expect((await adapter.export((await adapter.import(input)).session)).artifacts.map(f => f.path)).toContain("source/full-output.txt");
     generic.result.payload = "AQ==";

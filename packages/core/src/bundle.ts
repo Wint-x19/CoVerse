@@ -69,6 +69,8 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
   if (names.size !== contents.size - 1) invalid("manifest.json", "Incomplete bundle inventory");
   const context = readText("context.md");
   const session = readObject("session.json"), report = readObject("report.json");
+  if (session.incomplete !== undefined && (!Array.isArray(session.incomplete) || session.incomplete.length))
+    invalid("session.json","Incomplete display history cannot be injected");
   if (session.schemaVersion !== "1.0" || !isRecord(session.meta) || !Array.isArray(session.turns) ||
       session.meta.agent !== manifest.source || session.meta.agentFormatVersion !== manifest.sourceFormat) {
     invalid("session.json", "Unsupported or inconsistent source session");

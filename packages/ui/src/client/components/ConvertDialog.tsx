@@ -35,6 +35,7 @@ interface ConvertDialogProps {
   t: I18nMessages;
   onOpenChange: (open: boolean) => void;
   onConverted: (session: UiSession) => void;
+  onAddCompanions: (files:PickedFile[]) => void;
 }
 
 function samePathLoose(a: string, b: string): boolean {
@@ -53,6 +54,7 @@ export function ConvertDialog({
   t,
   onOpenChange,
   onConverted,
+  onAddCompanions,
 }: ConvertDialogProps) {
   const [inspecting, setInspecting] = React.useState(false);
   const [inspectResult, setInspectResult] = React.useState<InspectResponse | null>(null);
@@ -140,7 +142,7 @@ export function ConvertDialog({
       pathUnchanged,
   );
 
-  const handleConvert = async (event: React.FormEvent) => {
+  const handleConvert = async (event: React.SyntheticEvent, viewOnly=false) => {
     event.preventDefault();
     if (!to || !source) return;
     setConverting(true);
@@ -148,7 +150,8 @@ export function ConvertDialog({
     try {
       const session = await api.convertSource({
         from,
-        to,
+        to:viewOnly ? inspectResult?.detected ?? to : to,
+        ...(viewOnly ? {viewOnly:true} : {}),
         ...(source.paths ? { paths: source.paths } : {}),
         ...(source.files ? { files: source.files } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
@@ -388,6 +391,11 @@ export function ConvertDialog({
           )}
 
           <div className="flex justify-end gap-2 pt-1">
+            {inspectResult?.previewError?.code === "MISSING_ATTACHMENT" && <Button type="button" variant="outline" onClick={async () => {
+              try { const picked = await api.pickSessionFiles(); if (picked.length) onAddCompanions(picked); }
+              catch (cause) { setError({code:"PICK_FAILED",path:"/files",message:String(cause),severity:"error"}); }
+            }}>{t.addCompanions}</Button>}
+            {inspectResult?.canReadPartial && <Button type="button" disabled={converting} onClick={e => void handleConvert(e,true)}>{t.readAvailable}</Button>}
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t.cancel}
             </Button>

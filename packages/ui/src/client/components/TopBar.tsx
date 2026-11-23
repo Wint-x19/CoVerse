@@ -27,7 +27,7 @@ export function TopBar({
   onOpenHandoff,
 }: TopBarProps) {
   const handoff = session?.handoff;
-  const canHandoff = Boolean(session && (session.messages.length > 0 || session.handoff));
+  const canHandoff = Boolean(session && !session.readOnly && (session.messages.length > 0 || session.handoff));
   const isMac = api.platform === "darwin";
 
   return (

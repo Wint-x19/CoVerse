@@ -54,6 +54,9 @@ try {
       before:[{id:"checkpoint",kind:"compaction",text:"Recorded summary boundary"}]},
   ]});
   registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => []});
+  await store.upsertSession({...session,id:"partial",title:"Partial fixture",messages:[
+    {id:"available",role:"user",content:"Kept part",createdAt:at,historical:true},
+  ],readOnly:[{code:"MISSING_ATTACHMENT",path:"full.log",message:"Missing companion full.log",severity:"warning"}]});
   win = new BrowserWindow({show: false, webPreferences: {
     preload: path.join(ui, "dist/preload/index.cjs"), sandbox: true, contextIsolation: true, backgroundThrottling:false,
   }});
@@ -211,6 +214,13 @@ try {
   }).toString() + ')()');
   assert.equal(width,48);
   console.log("Verified opening a generated WebM recording in Electron");
+  const partial = await win.webContents.executeJavaScript('(' + (async () => {
+    document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+    document.querySelector('[data-testid="session-item-partial"]').click();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    return [document.body.innerText.includes("Missing companion full.log"),!!document.querySelector('[data-testid="composer"]')];
+  }).toString() + ')()');
+  assert.deepEqual(partial,[true,false]);
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

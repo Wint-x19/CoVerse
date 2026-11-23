@@ -476,7 +476,7 @@ export function App() {
   };
 
   const isRunningActive = Boolean(streaming && activeSession && streaming.sessionId === activeSession.id);
-  const showEmptyStage = !activeSession || (activeSession.messages.length === 0 && !activeSession.handoff && !isRunningActive);
+  const showEmptyStage = !activeSession || (activeSession.messages.length === 0 && !activeSession.handoff && !activeSession.readOnly && !isRunningActive);
 
   const currentAgent = activeSession ? activeSession.agent : draftAgent;
   const currentModel = activeSession ? (activeSession.model ?? "") : draftModel;
@@ -623,6 +623,10 @@ export function App() {
                       onInspectHandoff={() => setInspectorOpen(true)}
                     />
                     <div className="shrink-0 px-6 pb-5 pt-2 flex justify-center">
+                      {activeSession?.readOnly ? <div className="w-full max-w-[740px] rounded border p-3 text-xs">
+                        <strong>{t.partialHistory}</strong>
+                        {activeSession.readOnly.map((d,i) => <p key={i} className="break-all">{d.message}</p>)}
+                      </div> :
                       <Composer
                         agent={currentAgent}
                         agentLocked={agentLocked}
@@ -637,7 +641,7 @@ export function App() {
                         onSend={handleSend}
                         onStop={handleStop}
                         onImportClick={() => setImportOpen(true)}
-                      />
+                      />}
                     </div>
                   </>
                 )}
@@ -670,6 +674,8 @@ export function App() {
       <ConvertDialog
         open={convertOpen}
         source={pendingSource}
+        onAddCompanions={picked => setPendingSource(prev => prev ? {...prev,items:[...prev.items,...picked],
+          paths:[...new Set([...prev.paths ?? [],...picked.map(f=>f.path)])]} : prev)}
         adapters={adapters}
         drivers={drivers}
         defaultCwd={defaultCwd}
@@ -692,7 +698,7 @@ export function App() {
         open={paletteOpen}
         sessions={sessions}
         hasActiveSession={Boolean(activeSession)}
-        canHandoff={Boolean(activeSession && (activeSession.messages.length > 0 || activeSession.handoff))}
+        canHandoff={Boolean(activeSession && !activeSession.readOnly && (activeSession.messages.length > 0 || activeSession.handoff))}
         t={t}
         onOpenChange={setPaletteOpen}
         onSelectSession={handleSelectSession}

@@ -140,6 +140,7 @@ export interface ChatMessage {
 }
 
 export interface UiSession {
+  readOnly?: SessionDiagnostic[];
   historyVersion?: number;
   id: string;
   title: string;
@@ -194,6 +195,7 @@ export interface InspectPreview {
 }
 
 export interface InspectResponse {
+  canReadPartial?: boolean;
   candidates: InspectCandidate[];
   detected: string | null;
   ambiguous: boolean;
@@ -202,6 +204,7 @@ export interface InspectResponse {
 }
 
 export interface ConvertRequest {
+  viewOnly?: boolean;
   from: string;
   to: string;
   /** Route by source metadata, falling back to the catalog cwd if the transcript omits it. */

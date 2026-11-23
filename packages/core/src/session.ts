@@ -104,6 +104,8 @@ export function renderContinuationHistory(session: CSR, context: ExportContext =
   });
 }
 export function buildInjectionBundle(session: CSR, target: string, context: ExportContext = {}): ExportResult {
+  const missing = session.incomplete?.[0];
+  if (missing) throw new SessionError(missing.code,missing.path,missing.message);
   const ledger = emptyLedger();
   const diagnostics: SessionDiagnostic[] = [];
   const source = session.sourceArtifacts ?? [];
