@@ -60,6 +60,8 @@ export interface RecordedAsset {
   value: string;
   mediaType: string;
   label?: string;
+  sourceUri?: string;
+  description?: string;
 }
 
 export interface RecordedTool {

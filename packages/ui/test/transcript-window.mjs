@@ -36,7 +36,9 @@ try {
       reviews:[{path:"two lines.md",comment:"Recheck this line",selections:[{side:"modified",text:"second line",start:1}]}],
       assets:[{location:"embedded",value:pixel,label:"Screenshot",mediaType:"image/png"},
         {location:"project",value:"review.pdf",mediaType:"application/pdf"},
-        {location:"project",value:"clip.webm",mediaType:"video/webm"}]},
+        {location:"project",value:"clip.webm",mediaType:"video/webm",sourceUri:"file:///original/clip.webm"},
+        {location:"text",value:"# Acceptance\n\n![Recorded verification](clip.webm)",mediaType:"text/markdown",
+          label:"Walkthrough",sourceUri:"file:///original/walkthrough.md"}]},
     {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)\n\n" +
       '::code-comment{title="Check line" body="Recorded finding" file="two lines.md" start=2 end=2}',
       tools:[{id:"call",name:"Read",state:"completed",argumentsText:'{"path":"two lines.md"}',
@@ -157,7 +159,15 @@ try {
     + "Q/f0AGDyjCD+645f/7xkq/8ZKv/Gf/L7+RMSPSSEABxTu2uRu4+zgQC3iveBAfGCAabwgQM=", "base64"));
   const width = await win.webContents.executeJavaScript('(' + (async () => {
     document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
-    document.querySelector('button[title="clip.webm"]').click();
+    document.querySelector('button[title="Walkthrough"]').click();
+    for (let i=0; i<100; i++) {
+      const doc = document.querySelector('[role="dialog"] .cv-prose');
+      if (doc?.querySelector("h1")?.textContent === "Acceptance") {
+        doc.querySelector('button[title="clip.webm"]').click();
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve,30));
+    }
     for (let i=0; i<150; i++) {
       const media = document.querySelector('[role="dialog"] video');
       if (media?.videoWidth) return media.videoWidth;

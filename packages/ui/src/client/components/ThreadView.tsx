@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileLink, MessageAssets, MessageMarkdown, UserText } from "./FileViewer";
+import { FileLink, MessageAssets, MessageMarkdown, MessageOrigin, UserText } from "./FileViewer";
 import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Sparkles, Terminal } from "lucide-react";
 import type { ChatMessage, ToolActivity, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
@@ -240,13 +240,13 @@ export function ThreadView({ session, streaming, t, onInspectHandoff }: ThreadVi
     <div className="flex-1 overflow-y-auto" data-testid="thread-view">
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
         {historicalMessages.map((message) => (
-          <MessageRow key={message.id} message={message} t={t} />
+          <MessageOrigin.Provider key={message.id} value={message.id}><MessageRow message={message} t={t}/></MessageOrigin.Provider>
         ))}
 
         {handoffStrip}
 
         {liveMessages.map((message) => (
-          <MessageRow key={message.id} message={message} t={t} />
+          <MessageOrigin.Provider key={message.id} value={message.id}><MessageRow message={message} t={t}/></MessageOrigin.Provider>
         ))}
 
         {streaming && (

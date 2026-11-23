@@ -477,7 +477,7 @@ export function App() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <FileViewer sessionId={activeSession?.id} t={t}>
+      <FileViewer session={activeSession} t={t}>
       {settingsOpen ? (
         <SettingsView
           settings={settings}

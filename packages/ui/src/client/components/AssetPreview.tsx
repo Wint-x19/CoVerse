@@ -18,5 +18,6 @@ export function AssetPreview({url, type, label, t}: {url:string; type:string; la
   if (type.startsWith("video/")) return <video controls preload="metadata" src={url} className="mx-auto max-h-[68vh] max-w-full" onError={() => setFailed(true)}/>;
   if (type.startsWith("audio/")) return <audio controls src={url} onError={() => setFailed(true)}/>;
   if (type === "application/pdf") return <React.Suspense fallback={<p>{t.loading}</p>}><PdfPreview url={url} t={t}/></React.Suspense>;
+  if (external && type === "text/uri-list") return <a className="break-all underline" href={url} target="_blank" rel="noreferrer">{url}</a>;
   return <p role="status">{t.noPreview} · {type}</p>;
 }

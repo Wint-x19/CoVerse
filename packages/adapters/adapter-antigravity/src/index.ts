@@ -6,7 +6,7 @@ import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { buildInjectionBundle, compareFileVersions, emptyLedger, isRecord, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type RecordedFileChange, type SessionAdapter, type Turn } from "@coverse/core";
 import { decodeWire, nestedRecord } from "./wire.js";
 import { readReviews } from "./reviews.js";
-import { readMedia } from "./media.js";
+import { readArtifactSnapshots, readMedia } from "./media.js";
 import { committedSnapshot } from "./wal.js";
 import { publishWhenDesktopClosed } from "./desktop.js";
 
@@ -231,7 +231,8 @@ const adapter: SessionAdapter = {
                 : {path: diff.uri, added: null, removed: null});
               content.push({type:"text", text:"Historical file change:\n" + stringifyWireJson(diff, null, 2)});
             }
-            opaqueFields(content, checkpoint, opaqueKeys.filter(key => key !== "trajectory_file_diffs")); break;
+            readArtifactSnapshots(checkpoint, content, files, at);
+            opaqueFields(content, checkpoint, opaqueKeys.filter(key => key !== "trajectory_file_diffs" && key !== "artifact_snapshots")); break;
           }
           default: throw new SessionError("UNSUPPORTED_VERSION", at, "Unverified Antigravity step type");
         }

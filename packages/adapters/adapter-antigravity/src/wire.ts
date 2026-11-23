@@ -11,6 +11,10 @@ message TrajectoryFileDiff { string uri = 1; string original_content = 2; string
 message ReviewSelection { string content = 1; int32 start_line = 2; int32 end_line = 3; string before_text = 4; string after_text = 5; }
 message ImageData { string base64_data = 1; string mime_type = 2; string caption = 3; string uri = 4; }
 message Media { string mime_type = 1; bytes data = 2; }
+message ArtifactReviewState { string artifact_uri = 1; int32 status = 2; Timestamp last_reviewed_time = 3; string last_reviewed_content = 4; }
+message ArtifactMetadata { int32 artifact_type = 1; string summary = 2; Timestamp created_at = 3; Timestamp updated_at = 4; int64 version = 5; bool request_feedback = 6; bool user_facing = 7; }
+message UrlArtifact { string url = 1; string title = 2; }
+message ArtifactSnapshot { string artifact_name = 1; string content = 2; string artifact_absolute_uri = 3; Timestamp last_edited = 4; ArtifactReviewState review_state = 5; ArtifactMetadata artifact_metadata = 6; UrlArtifact url_artifact_payload = 7; }
 message DiffCommentInfo { ReviewSelection original_selection = 1; ReviewSelection modified_selection = 2; string comment = 3; }
 message FileCommentInfo { string comment = 1; ReviewSelection selection = 2; bytes image_selection = 3; }
 message FileComment { string file_uri = 1; repeated FileCommentInfo file_comment_infos = 2; }

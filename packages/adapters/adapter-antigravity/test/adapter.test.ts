@@ -10,6 +10,24 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("opens recorded artifact revisions and resolves supplied recording companions by unique name", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const original = db.exec("SELECT step_payload FROM steps WHERE idx=5")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step",original,"test").value;
+    const encode = (name:string,value:object) => wireRoot.lookupType(name).encode(wireRoot.lookupType(name).fromObject(value)).finish();
+    (step.checkpoint as Record<string,unknown>).artifact_snapshots = [
+      encode("ArtifactSnapshot",{artifact_name:"Walkthrough",artifact_absolute_uri:"file:///project/walkthrough.md",content:"# Original"}),
+      encode("ArtifactSnapshot",{artifact_name:"Recording",artifact_absolute_uri:"file:///project/demo.webm"}),
+    ];
+    db.run("UPDATE steps SET step_payload=? WHERE idx=5",[encode("Step",step)]);
+    const {session} = await adapter.import([...files(db.export()),{path:"assets/demo.webm",bytes:new Uint8Array([1])}]);
+    const media = session.turns[5]!.content.filter(block => block.type === "media");
+    expect(media).toMatchObject([{asset:{location:"text",value:"# Original",mediaType:"text/markdown",label:"Walkthrough"}},
+      {asset:{location:"attachment",value:"assets/demo.webm",label:"Recording"}}]);
+    expect(adapter.export(session)).toBeDefined();
+  } finally {db.close();}
+});
 it("decodes image captions and embedded media and preserves unfamiliar media payloads", async () => {
   const db = new (await sql).Database(await fixture());
   try {
