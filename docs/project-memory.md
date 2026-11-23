@@ -50,6 +50,23 @@ Antigravity 的桌面登记补充了上述 CLI 流程。Windows 桌面版 2.34.0
 
 ## 已验证经验
 
+### 三家原生会话在桌面对话页的显示缺口
+
+2026-11-23 核对实现版本 `430135d`。下表描述从本地记录导入后，读者在 CoVerse 对话页能看到或打开的内容。Codex 有两条展示路径：存在原生已完成的用户消息项时优先采用原生时间线，否则与另两家共用通用消息映射。[Codex 原生时间线](../packages/adapters/adapter-codex/src/transcript.ts) · [历史消息映射](../packages/ui/src/main/service.ts) · [对话组件](../packages/ui/src/client/components/ThreadView.tsx)
+
+| 内容 | 目前可观察到的缺口 |
+| --- | --- |
+| 文件、目录和行号引用（三家） | 用户消息按纯文本显示。助手 Markdown 可以生成链接，但没有按会话工作目录解析文件、打开编辑器或定位行号的操作。变更卡的路径只是文本。交接审计的文件列表也只显示路径和大小。[桌面接口](../packages/ui/src/shared/types.ts) · [审计面板](../packages/ui/src/client/components/InspectorDrawer.tsx) |
+| 文件 diff 和行内评审 | Codex 已完成的原生文件变更能显示路径、净增删行数和更多文件，逐行补丁只留在源记录。Claude Code 的编辑工具输入不进消息卡，`file-history-snapshot` 只留在原始记录。Antigravity 的检查点文件差异、文件/差异评论和工件评论以未解码字段保留。三者都不能在对话里打开当轮 diff 或定位评论行。[Codex 文件变更用例](../packages/adapters/adapter-codex/test/adapter.test.ts) · [Claude Code 适配器](../packages/adapters/adapter-claude-code/src/index.ts) · [Antigravity 适配器](../packages/adapters/adapter-antigravity/src/index.ts) |
+| 工具调用、命令和结果（三家） | 通用工具列表仅展示名称和状态，无法展开查看参数、文件内容、命令输出或失败正文。Codex 原生时间线可把命令及已有的汇总输出放进活动折叠区，与推理摘要、过程说明合并。一些搜索项只保留查询文字，没有结构化来源列表。 |
+| 原生图片、文档与媒体 | 通用展示会把用户图片写成含 URL 的占位文字，助手原生图片块会被略过。Claude Code 的文本型文档展开为历史文字，其余未识别文档块归档。Antigravity 的媒体、工件快照及外部工具输出没有会话内预览；缺少 `full_output_uri` 引用的文件会导致导入报错。助手正文中直接写的 Markdown 图片走另一条渲染路径。 |
+| 计划、工件与历史交互 | Codex 原生 Plan 可读，但与普通助手消息共用样式。三家工具形式的任务列表通常只剩工具名称和状态。Antigravity 的实现计划、Walkthrough、截图和浏览器录像在原生客户端可作为工件打开；CoVerse 缺少对应的工件与批注查看器，各项能否从某份数据库恢复取决于实际保存的字段和配套文件。[Antigravity 工件说明](https://antigravity.google/docs/artifacts) |
+| 压缩、通知与历史错误 | 通用映射跳过系统和开发者轮次。Codex 的压缩或页面上下文、Claude Code 的系统边界、progress 和顶层 attachment、Antigravity 的通知、检查点和独立错误步骤均缺少对应的历史展示。Claude Code 放在普通消息里的摘要可能仍可读，但没有压缩边界标识。 |
+| 分支、子会话与回退 | Claude Code 已解析的父子关系未传入消息卡，关联记录可能平铺在主线上。Codex 已支持在有原生时间线时按分支前缀和回退恢复正文，界面没有回退标记或跳回父消息的入口。Antigravity 遇到带子轨迹的步骤会在导入时报错，标为已撤回的普通轮次则没有界面标记。 |
+| 时间、模型与用量 | 历史消息未展示逐条时间。通用导入使用回退时间，不向消息卡传入逐条模型或用量。部分 Codex 原生消息有轮次耗时。CoVerse 内新发言可以显示模型、用量和运行错误，但实时工具事件仍只有名称与状态，缺少详细参数、结果、diff 和单独的推理事件。[桌面消息与流式事件](../packages/ui/src/shared/types.ts) |
+
+用三份经审核的基线样本分别调用适配器和桌面历史消息映射，均能在统一记录中找到读取工具返回的 `Hello from the sample.`，均无法在对话消息数据中找到这段返回值。Codex 和 Antigravity 显示 `read_file / completed`。Claude Code 的 `tool_result` 位于用户记录中，同一次成功读取在消息中显示为 `Read / called`。Antigravity 样本的系统通知、检查点和错误步骤也都未进入消息列表。此处核对了样本数据、桌面组件和 IPC，未在三个原生窗口逐项点验。[Codex 样本](../fixtures/codex/rollout-2026-11-17/sample.jsonl) · [Claude Code 样本](../fixtures/claude-code/transcript-sdk-0_3_326/sample.jsonl) · [Antigravity 样本生成器](../tools/fixtures/create-antigravity.py)
+
 ### 五条路线的目标续聊与 Antigravity 桌面回传
 
 2026-11-23 在 Windows 用 Codex CLI `0.171.0-alpha.13`、Claude Code `2.1.121` 和 agy `1.5.14` 各创建专用原生会话。Codex ↔ Claude Code、Antigravity ↔ Claude Code、Antigravity → Codex 五条路线均在源项目中生成目标会话。另起目标 CLI，只提交会话 ID 与不含答案的问题，五条路线均取回源回执。首轮覆盖一问一答。随后用新的真实会话完成双轮复验，每份来源含四条消息，回执和标签分别来自两轮用户发言。五个目标均按指定顺序返回两项随机值。两批测试都核对了角色、顺序、逐条正文与源文件 SHA-256。CLI 登记使用既有的历史上下文注入流程。[真机测试入口](../tools/m31/native-handoffs.mjs)
