@@ -16,6 +16,8 @@ message ArtifactMetadata { int32 artifact_type = 1; string summary = 2; Timestam
 message UrlArtifact { string url = 1; string title = 2; }
 message TaskBoundary { string task_name = 1; string task_status = 2; string task_summary = 3; string task_summary_with_citations = 4; int32 mode = 5; string delta_summary = 6; string delta_summary_with_citations = 7; }
 message TaskSnapshot { string task_id = 1; string tool_name = 2; string tool_summary = 3; string description = 4; Timestamp start_time = 5; uint32 step_index = 6; string log_uri = 7; bool is_daemon = 8; }
+message TrajectoryReference { string trajectory_id = 1; int32 step_index = 2; int32 trajectory_type = 3; int32 step_type = 4; int32 reference_type = 5; string conversation_id = 6; }
+message ChildTrajectory { string trajectory_id = 1; repeated bytes steps = 2; repeated bytes generator_metadata = 3; int32 trajectory_type = 4; repeated TrajectoryReference parent_references = 5; string cascade_id = 6; bytes metadata = 7; int32 source = 8; repeated bytes executor_metadatas = 9; repeated bytes battle_mode_infos = 10; }
 message ArtifactSnapshot { string artifact_name = 1; string content = 2; string artifact_absolute_uri = 3; Timestamp last_edited = 4; ArtifactReviewState review_state = 5; ArtifactMetadata artifact_metadata = 6; UrlArtifact url_artifact_payload = 7; }
 message DiffCommentInfo { ReviewSelection original_selection = 1; ReviewSelection modified_selection = 2; string comment = 3; }
 message FileCommentInfo { string comment = 1; ReviewSelection selection = 2; bytes image_selection = 3; }
@@ -37,7 +39,7 @@ message Checkpoint { uint32 checkpoint_index = 1; repeated uint32 included_step_
 message SystemMessage { string message = 1; bytes render_info = 2; string event_type = 3; bytes agent_message = 4; repeated Pair metadata = 5; repeated bytes media = 6; }
 message Result { string result = 1; repeated Pair metadata = 2; bytes step_render_info = 3; repeated bytes media = 4; repeated DataPair data = 5; bytes payload = 6; string full_output_uri = 7; bytes tool_call_step = 8; bytes tool_result_step = 9; bytes result_struct = 10; bytes result_value = 11; }
 message Generic { repeated Pair args = 1; Result result = 2; }
-message Step { int32 type = 1; int32 status = 4; Metadata metadata = 5; UserInput user_input = 19; Planner planner_response = 20; ErrorMessage error_message = 24; Checkpoint checkpoint = 30; ErrorDetails error = 31; TaskBoundary task_boundary = 93; SystemMessage system_message = 114; bytes permissions = 133; Generic generic = 140; repeated bytes completed_interactions = 147; bytes task_details = 148; }
+message Step { int32 type = 1; int32 status = 4; Metadata metadata = 5; bytes subtrajectory = 6; UserInput user_input = 19; Planner planner_response = 20; ErrorMessage error_message = 24; Checkpoint checkpoint = 30; ErrorDetails error = 31; TaskBoundary task_boundary = 93; SystemMessage system_message = 114; bytes permissions = 133; Generic generic = 140; repeated bytes completed_interactions = 147; bytes task_details = 148; }
 message Workspace { string workspace_folder_absolute_uri = 1; string git_root_absolute_uri = 2; bytes repository = 3; string branch_name = 4; }
 message DesktopExecutor { int32 termination_reason = 1; uint32 last_step_idx = 3; string execution_id = 9; }
 message DesktopStepOrigin { string trajectory_id = 1; uint32 step_index = 2; string cascade_id = 4; }

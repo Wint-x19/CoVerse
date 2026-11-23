@@ -104,8 +104,14 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
   const replacement = session.continuation;
   if (replacement !== undefined && (!isRecord(replacement) || !Array.isArray(replacement.replacement))) invalid("session.json", "Invalid continuation window");
   const snapshotTurns = isRecord(replacement) && Array.isArray(replacement.replacement) ? replacement.replacement : [];
-  for (const turn of [...session.turns, ...snapshotTurns]) {
+  const allTurns = [...session.turns,...snapshotTurns];
+  for (const turn of allTurns) {
     if (!isRecord(turn) || !Array.isArray(turn.content)) invalid("session.json", "Invalid turn content");
+    if (turn.childTrajectory !== undefined) {
+      const child = turn.childTrajectory;
+      if (!isRecord(child) || typeof child.id !== "string" || !Array.isArray(child.turns)) invalid("session.json","Invalid child trajectory");
+      for (const item of child.turns) allTurns.push(item);
+    }
     verifyChanges(turn.changedFiles);
     verifyReviews(turn.reviews);
     for (const block of turn.content) {

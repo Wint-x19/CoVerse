@@ -38,9 +38,10 @@ export interface Turn {
   changedFiles?: TranscriptMessage["changedFiles"];
   plan?: RecordedPlan;
   event?: HistoryEvent;
+  childTrajectory?: {id:string;turns:Turn[]};
   reviews?: RecordedReview[];
   /** Stable provenance; parent/branch references must not be flattened away. */
-  origin?: { artifact: string; record: number; parentId?: string; parentTurnId?: string; branchId?: string; reverted?: boolean; kind?: "message" | "compaction" | "reverted" | "subsession" };
+  origin?: { artifact: string; record: number; parentId?: string; parentTurnId?: string; branchId?: string; subsession?:boolean; reverted?: boolean; kind?: "message" | "compaction" | "reverted" | "subsession" };
 }
 
 /** Native conversation surface, independent of the model's compacted input window. */

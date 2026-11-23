@@ -11,6 +11,7 @@ import {reviewSegments} from "../src/client/lib/review-directives.js";
 import {visibleBranch} from "../src/client/lib/branches.js";
 import {
   createAdapterRegistry,
+  csrTurnsToChatMessages,
   IPC_CHANNELS,
   registerIpcHandlers,
   runEventChannel,
@@ -160,6 +161,17 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("opens nested histories on a separate path and maintains a jump back to the outer turn", () => {
+    const messages = csrTurnsToChatMessages([{id:"outer",role:"user",content:[{type:"text",text:"outer question"}],
+      origin:{artifact:"a.db",record:0,branchId:"main"},childTrajectory:{id:"child",turns:[
+        {id:"nested",role:"assistant",content:[{type:"text",text:"nested reply"}],origin:{
+          artifact:"a.db",record:0,parentId:"outer",branchId:"child",subsession:true,
+        }},
+      ]}}],"antigravity","now");
+    expect(messages[0]?.childBranch).toBe("child");
+    expect(visibleBranch(messages,"main").map(m=>m.id)).toEqual(["outer"]);
+    expect(visibleBranch(messages,"child").map(m=>m.id)).toEqual(["outer","nested"]);
+  });
   it("keeps common ancestors and excludes sibling and subagent replies from a selected branch", () => {
     const messages: UiSession["messages"] = [
       {id:"root",role:"user",content:"ask",createdAt:"now",lineage:{branchId:"main"}},

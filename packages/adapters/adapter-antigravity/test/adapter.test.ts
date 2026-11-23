@@ -10,6 +10,27 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("opens embedded subtrajectory messages separately and verifies their declared parent", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const encode = (name:string,value:object) => wireRoot.lookupType(name).encode(wireRoot.lookupType(name).fromObject(value)).finish();
+    const raw = db.exec("SELECT step_payload FROM steps WHERE idx=3")[0]!.values[0]![0] as Uint8Array;
+    const step = decodeWire("Step",raw,"parent").value;
+    const child = {trajectory_id:"child",parent_references:[{trajectory_id:"00000000-0000-4000-8000-000000000003",step_index:3}],
+      steps:[encode("Step",{type:14,status:3,user_input:{query:"child input"}}),
+        encode("Step",{type:15,status:3,planner_response:{response:"child output"}})]};
+    step.subtrajectory = Buffer.from(encode("ChildTrajectory",child)).toString("base64");
+    db.run("UPDATE steps SET step_payload=?,has_subtrajectory=1 WHERE idx=3",[encode("Step",step)]);
+    const result = await adapter.import(files(db.export()));
+    const parent = result.session.turns[3]!, nested = parent.childTrajectory!;
+    expect(nested.turns.map(t => t.content[0])).toEqual([{type:"text",text:"child input"},{type:"text",text:"child output"}]);
+    expect(nested.turns[0]?.origin).toMatchObject({subsession:true,parentId:parent.id,branchId:nested.id});
+    expect(result.ledger.downgraded.some(item => item.code === "SUBSESSION_ARCHIVED")).toBe(true);
+    const exported = await adapter.export(result.session);
+    expect(new TextDecoder().decode(exported.artifacts.find(a => a.path === "context.md")!.bytes)).not.toContain("child output");
+    expect(new TextDecoder().decode(exported.artifacts.find(a => a.path === "session.json")!.bytes)).toContain("child output");
+  } finally {db.close();}
+});
 it("displays a verified task-boundary step with its state and summary", async () => {
   const db = new (await sql).Database(await fixture());
   try {

@@ -52,12 +52,23 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     ...(m.tools?.length ? {tools:m.tools.map(tool => ({...tool,timestamp:m.createdAt ?? timestamp}))} : {}),
     ...(m.durationMs !== undefined ? {durationMs:m.durationMs} : {}),
   }));
-  const toolsByTurn = historicalTools(turns, timestamp);
+  const ordered: Turn[] = [];
+  function visit(items:readonly Turn[]) {
+    for (const turn of items) {
+      ordered.push(turn);
+      if (turn.childTrajectory) visit(turn.childTrajectory.turns);
+    }
+  }
+  visit(turns);
+  const toolsByTurn = historicalTools(ordered, timestamp);
   const messages: ChatMessage[] = [];
-  const pending: HistoryEvent[] = [];
-  const branches = new Set(turns.map(t => t.origin?.branchId).filter(Boolean));
-  const byId = new Map(turns.map(t => [t.id,t]));
-  for (const turn of turns) {
+  const eventGroups = new Map<string,HistoryEvent[]>();
+  const branches = new Set(ordered.map(t => t.origin?.branchId).filter(Boolean));
+  const byId = new Map(ordered.map(t => [t.id,t]));
+  for (const turn of ordered) {
+    const scope = turn.origin?.branchId ?? "";
+    const pending = eventGroups.get(scope) ?? [];
+    eventGroups.set(scope,pending);
     const tools = toolsByTurn.get(turn);
     const displayOnly = turn.role === "system" || turn.role === "developer" || turn.role === "tool";
     const parts: string[] = [], reasoning: string[] = [];
@@ -81,14 +92,14 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       if (block.type === "reasoning") reasoning.push(block.text);
     }
     const content = parts.join("\n\n");
-    if (!content && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
+    if (!content && !turn.childTrajectory && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
     const base = {id:turn.id, content, createdAt:timestamp, historical:true, ...(pending.length ? {before:pending.splice(0)} : {})};
     const origin = turn.origin;
     const lineage = origin && {
       ...(origin.branchId && (branches.size > 1 || origin.kind === "subsession") ? {branchId:origin.branchId} : {}),
       ...(origin.parentTurnId || origin.parentId ? {parentId:origin.parentTurnId ?? origin.parentId!} : {}),
-      ...(origin.kind === "subsession" ? {subsession:true} : {}),
+      ...(origin.kind === "subsession" || origin.subsession ? {subsession:true} : {}),
       ...(origin.reverted || origin.kind === "reverted" ? {reverted:true} : {}),
     };
     // A Claude user record can contain both an actual user message and the results of earlier work.
@@ -101,6 +112,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       ...(reasoning.length ? {reasoning:reasoning.join("\n\n")} : {}),
       ...(turn.plan ? {plan:turn.plan} : {}),
       ...(lineage && Object.keys(lineage).length ? {lineage} : {}),
+      ...(turn.childTrajectory?.turns.length ? {childBranch:turn.childTrajectory.id} : {}),
       ...(turn.reviews?.length ? {reviews:turn.reviews} : {})});
   }
   const visible = new Set(messages.map(m => m.id));
@@ -116,10 +128,11 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     if (parent && visible.has(parent) && !seen.has(parent)) message.lineage.parentId = parent;
     else delete message.lineage.parentId;
   }
-  if (pending.length) {
-    const last = messages.at(-1);
+  for (const [scope,pending] of eventGroups) if (pending.length) {
+    const last = messages.slice().reverse().find(m => (byId.get(m.id)?.origin?.branchId ?? "") === scope);
     if (last) last.after = pending;
-    else messages.push({id:pending[0]!.id + ":events",role:"assistant",agent:sourceAgent,content:"",historical:true,createdAt:timestamp,after:pending});
+    else messages.push({id:pending[0]!.id + ":events",role:"assistant",agent:sourceAgent,content:"",historical:true,createdAt:timestamp,after:pending,
+      ...(scope && branches.size > 1 ? {lineage:{branchId:scope}} : {})});
   }
   return messages;
 }
