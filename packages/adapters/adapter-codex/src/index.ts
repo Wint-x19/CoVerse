@@ -1,4 +1,4 @@
-import { imageAsset, parseWireJson, stringifyWireJson } from "@coverse/core";
+import { imageAsset, parseWireJson, stringifyWireJson, webSource } from "@coverse/core";
 import { decompress, Decompress } from "fzstd";
 import { ancestralRecords, prepareLineage, primaryLog, verifiedWriters } from "./lineage.js";
 import { nativeTranscript, patchEventFiles } from "./transcript.js";
@@ -24,7 +24,10 @@ function messageBlocks(value: JsonValue | undefined, path: string): ContentBlock
   if (!Array.isArray(value)) throw new SessionError("INVALID_INPUT", path, "Expected a message content array");
   return value.map((b, i) => {
     if (!isRecord(b)) throw new SessionError("INVALID_INPUT", `${path}/${i}`, "Invalid content block");
-    if (["input_text", "output_text", "text", "summary_text"].includes(String(b.type)) && typeof b.text === "string") return { type: "text", text: b.text };
+    if (["input_text", "output_text", "text", "summary_text"].includes(String(b.type)) && typeof b.text === "string") {
+      const sources = Array.isArray(b.annotations) ? b.annotations.flatMap(a => isRecord(a) && a.type === "url_citation" ? webSource(a.url,a.title) : []) : [];
+      return {type:"text",text:b.text,...(sources.length ? {sources} : {})};
+    }
     if (b.type === "input_image" && typeof b.image_url === "string") return { type: "image", url: b.image_url };
     if (b.type === "input_file" && typeof b.file_path === "string") return { type: "attachment", path: b.file_path, mediaType: typeof b.mime_type === "string" ? b.mime_type : "application/octet-stream" };
     return { type: "opaque", source: "codex", value: b };
@@ -94,6 +97,12 @@ const adapter: SessionAdapter = {
     const item = (p: Record<string, JsonValue>, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
       const path = `${artifact}:${line}`;
       switch (p.type) {
+        case "web_search_call": {
+          if (!isRecord(p.action)) {add("assistant",[{type:"opaque",source:"codex:web_search",value:p}],p,line,kind); break;}
+          const urls = Array.isArray(p.action.sources) ? p.action.sources.flatMap(s => isRecord(s) ? webSource(s.url,s.title) : []) : [];
+          add("system",[{type:"text",text:"Historical web search:\n" + stringifyWireJson(p.action,null,2),...(urls.length ? {sources:urls} : {})}],p,line,kind);
+          break;
+        }
         case "message":
           if (!["user", "assistant", "system", "developer"].includes(String(p.role))) throw new SessionError("INVALID_INPUT", path, "Unknown message role");
           add(p.role as Turn["role"], messageBlocks(p.content, path), p, line, kind); break;

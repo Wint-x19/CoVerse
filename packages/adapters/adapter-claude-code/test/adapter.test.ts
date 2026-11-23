@@ -10,6 +10,17 @@ it("imports official-reader validated text, reasoning and tool chains", async ()
   expect(r.session.turns[1]!.content.map(b => b.type)).toEqual(["reasoning", "tool_call"]);
   expect((await adapter.export(r.session)).artifacts.map(f => f.path)).toContain("context.md");
 });
+it("pairs server web searches in one message and retains clickable result and sentence citations", async () => {
+  const rows = await fixture(), url = "https://example.org/paper";
+  rows[3].message.content = [
+    {type:"server_tool_use",id:"server-1",name:"web_search",input:{query:"research"}},
+    {type:"web_search_tool_result",tool_use_id:"server-1",content:[{type:"web_search_result",url,title:"Paper"}]},
+    {type:"text",text:"A finding.",citations:[{type:"web_search_result_location",url,title:"Paper",cited_text:"sample finding"}]},
+  ];
+  const turn = (await adapter.import(input(rows))).session.turns.at(-1)!;
+  expect(turn.content[1]).toMatchObject({type:"tool_result",callTurnId:turn.id,sources:[{url,title:"Paper"}]});
+  expect(turn.content[2]).toMatchObject({sources:[{url,title:"Paper",excerpt:"sample finding"}]});
+});
 it("reads message timestamps, actual model switches and cache usage",async () => {
   const rows = await fixture();
   rows[3].timestamp = "2026-01-01T12:00:00Z";

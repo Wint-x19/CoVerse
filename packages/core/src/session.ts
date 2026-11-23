@@ -61,7 +61,10 @@ export function renderContinuationHistory(session: CSR, context: ExportContext =
       const path = `${record.path}/content/${bi}`;
       let text: string;
       switch (block.type) {
-        case "text": text = block.text; break;
+        case "text":
+          text = block.text;
+          if (block.sources?.length) text += "\n\nSources:\n" + block.sources.map(s => (s.title ? s.title + " · " : "") + s.url).join("\n");
+          break;
         case "reasoning": text = `Historical reasoning:\n${block.text}`; ledger.downgraded.push({ code: "REASONING_AS_HISTORY", path, reason: "Reasoning is quoted history, not a target-native reasoning block" }); break;
         case "tool_call": text = `Historical tool call ${stringifyWireJson(block.id)} (${stringifyWireJson(block.name)}):\n${block.argumentsText ?? stringifyWireJson(block.arguments, null, 2)}`; ledger.downgraded.push({ code: "TOOL_AS_HISTORY", path, reason: "Tool invocation is transcribed, never executed" }); break;
         case "tool_result": text = `Historical tool result for ${stringifyWireJson(block.callId)}${block.isError ? " (error)" : ""}:\n${typeof block.content === "string" ? block.content : stringifyWireJson(block.content, null, 2)}`; ledger.downgraded.push({ code: "TOOL_AS_HISTORY", path, reason: "Tool result is quoted history" }); break;

@@ -28,8 +28,9 @@ function historicalTools(turns: readonly Turn[], timestamp: string) {
       add(turn, tool);
     }
     tool.state = block.isError ? "failed" : "completed";
+    if (block.sources?.length) tool.sources = [...tool.sources ?? [],...block.sources];
     (tool.results ??= []).push({text:typeof block.content === "string" ? block.content : stringifyWireJson(block.content,null,2),
-      ...(block.assets ? {assets:block.assets,displayText:block.displayText ?? ""} : {}),
+      ...(block.assets ? {assets:block.assets} : {}), ...(block.displayText !== undefined ? {displayText:block.displayText} : {}),
       ...(block.isError ? {failed:true} : {})});
     if (turn.role === "tool") {
       const details = turn.content.flatMap(b => b.type === "text" ? [b.text] : b.type === "attachment" ? [b.path] : []);
@@ -48,6 +49,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     ...(m.changedFiles ? {changedFiles:m.changedFiles} : {}), ...(m.reviews ? {reviews:m.reviews} : {}),
     ...(m.assets?.length ? {assets:m.assets} : {}),
     ...(m.plan ? {plan:m.plan} : {}),
+    ...(m.sources ? {sources:m.sources} : {}),
     ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
     ...(m.lineage ? {lineage:m.lineage} : {}),
     ...(m.tools?.length ? {tools:m.tools.map(tool => ({...tool,timestamp:m.createdAt ?? timestamp}))} : {}),
@@ -74,6 +76,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     const displayOnly = turn.role === "system" || turn.role === "developer" || turn.role === "tool";
     const parts: string[] = [], reasoning: string[] = [];
     const assets: RecordedAsset[] = [...turn.assets ?? []];
+    const sources = turn.content.flatMap(b => b.type === "text" ? b.sources ?? [] : []);
     let event = turn.event;
     if (!event && (turn.role === "system" || turn.role === "developer" || turn.origin?.kind === "compaction")) {
       const text = turn.content.flatMap(b => b.type === "text" ? [b.text] : []).join("\n\n");
@@ -89,11 +92,12 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       if (asset) assets.push(asset);
     }
     if (!displayOnly) for (const block of turn.content) {
-      if (block.type === "text" && event?.kind !== "compaction" && !(block.displayAs === "review" && turn.reviews?.length)) parts.push(block.text);
+      if (block.type === "text" && event?.kind !== "compaction" && !(block.displayAs === "review" && turn.reviews?.length) &&
+          !(block.displayAs === "sources" && sources.length)) parts.push(block.text);
       if (block.type === "reasoning") reasoning.push(block.text);
     }
     const content = parts.join("\n\n");
-    if (!content && !turn.childTrajectory && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
+    if (!content && !sources.length && !turn.childTrajectory && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
     const base = {id:turn.id,content,createdAt:turn.createdAt ?? timestamp,historical:true,
       ...(turn.createdAt ? {recordedTime:true} : {}), ...(turn.model ? {model:turn.model} : {}),
@@ -115,6 +119,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       ...(tools?.length ? {tools} : {}), ...(turn.changedFiles?.length ? {changedFiles:turn.changedFiles} : {})} : {}),
       ...(reasoning.length ? {reasoning:reasoning.join("\n\n")} : {}),
       ...(turn.plan ? {plan:turn.plan} : {}),
+      ...(sources.length ? {sources} : {}),
       ...(lineage && Object.keys(lineage).length ? {lineage} : {}),
       ...(turn.childTrajectory?.turns.length ? {childBranch:turn.childTrajectory.id} : {}),
       ...(turn.reviews?.length ? {reviews:turn.reviews} : {})});

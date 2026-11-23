@@ -10,6 +10,18 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("decodes Antigravity's own web grounding source tags",async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const encode = (name:string,obj:object) => wireRoot.lookupType(name).encode(wireRoot.lookupType(name).fromObject(obj)).finish();
+    const url = "https://example.org/ref";
+    const grounding = encode("GroundingMetadata",{sources:[{web:{uri:url,title:"Published source",snippet:"A passage"}}]});
+    db.run("UPDATE steps SET step_payload=? WHERE idx=3",[encode("Step",{type:15,status:3,planner_response:{response:"Answer",grounding_metadata:grounding}})]);
+    expect((await adapter.import(files(db.export()))).session.turns[3]!.content).toContainEqual(expect.objectContaining({
+      sources:[{url,title:"Published source",excerpt:"A passage"}],
+    }));
+  } finally {db.close();}
+});
 it("reads per-step timestamps, actual model name, elapsed time and usage counters", async () => {
   const db = new (await sql).Database(await fixture());
   try {

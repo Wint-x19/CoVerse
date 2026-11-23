@@ -21,9 +21,9 @@ export interface LossLedger {
 }
 
 export type ContentBlock =
-  | { type: "text" | "reasoning"; text: string; displayAs?: "review" }
+  | { type: "text" | "reasoning"; text: string; displayAs?: "review" | "sources"; sources?: RecordedSource[] }
   | { type: "tool_call"; id: string; name: string; arguments: JsonValue; argumentsText?: string }
-  | { type: "tool_result"; callId: string; callTurnId?: string; content: JsonValue; isError?: boolean; assets?: RecordedAsset[]; displayText?: string }
+  | { type: "tool_result"; callId: string; callTurnId?: string; content: JsonValue; isError?: boolean; assets?: RecordedAsset[]; displayText?: string; sources?:RecordedSource[] }
   | { type: "attachment"; path: string; mediaType: string }
   | { type: "image"; url: string; detail?: string }
   | { type: "media"; asset: RecordedAsset }
@@ -77,7 +77,10 @@ export interface RecordedAsset {
   description?: string;
 }
 
+export interface RecordedSource {url:string;title?:string;excerpt?:string}
+
 export interface RecordedTool {
+  sources?: RecordedSource[];
   changedFiles?: RecordedFileChange[];
   plan?: RecordedPlan;
   id?: string;
@@ -113,6 +116,7 @@ export interface TranscriptMessage extends MessageMetadata {
   role: "user" | "assistant";
   text: string;
   activity?: string;
+  sources?: RecordedSource[];
   plan?: RecordedPlan;
   before?: HistoryEvent[];
   lineage?: MessageLineage;

@@ -1,4 +1,4 @@
-import {compareFileVersions, isRecord, parseWireJson, requireString, SessionError, stringifyWireJson, validateToolLinks,
+import {compareFileVersions, isRecord, parseWireJson, requireString, SessionError, stringifyWireJson, validateToolLinks, webSource,
   type ContentBlock, type CSR, type FileSet, type JsonValue, type LossLedger, type RecordedFileChange, type Turn} from "@coverse/core";
 import {decodeWire, nestedRecord} from "./wire.js";
 import {readReviews} from "./reviews.js";
@@ -76,7 +76,14 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
         if (typeof planner.modified_response === "string" && planner.modified_response !== planner.response) content.push({ type: "text", text: `Modified historical response:\n${planner.modified_response}` });
         if (Array.isArray(planner.tool_calls)) for (const call of planner.tool_calls) recordCall(call, true);
         readMedia(planner, content, at);
-        opaqueFields(content, planner, ["thinking_redacted", "knowledge_base_items", "side_channels", "passback_context", "grounding_metadata"]);
+        if (planner.grounding_metadata) {
+          const grounding = nestedRecord("GroundingMetadata",planner.grounding_metadata,at);
+          const sources = Array.isArray(grounding?.sources) ? grounding.sources.flatMap(s =>
+            isRecord(s) && isRecord(s.web) ? webSource(s.web.uri,s.web.title,s.web.snippet) : []) : [];
+          if (sources.length) content.push({type:"text",displayAs:"sources",sources,text:"Historical grounding:\n" + stringifyWireJson(grounding,null,2)});
+          else opaqueFields(content,planner,["grounding_metadata"]);
+        }
+        opaqueFields(content, planner, ["thinking_redacted", "knowledge_base_items", "side_channels", "passback_context"]);
         break;
       }
       case 132: {

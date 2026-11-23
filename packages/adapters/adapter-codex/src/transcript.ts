@@ -1,4 +1,4 @@
-import { imageAsset, isRecord, SessionError, stringifyWireJson, type HistoryEvent, type JsonValue, type RecordedAsset, type RecordedTool, type TranscriptMessage } from "@coverse/core";
+import { imageAsset, isRecord, SessionError, stringifyWireJson, webSource, type HistoryEvent, type JsonValue, type RecordedAsset, type RecordedSource, type RecordedTool, type TranscriptMessage } from "@coverse/core";
 import {tokenMetadata} from "./metadata.js";
 
 type Row = Record<string, JsonValue>;
@@ -90,7 +90,10 @@ function nativeTool(item: Row): RecordedTool | undefined {
   const details = Object.fromEntries(Object.entries(item).filter(([key]) => ![
     "id","type","tool","status","arguments","command","query","error","result","aggregated_output",
   ].includes(key)));
+  const listed = isRecord(item.action) ? item.action.sources : item.sources;
+  const sources = Array.isArray(listed) ? listed.flatMap(s => isRecord(s) ? webSource(s.url,s.title) : []) : [];
   return {name, id:String(item.id), state:typeof item.status === "string" ? item.status : failed ? "failed" : "completed",
+    ...(sources.length ? {sources} : {}),
     ...(args !== undefined ? {argumentsText:typeof args === "string" ? args : stringifyWireJson(args,null,2)} : {}),
     ...(output !== undefined ? {results:[{text:typeof output === "string" ? output : stringifyWireJson(output,null,2), ...(failed ? {failed:true} : {})}]} : {}),
     ...(Object.keys(details).length ? {details:stringifyWireJson(details,null,2)} : {})};
@@ -104,6 +107,7 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
   const durations = new Map<string, number>();
   const models = new Map<string,string>();
   const usages = new Map<string,ReturnType<typeof tokenMetadata>>();
+  const sources = new Map<string,RecordedSource[]>();
   const events: {position:number; turn?:string; event:HistoryEvent}[] = [];
   const removed = new Set<string>();
   let activeTurn: string | undefined;
@@ -111,6 +115,13 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
     const p = value.payload;
     if (!isRecord(p)) continue;
     if (typeof p.turn_id === "string") activeTurn = p.turn_id;
+    if (activeTurn && value.type === "response_item") {
+      const listed = p.type === "web_search_call" && isRecord(p.action) && Array.isArray(p.action.sources) ? p.action.sources : [];
+      const annotations = p.type === "message" && Array.isArray(p.content) ? p.content.flatMap(b =>
+        isRecord(b) && Array.isArray(b.annotations) ? b.annotations : []) : [];
+      const links = [...listed,...annotations].flatMap(s => isRecord(s) ? webSource(s.url,s.title) : []);
+      if (links.length) sources.set(activeTurn,[...sources.get(activeTurn) ?? [],...links]);
+    }
     if (activeTurn && value.type === "turn_context" && typeof p.model === "string") models.set(activeTurn,p.model);
     if (activeTurn && value.type === "event_msg" && p.type === "token_count") {
       const meta = tokenMetadata(p.info);
@@ -166,6 +177,9 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
       if (!text && !assets.length) continue;
       const role = item.type === "UserMessage" ? "user" : "assistant";
       const msg: TranscriptMessage = { id, role, text, ...(at ? {createdAt: at} : {}), ...(assets.length ? {assets} : {}) };
+      const links = (Array.isArray(item.content) ? item.content : []).flatMap(b => isRecord(b) && Array.isArray(b.annotations)
+        ? b.annotations.flatMap(a => isRecord(a) ? webSource(a.url,a.title) : []) : []);
+      if (links.length) msg.sources = links;
       if (item.type === "Plan") msg.plan = {text,steps:[]};
       if (role === "assistant") {
         const model = models.get(turnId);
@@ -188,6 +202,8 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
       if (files.size) lastAnswer.changedFiles = fileRows(files, cwd);
     }
     const duration = durations.get(turnId);
+    const refs = sources.get(turnId);
+    if (lastAnswer && refs?.length) lastAnswer.sources = [...lastAnswer.sources ?? [],...refs];
     if (lastAnswer) Object.assign(lastAnswer,usages.get(turnId));
     if (lastAnswer && duration !== undefined) lastAnswer.durationMs = duration;
   }

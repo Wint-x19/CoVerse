@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileLink, MessageAssets, MessageMarkdown, MessageOrigin, UserText } from "./FileViewer";
+import { FileLink, MessageAssets, MessageMarkdown, MessageOrigin, UrlText, UserText } from "./FileViewer";
 import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Sparkles, Terminal } from "lucide-react";
 import type { ChatMessage, ToolActivity, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
@@ -45,13 +45,14 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
               <span className="ml-2 text-[var(--text-tertiary)]">{tool.state}</span>
               </summary>
               <dl className="ml-3 space-y-1 py-2">
-                <dt>{t.toolInput}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap">{tool.argumentsText ?? t.unrecorded}</pre></dd>
+                <dt>{t.toolInput}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap"><UserText text={tool.argumentsText ?? t.unrecorded}/></pre></dd>
                 <dt>{t.toolOutput}</dt><dd>{tool.results?.length ? tool.results.map((result, i) =>
                   <div key={i}><pre className={cn("max-h-80 overflow-auto whitespace-pre-wrap",result.failed && "text-red-500")}>
-                    {result.displayText ?? (result.text || t.emptyOutput)}
+                    <UrlText text={result.displayText ?? (result.text || t.emptyOutput)}/>
                   </pre><MessageAssets assets={result.assets}/></div>) : t.unrecorded}</dd>
                 {tool.details && <><dt>{t.toolDetails}</dt><dd><pre className="max-h-80 overflow-auto whitespace-pre-wrap">{tool.details}</pre></dd></>}
               </dl>
+              <Sources sources={tool.sources} t={t}/>
             </details>
           ))}
         </div>
@@ -127,6 +128,15 @@ function ToolChanges({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages
   return tools?.map((tool,i) => tool.changedFiles?.length ? <ChangedFiles key={i} files={tool.changedFiles} t={t}/> : null);
 }
 
+function Sources({sources,t}: {sources:ChatMessage["sources"];t:I18nMessages}) {
+  if (!sources?.length) return null;
+  const links = [...new Map(sources.filter(s => /^https?:\/\//i.test(s.url)).map(s => [s.url,s])).values()];
+  return <section className="my-2 space-y-1 text-xs"><h3>{t.sources}</h3>
+    {links.map(s => <div key={s.url}><a className="break-all text-[var(--accent-text)] hover:underline" href={s.url} target="_blank" rel="noreferrer">{s.title || s.url}</a>
+      {s.excerpt && <blockquote className="border-l pl-2 text-[var(--text-secondary)]">{s.excerpt}</blockquote>}</div>)}
+  </section>;
+}
+
 function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMessages}) {
   return reviews?.map((review, index) => <section key={index} className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-sm">
     <FileLink target={{path:review.path}}>{review.path}</FileLink>
@@ -167,6 +177,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
         <div className="max-w-[82%] rounded-xl border border-[var(--border-subtle)] bg-[var(--user-bubble)] px-3.5 py-2.5 text-[14px] leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
           <UserText text={message.content}/>
           <MessageAssets assets={message.assets}/>
+          <Sources sources={message.sources} t={t}/>
           <ReviewCards reviews={message.reviews} t={t}/>
           <Metadata message={message} t={t}/>
         </div>
@@ -195,6 +206,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
 
         {message.changedFiles?.length ? <ChangedFiles files={message.changedFiles} t={t} /> : <ToolChanges tools={message.tools} t={t}/>}
         <MessageAssets assets={message.assets}/>
+        <Sources sources={message.sources} t={t}/>
         <ReviewCards reviews={message.reviews} t={t}/>
         {message.error && (
           <div
@@ -244,7 +256,7 @@ function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
   const jump = React.useContext(JumpContext);
   const browse = React.useContext(BrowseContext);
   const visible = message.content || message.tools?.length || message.reasoning || message.plan || message.changedFiles?.length ||
-    message.assets?.length || message.reviews?.length || message.error || message.usage;
+    message.assets?.length || message.sources?.length || message.reviews?.length || message.error || message.usage;
   return <MessageOrigin.Provider value={message.id}>
     <div id={"timeline-" + message.id} tabIndex={-1} className="outline-none focus-visible:ring-1">
       <HistoryEvents events={message.before} t={t}/>

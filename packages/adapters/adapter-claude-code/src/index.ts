@@ -1,4 +1,4 @@
-import { blockAsset, recordedUsage, stringifyWireJson, type RecordedAsset } from "@coverse/core";
+import { blockAsset, recordedUsage, stringifyWireJson, webSource, type RecordedAsset } from "@coverse/core";
 import { recordedEdit } from "./file-edit.js";
 import {readToolPlan} from "./plan.js";
 import {SnapshotHistory,supplyNativeBackups} from "./snapshots.js";
@@ -29,21 +29,27 @@ function blocks(content: JsonValue | undefined, at: string): ContentBlock[] {
   return content.map(b => {
     if (!isRecord(b)) throw new SessionError("INVALID_INPUT", at, "Invalid content block");
     switch (b.type) {
-      case "text": if (typeof b.text === "string") return { type: "text", text: b.text }; break;
+      case "text": if (typeof b.text === "string") {
+        const sources = Array.isArray(b.citations) ? b.citations.flatMap(c => isRecord(c) ? webSource(c.url,c.title,c.cited_text) : []) : [];
+        return {type:"text",text:b.text,...(sources.length ? {sources} : {})};
+      } break;
       case "thinking": if (typeof b.thinking === "string") return { type: "reasoning", text: b.thinking }; break;
+      case "server_tool_use": if (b.name !== "web_search") break;
       case "tool_use":
         if (b.input === undefined) throw new SessionError("INVALID_INPUT", at, "Tool input is missing");
         return { type: "tool_call", id: requireString(b.id, at), name: requireString(b.name, at), arguments: b.input };
-      case "tool_result": {
+      case "web_search_tool_result": case "tool_result": {
         if (b.content === undefined) throw new SessionError("INVALID_INPUT", at, "Tool result content is missing");
         const assets: RecordedAsset[] = [], visible: string[] = [];
+        const sources = Array.isArray(b.content) ? b.content.flatMap(s => isRecord(s) && s.type === "web_search_result" ? webSource(s.url,s.title) : []) : [];
         if (Array.isArray(b.content)) for (const item of b.content) {
           const media = isRecord(item) && (item.type === "image" || item.type === "document") && blockAsset(blocks([item],at)[0]!);
           if (media) assets.push(media);
           else visible.push(isRecord(item) && typeof item.text === "string" ? item.text : stringifyWireJson(item,null,2));
         }
         return { type: "tool_result", callId: requireString(b.tool_use_id, at), content: b.content,
-          ...(assets.length ? {assets,displayText:visible.join("\n\n")} : {}), ...(typeof b.is_error === "boolean" ? { isError: b.is_error } : {}) };
+          ...(assets.length ? {assets,displayText:visible.join("\n\n")} : {}), ...(sources.length ? {sources,displayText:sources.map(s=>s.title ?? s.url).join("\n")} : {}),
+          ...(typeof b.is_error === "boolean" ? { isError: b.is_error } : {}) };
       }
       case "image":
         if (isRecord(b.source)) {
@@ -176,7 +182,7 @@ const adapter: SessionAdapter = {
           if (plan) turn.plan = plan;
         }
         if (block.type === "tool_result") {
-          const parent = ancestors(turn.id).map(id => byId.get(id)).find(t =>
+          const parent = localCalls.has(block.callId) ? turn : ancestors(turn.id).map(id => byId.get(id)).find(t =>
             t?.content.some(b => b.type === "tool_call" && b.id === block.callId));
           const call = parent?.content.find(b => b.type === "tool_call" && b.id === block.callId);
           if (call?.type !== "tool_call") throw new SessionError("BROKEN_TOOL_REFERENCE", turn.id, "Tool result has no call in its parent chain");

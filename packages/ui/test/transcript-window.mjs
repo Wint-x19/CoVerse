@@ -49,6 +49,7 @@ try {
       changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
     {id:"p",role:"assistant",agent:"codex",createdAt:at,content:"Review the change",
       model:"model-test",durationMs:350,usage:{input:7,output:3,reasoning:1},usageScope:"request",
+      sources:[{url:"https://example.org/fixture",title:"Recorded source"}],
       plan:{text:"Review the change",steps:[{title:"Run tests",status:"completed"}]},
       before:[{id:"checkpoint",kind:"compaction",text:"Recorded summary boundary"}]},
   ]});
@@ -57,6 +58,8 @@ try {
     preload: path.join(ui, "dist/preload/index.cjs"), sandbox: true, contextIsolation: true, backgroundThrottling:false,
   }});
   await win.loadFile(path.join(ui, "dist/renderer/index.html"));
+  let externalLink;
+  win.webContents.setWindowOpenHandler(({url}) => {externalLink = url;return {action:"deny"};});
   async function exercise(id) {
     return win.webContents.executeJavaScript('(' + (async function (id, sessionId) {
       async function find(selector) {
@@ -93,6 +96,8 @@ try {
   assert.match(plan,/已完成/);
   assert.equal(plan.split("Review the change").length,2);
   assert.match(plan,/model-test/); assert.match(plan,/350 ms/); assert.match(plan,/最近请求用量/); assert.match(plan,/推理 1/);
+  await win.webContents.executeJavaScript('document.querySelector(\'a[href="https://example.org/fixture"]\').click()');
+  assert.equal(externalLink,"https://example.org/fixture");
   const summary = await win.webContents.executeJavaScript('(' + (() => {
     const details = document.querySelector('[data-testid="message-assistant-p"]').parentElement.querySelector("details");
     details.querySelector("summary").click();

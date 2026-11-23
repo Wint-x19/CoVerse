@@ -28,6 +28,15 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("links structured web search sources to the visible native turn", async () => {
+  const url = "https://example.org/ref";
+  const {session} = await adapter.import(encode([header,
+    completed("t",{id:"u",type:"UserMessage",content:[{type:"text",text:"look"}]}),
+    response({type:"web_search_call",action:{type:"search",sources:[{type:"url",url,title:"Result"}]}}),
+    completed("t",{id:"a",type:"AgentMessage",content:[{type:"text",text:"Found it."}]}),
+  ]));
+  expect(session.transcript?.at(-1)?.sources).toEqual([{url,title:"Result"}]);
+});
 it("displays native model, elapsed time and last-request token usage without mixing cumulative totals", async () => {
   const {session} = await adapter.import(encode([header,
     {type:"turn_context",payload:{turn_id:"t",model:"demo-model"}},

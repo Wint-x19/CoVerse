@@ -1123,7 +1123,8 @@ export class UiService {
           if (tool.details) content.push({type:"text",text:tool.details});
         }
       }
-      if (message.content) content.push({ type: "text", text: message.content });
+      if (message.content || message.sources?.length) content.push({ type: "text", text: message.content,
+        ...(message.sources?.length ? {sources:message.sources} : {}) });
       if (message.reasoning) content.push({type:"reasoning",text:message.reasoning});
       for (const asset of message.assets ?? []) {
         if (asset.location === "attachment" && sourceArtifacts.some(f => f.path === asset.value))
@@ -1180,6 +1181,7 @@ export class UiService {
         ...(m.tools?.length ? {tools:m.tools} : {}),
         ...(m.assets?.length ? {assets:m.assets} : {}),
         ...(m.plan ? {plan:m.plan} : {}),
+        ...(m.sources ? {sources:m.sources} : {}),
         ...(m.before ? {before:m.before} : {}), ...(m.after ? {after:m.after} : {}),
         ...(m.lineage ? {lineage:m.lineage} : {}),
       }))]} : {}),

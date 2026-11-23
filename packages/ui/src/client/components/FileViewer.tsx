@@ -57,6 +57,14 @@ export function MessageMarkdown({text}: {text: string}) {
     </section>)}</>;
 }
 
+export function UrlText({text}: {text:string}) {
+  return <>{text.split(/(https?:\/\/[^\s<>"\]]+)/gi).map((part,i) => {
+    if (!/^https?:\/\//i.test(part)) return part;
+    const href = part.replace(/[.,;:!?，。；！）]+$/u,"");
+    return <React.Fragment key={i}><a href={href} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] hover:underline">{href}</a>{part.slice(href.length)}</React.Fragment>;
+  })}</>;
+}
+
 export function UserText({text}: {text: string}) {
   // Keep prompts verbatim, including instructions that happen to look like HTML or Markdown.
   const parts = text.split(/(\[[^\]\n]+\]\((?:<[^>\n]+>|[^)\s]+)\))/g);
@@ -64,8 +72,10 @@ export function UserText({text}: {text: string}) {
     const link = /^\[[^\]\n]+\]\((?:<([^>\n]+)>|([^)\s]+))\)$/.exec(part);
     const target = link && fileReference(link[1] ?? link[2]!, true);
     if (target) return <FileLink key={index} target={target}>{part}</FileLink>;
+    const href = link?.[1] ?? link?.[2];
+    if (href && /^https?:\/\//i.test(href)) return <a key={index} href={href} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] hover:underline">{part}</a>;
     return <React.Fragment key={index}>{fileTokens(part).map((item, i) => item.reference
-      ? <FileLink key={i} target={item.reference}>{item.text}</FileLink> : item.text)}</React.Fragment>;
+      ? <FileLink key={i} target={item.reference}>{item.text}</FileLink> : <UrlText key={i} text={item.text}/>)}</React.Fragment>;
   })}</>;
 }
 

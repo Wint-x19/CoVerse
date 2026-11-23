@@ -16,6 +16,10 @@ message Media { string mime_type = 1; bytes data = 2; }
 message ArtifactReviewState { string artifact_uri = 1; int32 status = 2; Timestamp last_reviewed_time = 3; string last_reviewed_content = 4; }
 message ArtifactMetadata { int32 artifact_type = 1; string summary = 2; Timestamp created_at = 3; Timestamp updated_at = 4; int64 version = 5; bool request_feedback = 6; bool user_facing = 7; }
 message UrlArtifact { string url = 1; string title = 2; }
+message WebSource { string uri = 1; string title = 2; string snippet = 3; string site_name = 4; }
+message Source { string reference_id = 1; WebSource web = 2; }
+message GroundingSupport { int32 start_index = 1; int32 end_index = 2; repeated int32 source_indices = 3; string segment_text = 4; }
+message GroundingMetadata { repeated Source sources = 1; repeated GroundingSupport grounding_supports = 2; }
 message TaskBoundary { string task_name = 1; string task_status = 2; string task_summary = 3; string task_summary_with_citations = 4; int32 mode = 5; string delta_summary = 6; string delta_summary_with_citations = 7; }
 message TaskSnapshot { string task_id = 1; string tool_name = 2; string tool_summary = 3; string description = 4; Timestamp start_time = 5; uint32 step_index = 6; string log_uri = 7; bool is_daemon = 8; }
 message TrajectoryReference { string trajectory_id = 1; int32 step_index = 2; int32 trajectory_type = 3; int32 step_type = 4; int32 reference_type = 5; string conversation_id = 6; }
