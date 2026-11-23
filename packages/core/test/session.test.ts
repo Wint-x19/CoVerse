@@ -39,6 +39,16 @@ describe("injection bundle contract", () => {
     s.turns[0]!.content = [{ type: "attachment", path: "absent", mediaType: "text/plain" }];
     expect(() => buildInjectionBundle(s, "x")).toThrow("Attachment not supplied");
   });
+  it.each([
+    {plan:{steps:[{title:42}]}},{tools:[{name:"read",state:"done",results:{}}]},
+    {relatedSessions:[{kind:"child",id:3}]},{before:[{id:"notice",kind:"system",text:{}}]},
+    {sources:[{url:"https://example.org",excerpt:{}}]},
+  ])("rejects malformed display metadata in a checksummed archive", fields => {
+    const s = session();
+    s.transcript = [{id:"item",role:"assistant",text:"archived"}];
+    Object.assign(s.transcript[0]!,fields);
+    expect(() => verifyInjectionBundle(buildInjectionBundle(s,"target").artifacts,"target")).toThrow(/Invalid (historical|related)/);
+  });
   it("does not truncate long content or restore old source text over edited CSR", () => {
     const s = session(); const full = "历史".repeat(100_000); s.turns[0]!.content = [{ type: "text", text: full }];
     const files = buildInjectionBundle(s, "x").artifacts;

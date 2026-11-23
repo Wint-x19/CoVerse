@@ -30,7 +30,50 @@ function verifyReviews(value: JsonValue | undefined) {
 function validAsset(asset: JsonValue | undefined) {
   return isRecord(asset) && ["embedded","remote","project","attachment","text"].includes(String(asset.location)) &&
     typeof asset.value === "string" && typeof asset.mediaType === "string" &&
-    (asset.label === undefined || typeof asset.label === "string");
+    [asset.label,asset.description,asset.sourceUri].every(optionalText);
+}
+
+function optionalText(value:JsonValue | undefined) {
+  return value === undefined || typeof value === "string";
+}
+
+function optionalList(value:JsonValue | undefined, valid:(item:JsonValue) => boolean) {
+  return value === undefined || (Array.isArray(value) && value.every(valid));
+}
+
+function validSource(value:JsonValue) {
+  return isRecord(value) && typeof value.url === "string" && [value.title,value.excerpt].every(optionalText);
+}
+
+function validPlan(value:JsonValue | undefined) {
+  return value === undefined || (isRecord(value) && optionalText(value.text) && Array.isArray(value.steps) &&
+    value.steps.every(step => isRecord(step) && typeof step.title === "string" && [step.status,step.detail].every(optionalText)));
+}
+
+function validEvent(value:JsonValue) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.kind === "string" &&
+    typeof value.text === "string" && [value.anchorId,value.sourceRole,value.createdAt].every(optionalText);
+}
+
+function verifyPresentation(row:Record<string,JsonValue>) {
+  verifyChanges(row.changedFiles);
+  verifyReviews(row.reviews);
+  if (!validPlan(row.plan) || !optionalList(row.assets,validAsset) || !optionalList(row.sources,validSource) ||
+      !optionalList(row.before,validEvent) || !optionalList(row.after,validEvent) || (row.event !== undefined && !validEvent(row.event))) {
+    invalid("session.json","Invalid historical content");
+  }
+  if (!optionalList(row.relatedSessions,ref => isRecord(ref) && typeof ref.id === "string" && (ref.kind === "parent" || ref.kind === "child") &&
+    [ref.label,ref.trajectoryId].every(optionalText) && (ref.step === undefined || (typeof ref.step === "number" && Number.isSafeInteger(ref.step))))) {
+    invalid("session.json","Invalid related session");
+  }
+  if (!optionalList(row.tools,tool => {
+    if (!isRecord(tool)) return false;
+    verifyChanges(tool.changedFiles);
+    return typeof tool.name === "string" && typeof tool.state === "string" && [tool.id,tool.argumentsText,tool.details].every(optionalText) &&
+      validPlan(tool.plan) && optionalList(tool.sources,validSource) && optionalList(tool.results,r => isRecord(r) &&
+        typeof r.text === "string" && optionalText(r.displayText) && optionalList(r.assets,validAsset) &&
+        (r.failed === undefined || typeof r.failed === "boolean"));
+  })) invalid("session.json","Invalid historical tool");
 }
 
 /** Validate the same bytes that will be injected. Source files may contain arbitrary binary data. */
@@ -85,9 +128,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
           (m.createdAt !== undefined && typeof m.createdAt !== "string") ||
           (m.durationMs !== undefined && (typeof m.durationMs !== "number" || !Number.isSafeInteger(m.durationMs) || m.durationMs < 0))) invalid("session.json", "Invalid native message");
       seen.add(m.id);
-      verifyChanges(m.changedFiles);
-      verifyReviews(m.reviews);
-      if (m.assets !== undefined && (!Array.isArray(m.assets) || !m.assets.every(validAsset))) invalid("session.json","Invalid message media");
+      verifyPresentation(m);
     }
   }
   const archived = new Set<string>();
@@ -114,9 +155,10 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
       if (!isRecord(child) || typeof child.id !== "string" || !Array.isArray(child.turns)) invalid("session.json","Invalid child trajectory");
       for (const item of child.turns) allTurns.push(item);
     }
-    verifyChanges(turn.changedFiles);
-    verifyReviews(turn.reviews);
+    verifyPresentation(turn);
     for (const block of turn.content) {
+      if (isRecord(block) && (block.type === "text" || block.type === "reasoning" || block.type === "tool_result") &&
+          (!optionalList(block.sources,validSource) || !optionalList(block.assets,validAsset))) invalid("session.json","Invalid sources or media in historical content");
       if (isRecord(block) && block.type === "media" && !validAsset(block.asset)) invalid("session.json","Invalid media block");
       if (isRecord(block) && block.type === "attachment") {
         if (typeof block.path !== "string" || !names.has("source/" + block.path)) invalid("session.json", "Missing required attachment");
