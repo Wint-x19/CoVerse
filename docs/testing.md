@@ -17,6 +17,8 @@
 
 ## 何时使用 Computer Use
 
+对话记录的真实窗口回归在仓库根目录运行 `pnpm build` 后执行 `pnpm --filter @coverse/ui exec electron test/transcript-window.mjs`。脚本在独立的 Electron 窗口中点击消息链接、打开历史 diff、定位评审、跳转分支与关联会话，并验证图片解码、PDF 翻页、WebM 和缺件只读提示。文件选择器和外部浏览器用测试回调接收请求。[窗口用例](../packages/ui/test/transcript-window.mjs)
+
 Computer Use 指 Agent 通过可见窗口、鼠标和键盘操作真实客户端。默认先运行可重复的自动化测试。如果现有窗口自动化已经覆盖同一操作和可见结果，可以跳过重复点验。需要使用 Computer Use 时，按下面的步骤执行。
 
 1. **确定验收路径。** 写下入口、操作和可见的通过条件。日常验收只走一遍本次受影响的路径；故障复现保留触发条件，例如窗口宽度、系统缩放或拖入的文件类型。

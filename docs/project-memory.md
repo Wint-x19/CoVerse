@@ -50,11 +50,28 @@ Antigravity 的桌面登记补充了上述 CLI 流程。Windows 桌面版 2.34.0
 
 ## 已验证经验
 
-### 三家原生会话在桌面对话页的显示缺口
+### 三家原生会话在桌面对话页的显示能力
+
+截至 `db3182b`，以下为已通过适配器样本、桌面服务或 Windows Electron 窗口回归的行为。下文保留旧版缺口，便于追查历史会话为何显示不同。
+
+| 内容 | 在 CoVerse 对话页可以做什么 |
+| --- | --- |
+| 文件与目录 | 点击用户或助手消息、变更卡、评审和交接包中的文件引用，按来源项目或归档打开只读查看器；目录可逐级浏览，行号范围会高亮。源文件移动后可手动定位。 |
+| 差异与评审 | 展开 Codex 原生及旧式补丁、Claude Code 成功编辑的补丁和已收集的文件历史版本、Antigravity 检查点中可重建的差异。评审卡保留评论、引用和差异侧，可跳到引文。单侧快照会注明缺失信息。 |
+| 工具与搜索 | 展开参数、命令、返回正文、失败和已有退出码，点击已记录的网页来源。Codex 的原生 UI 项与底层调用按 ID 对应，延迟返回仍属于原调用。实时对话及再次交接保留已收到的工具详情。 |
+| 图片、文档与媒体 | 点击消息或工具结果中的图片、文本、PDF、音频和视频。Antigravity Walkthrough、工件版本和录像使用随历史保存的内容或对应会话的配套文件。 |
+| 计划与任务 | 查看 Codex Plan 和任务列表、Claude Code 任务操作、Antigravity 任务边界及快照中的条目、状态和说明。 |
+| 历史事件 | 按记录位置查看上下文压缩、系统和开发者消息、进度、通知、错误及未知内容提示。续聊窗口仍遵循源适配器的压缩边界。 |
+| 分支与子会话 | 选择分支、跳回父消息、查看回退标记。Antigravity 可展开内嵌子轨迹，也可按外部父子会话 ID 查找已保存或本机登记的会话。 |
+| 时间、模型与用量 | 查看来源给出的逐条时间、模型、耗时及用量，并区分消息、请求和会话累计口径。实时对话单独展示可读推理、工具活动和可恢复的变更。 |
+
+已有导入记录可从原生文件或交接包升级显示，并保留随后在本地追加的发言。Antigravity 缺少配套记录时，可补选文件或选择“查看已有记录”；该视图会列出缺项并保持只读。预览本机文件时，文本上限为 8 MiB，支持的二进制媒体上限为 96 MiB。定位到的当前文件和保存的历史补丁可能属于不同版本。[历史消息映射](../packages/ui/src/main/history.ts) · [文件和历史恢复服务](../packages/ui/src/main/service.ts) · [窗口回归](../packages/ui/test/transcript-window.mjs)
+
+#### 旧版缺口基线
 
 2026-11-23 核对实现版本 `430135d`。下表描述从本地记录导入后，读者在 CoVerse 对话页能看到或打开的内容。Codex 有两条展示路径：存在原生已完成的用户消息项时优先采用原生时间线，否则与另两家共用通用消息映射。[Codex 原生时间线](../packages/adapters/adapter-codex/src/transcript.ts) · [历史消息映射](../packages/ui/src/main/service.ts) · [对话组件](../packages/ui/src/client/components/ThreadView.tsx)
 
-| 内容 | 目前可观察到的缺口 |
+| 内容 | 在 `430135d` 可观察到的缺口 |
 | --- | --- |
 | 文件、目录和行号引用（三家） | 用户消息按纯文本显示。助手 Markdown 可以生成链接，但没有按会话工作目录解析文件、打开编辑器或定位行号的操作。变更卡的路径只是文本。交接审计的文件列表也只显示路径和大小。[桌面接口](../packages/ui/src/shared/types.ts) · [审计面板](../packages/ui/src/client/components/InspectorDrawer.tsx) |
 | 文件 diff 和行内评审 | Codex 已完成的原生文件变更能显示路径、净增删行数和更多文件，逐行补丁只留在源记录。Claude Code 的编辑工具输入不进消息卡，`file-history-snapshot` 只留在原始记录。Antigravity 的检查点文件差异、文件/差异评论和工件评论以未解码字段保留。三者都不能在对话里打开当轮 diff 或定位评论行。[Codex 文件变更用例](../packages/adapters/adapter-codex/test/adapter.test.ts) · [Claude Code 适配器](../packages/adapters/adapter-claude-code/src/index.ts) · [Antigravity 适配器](../packages/adapters/adapter-antigravity/src/index.ts) |
