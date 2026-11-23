@@ -193,9 +193,11 @@ export async function publishToStore(input: DesktopPublication, base: string, sq
       let text = message.text;
       if (message.changedFiles?.length) {
         const files = message.changedFiles;
-        const list = files.map(f => "- `" + f.path.replaceAll("`", "\\`") + "`　+" + f.added + " −" + f.removed);
-        text += "\n\n**已编辑 " + files.length + " 个文件**　+" + files.reduce((s,f) => s+f.added,0) +
-          " −" + files.reduce((s,f) => s+f.removed,0) + "\n\n" + list.join("\n");
+        const list = files.map(f => "- `" + f.path.replaceAll("`", "\\`") + "`　" +
+          (f.added === null || f.removed === null ? "逐行差异未记录" : "+" + f.added + " −" + f.removed));
+        const total = files.every(f => f.added !== null && f.removed !== null)
+          ? "　+" + files.reduce((s,f) => s+(f.added ?? 0),0) + " −" + files.reduce((s,f) => s+(f.removed ?? 0),0) : "";
+        text += "\n\n**已编辑 " + files.length + " 个文件**" + total + "\n\n" + list.join("\n");
       }
       if (!text && !message.activity) continue;
       const ms = message.createdAt ? Date.parse(message.createdAt) : NaN;

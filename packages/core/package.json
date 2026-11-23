@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "diff": "9.0.0",
     "lossless-json": "4.3.4"
   }
 }

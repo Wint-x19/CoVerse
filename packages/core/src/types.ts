@@ -40,6 +40,13 @@ export interface Turn {
 }
 
 /** Native conversation surface, independent of the model's compacted input window. */
+export interface RecordedFileChange {
+  path: string;
+  added: number | null;
+  removed: number | null;
+  patches?: string[];
+}
+
 export interface TranscriptMessage {
   id: string;
   role: "user" | "assistant";
@@ -47,7 +54,7 @@ export interface TranscriptMessage {
   createdAt?: string;
   activity?: string;
   durationMs?: number;
-  changedFiles?: { path: string; added: number; removed: number; patches?: string[] }[];
+  changedFiles?: RecordedFileChange[];
 }
 export interface CSR {
   schemaVersion: "1.0";

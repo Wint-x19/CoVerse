@@ -1,4 +1,5 @@
 import { stringifyWireJson } from "@coverse/core";
+import { recordedEdit } from "./file-edit.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "transcript-sdk-0_3_326";
@@ -124,8 +125,16 @@ const adapter: SessionAdapter = {
           }
           localCalls.add(block.id);
         }
-        if (block.type === "tool_result" && !ancestors(turn.id).some(id => byId.get(id)?.content.some(b => b.type === "tool_call" && b.id === block.callId))) {
-          throw new SessionError("BROKEN_TOOL_REFERENCE", turn.id, "Tool result has no call in its parent chain");
+        if (block.type === "tool_result") {
+          const parent = ancestors(turn.id).map(id => byId.get(id)).find(t =>
+            t?.content.some(b => b.type === "tool_call" && b.id === block.callId));
+          const call = parent?.content.find(b => b.type === "tool_call" && b.id === block.callId);
+          if (call?.type !== "tool_call") throw new SessionError("BROKEN_TOOL_REFERENCE", turn.id, "Tool result has no call in its parent chain");
+          if (!block.isError) {
+            const uniqueResult = turn.content.filter(b => b.type === "tool_result").length === 1;
+            const file = recordedEdit(call, uniqueResult && isRecord(turn.raw) ? turn.raw.toolUseResult : undefined);
+            if (file) (turn.changedFiles ??= []).push(file);
+          }
         }
       }
     }

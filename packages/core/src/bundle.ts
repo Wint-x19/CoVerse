@@ -6,6 +6,16 @@ function invalid(path: string, message: string): never {
   throw new SessionError("INVALID_BUNDLE", path, message);
 }
 
+function verifyChanges(value: JsonValue | undefined) {
+  if (value === undefined) return;
+  const count = (v: JsonValue | undefined) => v === null || (typeof v === "number" && Number.isSafeInteger(v) && v >= 0);
+  if (!Array.isArray(value) || value.some(f => !isRecord(f) || typeof f.path !== "string" ||
+      !count(f.added) || !count(f.removed) || (f.patches !== undefined &&
+        (!Array.isArray(f.patches) || f.patches.some(p => typeof p !== "string"))))) {
+    invalid("session.json", "Invalid native file changes");
+  }
+}
+
 /** Validate the same bytes that will be injected. Source files may contain arbitrary binary data. */
 export function verifyInjectionBundle(files: FileSet, target: string) {
   try { validateFileSet(files); } catch { invalid("/manifest", "Invalid artifact paths"); }
@@ -56,9 +66,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
           (m.createdAt !== undefined && typeof m.createdAt !== "string") ||
           (m.durationMs !== undefined && (typeof m.durationMs !== "number" || !Number.isSafeInteger(m.durationMs) || m.durationMs < 0))) invalid("session.json", "Invalid native message");
       seen.add(m.id);
-      if (m.changedFiles !== undefined && (!Array.isArray(m.changedFiles) || m.changedFiles.some(f =>
-        !isRecord(f) || typeof f.path !== "string" || !Number.isSafeInteger(f.added) || !Number.isSafeInteger(f.removed) ||
-        Number(f.added) < 0 || Number(f.removed) < 0))) invalid("session.json", "Invalid native file changes");
+      verifyChanges(m.changedFiles);
     }
   }
   const archived = new Set<string>();
@@ -79,6 +87,7 @@ export function verifyInjectionBundle(files: FileSet, target: string) {
   const snapshotTurns = isRecord(replacement) && Array.isArray(replacement.replacement) ? replacement.replacement : [];
   for (const turn of [...session.turns, ...snapshotTurns]) {
     if (!isRecord(turn) || !Array.isArray(turn.content)) invalid("session.json", "Invalid turn content");
+    verifyChanges(turn.changedFiles);
     for (const block of turn.content) {
       if (isRecord(block) && block.type === "attachment") {
         if (typeof block.path !== "string" || !names.has("source/" + block.path)) invalid("session.json", "Missing required attachment");

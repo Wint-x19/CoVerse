@@ -67,6 +67,12 @@ Antigravity 的桌面登记补充了上述 CLI 流程。Windows 桌面版 2.34.0
 
 用三份经审核的基线样本分别调用适配器和桌面历史消息映射，均能在统一记录中找到读取工具返回的 `Hello from the sample.`，均无法在对话消息数据中找到这段返回值。Codex 和 Antigravity 显示 `read_file / completed`。Claude Code 的 `tool_result` 位于用户记录中，同一次成功读取在消息中显示为 `Read / called`。Antigravity 样本的系统通知、检查点和错误步骤也都未进入消息列表。此处核对了样本数据、桌面组件和 IPC，未在三个原生窗口逐项点验。[Codex 样本](../fixtures/codex/rollout-2026-11-17/sample.jsonl) · [Claude Code 样本](../fixtures/claude-code/transcript-sdk-0_3_326/sample.jsonl) · [Antigravity 样本生成器](../tools/fixtures/create-antigravity.py)
 
+后续实现进展：
+
+- `33315ed` 增加项目文件、目录与交接包文本文件的只读查看。Windows Electron 回归从两种消息角色打开了带空格的文件名并定位到引用行。
+- `215ed06` 保留 Codex 原生变更的逐次补丁及旧式成功补丁事件。对话中可核对当时的增删行，包括当前磁盘上已经不存在的行。
+- Claude Code 的成功 Edit、Write 可在关联的用户结果记录中携带 `toolUseResult.structuredPatch`。新建文件可能只提供完整新正文；覆盖文件在缺少旧正文和补丁时无法计算行数。应按返回记录显示，工具请求中的替换字符串不足以证明某一行实际被修改。[官方工具结果定义](https://code.claude.com/docs/en/agent-sdk/typescript#edit) · [适配器回归](../packages/adapters/adapter-claude-code/test/adapter.test.ts)
+
 ### 五条路线的目标续聊与 Antigravity 桌面回传
 
 2026-11-23 在 Windows 用 Codex CLI `0.171.0-alpha.13`、Claude Code `2.1.121` 和 agy `1.5.14` 各创建专用原生会话。Codex ↔ Claude Code、Antigravity ↔ Claude Code、Antigravity → Codex 五条路线均在源项目中生成目标会话。另起目标 CLI，只提交会话 ID 与不含答案的问题，五条路线均取回源回执。首轮覆盖一问一答。随后用新的真实会话完成双轮复验，每份来源含四条消息，回执和标签分别来自两轮用户发言。五个目标均按指定顺序返回两项随机值。两批测试都核对了角色、顺序、逐条正文与源文件 SHA-256。CLI 登记使用既有的历史上下文注入流程。[真机测试入口](../tools/m31/native-handoffs.mjs)

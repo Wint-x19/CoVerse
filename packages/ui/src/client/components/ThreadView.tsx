@@ -72,7 +72,8 @@ function ReasoningTrace({ text, t, durationMs }: { text: string; t: I18nMessages
 function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFiles"]>; t: I18nMessages }) {
   const row = (f: typeof files[number]) => <div key={f.path} className="mt-2">
     <div className="flex justify-between gap-4">
-      <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink><span>+{f.added} −{f.removed}</span>
+      <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink>
+      {f.added !== null && f.removed !== null && <span>+{f.added} −{f.removed}</span>}
     </div>
     {f.patches?.length ? <details>
       <summary className="cursor-pointer text-[var(--text-secondary)]">{t.viewDiff}</summary>
@@ -82,10 +83,11 @@ function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFil
           line.startsWith("-") ? "text-red-600 dark:text-red-400" : undefined
         }>{line}{"\n"}</span>)}
       </pre>)}
-    </details> : <span className="text-[var(--text-tertiary)]">{t.diffUnavailable}</span>}
+    </details> : <span className="text-[var(--text-tertiary)]">{f.patches ? t.noChanges : t.diffUnavailable}</span>}
   </div>;
   return <div className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-xs">
-    <span>{t.editedFiles(files.length)}　+{files.reduce((n, f) => n + f.added, 0)} −{files.reduce((n, f) => n + f.removed, 0)}</span>
+    <span>{t.editedFiles(files.length)}　{files.every(f => f.added !== null && f.removed !== null) &&
+      ("+" + files.reduce((n, f) => n + (f.added ?? 0), 0) + " −" + files.reduce((n, f) => n + (f.removed ?? 0), 0))}</span>
     {files.slice(0, 3).map(row)}
     {files.length > 3 && <details className="mt-2"><summary className="cursor-pointer">{t.moreFiles(files.length - 3)}</summary>{files.slice(3).map(row)}</details>}
   </div>;

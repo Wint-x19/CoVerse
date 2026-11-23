@@ -9,6 +9,26 @@ it("imports official-reader validated text, reasoning and tool chains", async ()
   expect(r.session.turns[1]!.content.map(b => b.type)).toEqual(["reasoning", "tool_call"]);
   expect((await adapter.export(r.session)).artifacts.map(f => f.path)).toContain("context.md");
 });
+it("shows the recorded Edit hunks and distinguishes new files from overwrites with unknown history", async () => {
+  const rows = await fixture();
+  const call = rows[1].message.content[1];
+  call.name = "Edit";
+  rows[2].toolUseResult = {filePath:"example.txt", structuredPatch:[
+    {oldStart:2, oldLines:1, newStart:2, newLines:1, lines:["-before", "+after"]},
+  ]};
+  const change = async () => (await adapter.import(input(rows))).session.turns[2]!.changedFiles?.[0];
+  expect(await change()).toEqual({path:"example.txt", added:1, removed:1, patches:["@@ -2,1 +2,1 @@\n-before\n+after"]});
+  rows[2].message.content[0].is_error = true;
+  expect(await change()).toBeUndefined();
+  rows[2].message.content[0].is_error = false;
+  call.name = "Write";
+  rows[2].toolUseResult = {type:"create", filePath:"example.txt", content:"new\n", originalFile:null, structuredPatch:[]};
+  expect(await change()).toMatchObject({added:1, removed:0, patches:["@@ -0,0 +1,1 @@\n+new"]});
+  rows[2].toolUseResult.type = "update";
+  expect(await change()).toEqual({path:"example.txt", added:null, removed:null});
+  rows[2].toolUseResult.originalFile = "old\n";
+  expect(await change()).toMatchObject({added:1, removed:1, patches:[expect.stringContaining("-old\n+new")]});
+});
 it("preserves forks and subagent branches without selecting only the last leaf", async () => {
   const rows = await fixture();
   rows.push({ ...rows[3], uuid: "fork", message: { role: "assistant", content: "Alternate answer" } });
