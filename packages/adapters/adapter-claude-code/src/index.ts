@@ -1,4 +1,4 @@
-import { blockAsset, stringifyWireJson, type RecordedAsset } from "@coverse/core";
+import { blockAsset, recordedUsage, stringifyWireJson, type RecordedAsset } from "@coverse/core";
 import { recordedEdit } from "./file-edit.js";
 import {readToolPlan} from "./plan.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
@@ -115,6 +115,13 @@ const adapter: SessionAdapter = {
         if (typeof message.model === "string") session.meta.model = message.model;
         if (r.isCompactSummary === true) origin.kind = "compaction";
         turn = { id, role: r.type, content: blocks(message.content, at), raw: r, origin };
+        if (typeof message.model === "string") turn.model = message.model;
+        if (isRecord(message.usage)) {
+          const u = message.usage;
+          const usage = recordedUsage({input:u.input_tokens,output:u.output_tokens,cachedInput:u.cache_read_input_tokens,
+            cacheWrite:u.cache_creation_input_tokens,reasoning:u.thinking_tokens});
+          if (usage) {turn.usage = usage;turn.usageScope = "message";}
+        }
       } else if (["system", "attachment", "progress", "summary"].includes(String(r.type)) ||
           (r.type === "ai-title" && r.sessionId === session.meta.id && typeof r.aiTitle === "string" &&
             Object.keys(r).every(key => ["type", "sessionId", "aiTitle"].includes(key)))) {
@@ -127,6 +134,7 @@ const adapter: SessionAdapter = {
         turn = { id, role: "system", content: [{ type: "opaque", source: "claude-code:record", value: r }], raw: r, origin };
       }
       if (turn) {
+        if (typeof r.timestamp === "string" && Number.isFinite(Date.parse(r.timestamp))) turn.createdAt = r.timestamp;
         session.turns.push(turn); byId.set(id, turn);
         if (r.isCompactSummary === true && origin.branchId === "main") {
           const boundary = chain.map(parent => nodes.get(parent)?.value).find(row => row?.subtype === "compact_boundary");

@@ -16,7 +16,7 @@ export type DriverEvent =
   | { type: "session"; id: string }
   | { type: "text"; text: string }
   | ({ type: "tool" } & RecordedTool)
-  | { type: "usage"; usage: ProtocolUsage; nativeUsage: WireRecord }
+  | { type: "usage"; usage: ProtocolUsage; nativeUsage: WireRecord; scope?: "message" | "request" | "session" }
   | { type: "done" };
 
 export interface ModelOption {

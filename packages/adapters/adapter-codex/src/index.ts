@@ -3,6 +3,7 @@ import { decompress, Decompress } from "fzstd";
 import { ancestralRecords, prepareLineage, primaryLog, verifiedWriters } from "./lineage.js";
 import { nativeTranscript, patchEventFiles } from "./transcript.js";
 import {readToolPlan} from "./plan.js";
+import {tokenMetadata} from "./metadata.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
@@ -75,11 +76,18 @@ const adapter: SessionAdapter = {
       mirrors.set(key, (mirrors.get(key) ?? 0) + 1);
     }
     let destination = session.turns;
+    let recordedAt: string | undefined, model: string | undefined;
+    let lastAssistant: Turn | undefined;
     const turnGroups = new Map<string,Turn[]>();
     let activeTurn: string | undefined;
     let artifact = file.path;
     const add = (role: Turn["role"], content: ContentBlock[], raw: JsonValue, line: number, kind?: NonNullable<Turn["origin"]>["kind"]) => {
       destination.push({ id: `${session.meta.id}:${++sequence}`, role, content, raw, origin: { artifact, record: line, ...(kind ? { kind } : {}) } });
+      const turn = destination.at(-1)!;
+      if (recordedAt && destination === session.turns) turn.createdAt = recordedAt;
+      if (model && role === "assistant") turn.model = model;
+      if (destination === session.turns && role === "assistant") lastAssistant = turn;
+      if (role === "user" && destination === session.turns) lastAssistant = undefined;
       if (activeTurn && destination === session.turns) turnGroups.get(activeTurn)?.push(destination.at(-1)!);
     };
     if (isRecord(meta.base_instructions) && typeof meta.base_instructions.text === "string") add("system", [{ type: "text", text: meta.base_instructions.text }], meta.base_instructions, 1);
@@ -127,6 +135,10 @@ const adapter: SessionAdapter = {
       artifact = sourceArtifact;
       if (!isRecord(r.payload)) throw new SessionError("INVALID_INPUT", `${file.path}:${line}`, "Expected record payload");
       const p = r.payload;
+      recordedAt = typeof r.timestamp === "string" && Number.isFinite(Date.parse(r.timestamp)) ? r.timestamp : undefined;
+      if (r.type === "turn_context" && typeof p.model === "string") model = p.model;
+      if (r.type === "event_msg" && p.type === "token_count" && lastAssistant) Object.assign(lastAssistant,tokenMetadata(p.info));
+      if (r.type === "event_msg" && p.type === "task_complete" && lastAssistant && typeof p.duration_ms === "number" && p.duration_ms >= 0) lastAssistant.durationMs = p.duration_ms;
       if (typeof p.turn_id === "string" && (r.type === "turn_context" || (r.type === "event_msg" && p.type === "task_started"))) {
         activeTurn = p.turn_id;
         if (!turnGroups.has(activeTurn)) turnGroups.set(activeTurn,[]);

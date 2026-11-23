@@ -1,3 +1,4 @@
+import type {ProtocolUsage} from "./protocol.js";
 /** CoVerse IR v1. Protocol wire formats belong to codecs, not core. */
 export type JsonValue = null | boolean | number | bigint | string | JsonValue[] | { [key: string]: JsonValue };
 
@@ -29,7 +30,15 @@ export type ContentBlock =
   | { type: "opaque"; source: string; value: JsonValue; requiredForContinuation?: boolean }
   | { type: "unknown"; raw: JsonValue };
 
-export interface Turn {
+export interface MessageMetadata {
+  createdAt?: string;
+  model?: string;
+  usage?: ProtocolUsage;
+  usageScope?: "message" | "request" | "session";
+  durationMs?: number;
+}
+
+export interface Turn extends MessageMetadata {
   id: string;
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content: ContentBlock[];
@@ -82,7 +91,7 @@ export interface RecordedPlan {
   steps: {title: string; status?: string; detail?: string}[];
 }
 
-export interface HistoryEvent {
+export interface HistoryEvent extends MessageMetadata {
   id: string;
   anchorId?: string;
   sourceRole?: Turn["role"];
@@ -97,11 +106,10 @@ export interface MessageLineage {
   reverted?: boolean;
 }
 
-export interface TranscriptMessage {
+export interface TranscriptMessage extends MessageMetadata {
   id: string;
   role: "user" | "assistant";
   text: string;
-  createdAt?: string;
   activity?: string;
   plan?: RecordedPlan;
   before?: HistoryEvent[];
@@ -109,7 +117,6 @@ export interface TranscriptMessage {
   after?: HistoryEvent[];
   assets?: RecordedAsset[];
   tools?: RecordedTool[];
-  durationMs?: number;
   changedFiles?: RecordedFileChange[];
   reviews?: RecordedReview[];
 }

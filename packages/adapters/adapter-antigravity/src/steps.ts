@@ -3,6 +3,7 @@ import {compareFileVersions, isRecord, parseWireJson, requireString, SessionErro
 import {decodeWire, nestedRecord} from "./wire.js";
 import {readReviews} from "./reviews.js";
 import {readArtifactSnapshots, readMedia} from "./media.js";
+import {stepMetadata} from "./metadata.js";
 
 export type StepRow = Record<string,string | number | Uint8Array | null>;
 interface StepSource { file:{path:string}; files:FileSet; ledger:LossLedger }
@@ -174,7 +175,7 @@ export function readSteps(session: CSR, steps: StepRow[], context:StepSource, an
     }
     if (step.error) content.push({ type: "text", text: `Historical step error:\n${stringifyWireJson(step.error)}` });
     if (!event && step.error) event = {id:at,kind:"error",text:stringifyWireJson(step.error,null,2)};
-    session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step,
+    session.turns.push({ id: `${session.meta.id}:${row.idx}`, role, content, raw: step, ...stepMetadata(step.metadata,at),
       ...(changedFiles.length ? {changedFiles} : {}),
       ...(reviews?.length ? {reviews} : {}),
       ...(plan ? {plan} : {}),

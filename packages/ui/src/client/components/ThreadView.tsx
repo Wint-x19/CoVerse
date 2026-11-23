@@ -58,7 +58,7 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
   );
 }
 
-function ReasoningTrace({ text, t, durationMs }: { text: string; t: I18nMessages; durationMs?: number | undefined }) {
+function ReasoningTrace({ text, t }: { text: string; t: I18nMessages }) {
   const [open, setOpen] = React.useState(false);
   return (
     <div className="mb-2.5">
@@ -68,7 +68,7 @@ function ReasoningTrace({ text, t, durationMs }: { text: string; t: I18nMessages
         className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2 py-1 text-[11.5px] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] cursor-pointer"
       >
         <Sparkles className="h-3 w-3" />
-        <span>{durationMs === undefined ? t.reasoning : t.elapsed(Math.floor(durationMs / 60000), Math.floor(durationMs / 1000) % 60)}</span>
+        <span>{t.reasoning}</span>
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
       </button>
       {open && (
@@ -135,6 +135,25 @@ function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMess
   </section>);
 }
 
+function Stamp({at,t}: {at:string;t:I18nMessages}) {
+  const date = new Date(at);
+  return Number.isFinite(date.valueOf()) ? <time dateTime={at} title={at}>{date.toLocaleString(t.locale)}</time> : null;
+}
+function Metadata({message,t}: {message:ChatMessage;t:I18nMessages}) {
+  const stamp = !message.historical || message.recordedTime;
+  if (!stamp && !message.usage && message.durationMs === undefined) return null;
+  return <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--text-tertiary)]">
+    {stamp && <Stamp at={message.createdAt} t={t}/>}
+    {message.durationMs !== undefined && <span>{t.duration} {message.durationMs < 1000
+      ? message.durationMs + " ms" : Number((message.durationMs/1000).toFixed(2)) + " s"}</span>}
+    {message.usage && <>
+      {message.usageScope && <span>{t.usageScopes[message.usageScope]}</span>}
+      {(Object.keys(t.tokenKinds) as (keyof typeof t.tokenKinds)[]).map(k => message.usage?.[k] !== undefined &&
+        <span key={k}>{t.tokenKinds[k]} {message.usage[k]}</span>)}
+    </>}
+  </div>;
+}
+
 function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
   if (message.role === "user") {
     return (
@@ -143,6 +162,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
           <UserText text={message.content}/>
           <MessageAssets assets={message.assets}/>
           <ReviewCards reviews={message.reviews} t={t}/>
+          <Metadata message={message} t={t}/>
         </div>
       </div>
     );
@@ -157,7 +177,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
       </div>
 
       <div className="pl-[22px]">
-        {message.reasoning && <ReasoningTrace text={message.reasoning} t={t} durationMs={message.durationMs} />}
+        {message.reasoning && <ReasoningTrace text={message.reasoning} t={t} />}
         {message.tools && message.tools.length > 0 && <ToolTrace tools={message.tools} t={t} />}
         <ToolPlans tools={message.tools} t={t}/>
         {message.plan && <PlanCard plan={message.plan} t={t}/>}
@@ -190,17 +210,7 @@ function MessageRow({ message, t }: { message: ChatMessage; t: I18nMessages }) {
           </div>
         )}
 
-        {message.usage && (
-          <div className="mt-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-            {[
-              message.usage.input !== undefined ? `${message.usage.input} in` : null,
-              message.usage.output !== undefined ? `${message.usage.output} out` : null,
-              message.usage.cachedInput !== undefined ? `${message.usage.cachedInput} cached` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
-        )}
+        <Metadata message={message} t={t}/>
       </div>
     </div>
   );
@@ -216,6 +226,7 @@ function HistoryEvents({events,t}: {events:ChatMessage["before"];t:I18nMessages}
     {events.map((event,i) => <details key={event.id + i}>
       <summary className="cursor-pointer text-[var(--text-secondary)]">
         {t.historyKinds[event.kind]}{event.kind === "error" && <span className="ml-2 text-red-500">{event.text.split("\n")[0]}</span>}
+        {event.createdAt && <span className="ml-2"><Stamp at={event.createdAt} t={t}/></span>}
       </summary>
       <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words">{event.text}</pre>
       {event.anchorId && <button type="button" className="cursor-pointer text-[var(--accent-text)]" onClick={() => jump(event.anchorId!)}>{t.jumpParent}</button>}

@@ -1136,6 +1136,10 @@ export class UiService {
           id: `ui-${message.id}`,
           role: message.role,
           content,
+          ...(!message.historical || message.recordedTime ? {createdAt:message.createdAt} : {}),
+          ...(message.model ? {model:message.model} : {}), ...(message.usage ? {usage:message.usage} : {}),
+          ...(message.usageScope ? {usageScope:message.usageScope} : {}),
+          ...(message.durationMs !== undefined ? {durationMs:message.durationMs} : {}),
           ...(message.reviews?.length ? {reviews:message.reviews} : {}),
           ...(message.plan ? {plan:message.plan} : {}),
           origin: { artifact: "coverse-desktop/sessions.json", record: index + 1, kind: "message" },
@@ -1160,7 +1164,11 @@ export class UiService {
       },
       turns,
       ...(priorTranscript ? {transcript: [...priorTranscript, ...messagesToAppend.map(m => ({
-        id: m.id, role: m.role, text: m.content, createdAt: m.createdAt,
+        id: m.id, role: m.role, text: m.content,
+        ...(!m.historical || m.recordedTime ? {createdAt:m.createdAt} : {}),
+        ...(m.model ? {model:m.model} : {}), ...(m.usage ? {usage:m.usage} : {}),
+        ...(m.usageScope ? {usageScope:m.usageScope} : {}),
+        ...(m.durationMs !== undefined ? {durationMs:m.durationMs} : {}),
         ...(m.reasoning ? {activity: m.reasoning} : {}), ...(m.changedFiles ? {changedFiles: m.changedFiles} : {}),
         ...(m.reviews ? {reviews:m.reviews} : {}),
         ...(m.tools?.length ? {tools:m.tools} : {}),
@@ -1327,6 +1335,8 @@ export class UiService {
     let textBuffer = "";
     let tools: ToolActivity[] = [];
     let latestUsage: ProtocolUsage | undefined;
+    let usageScope: ChatMessage["usageScope"];
+    const runStarted = Date.now();
 
     try {
       if (bundleNotice) {
@@ -1362,6 +1372,7 @@ export class UiService {
           emit({type,...update});
         } else if (event.type === "usage") {
           latestUsage = event.usage;
+          usageScope = event.scope;
           emit({ type: "usage", usage: event.usage });
         }
       }
@@ -1370,6 +1381,8 @@ export class UiService {
         id: makeId("msg"),
         role: "assistant",
         content: textBuffer,
+        durationMs:Date.now()-runStarted,
+        ...(usageScope ? {usageScope} : {}),
         createdAt: nowIso(),
         agent: session.agent,
         ...(effectiveModel ? { model: effectiveModel } : {}),
@@ -1392,6 +1405,8 @@ export class UiService {
         id: makeId("msg"),
         role: "assistant",
         content: textBuffer,
+        durationMs:Date.now()-runStarted,
+        ...(usageScope ? {usageScope} : {}),
         createdAt: nowIso(),
         agent: session.agent,
         ...(effectiveModel ? { model: effectiveModel } : {}),

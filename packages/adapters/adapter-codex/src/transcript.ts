@@ -1,4 +1,5 @@
 import { imageAsset, isRecord, SessionError, stringifyWireJson, type HistoryEvent, type JsonValue, type RecordedAsset, type RecordedTool, type TranscriptMessage } from "@coverse/core";
+import {tokenMetadata} from "./metadata.js";
 
 type Row = Record<string, JsonValue>;
 type Changes = { lines: boolean[]; removed: number; patches: string[] };
@@ -101,6 +102,8 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
       value.payload.type === "item_completed" && isRecord(value.payload.item) && value.payload.item.type === "UserMessage")) return;
   const groups = new Map<string, Map<string, { item: Row; position:number; at?: string }>>();
   const durations = new Map<string, number>();
+  const models = new Map<string,string>();
+  const usages = new Map<string,ReturnType<typeof tokenMetadata>>();
   const events: {position:number; turn?:string; event:HistoryEvent}[] = [];
   const removed = new Set<string>();
   let activeTurn: string | undefined;
@@ -108,8 +111,14 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
     const p = value.payload;
     if (!isRecord(p)) continue;
     if (typeof p.turn_id === "string") activeTurn = p.turn_id;
+    if (activeTurn && value.type === "turn_context" && typeof p.model === "string") models.set(activeTurn,p.model);
+    if (activeTurn && value.type === "event_msg" && p.type === "token_count") {
+      const meta = tokenMetadata(p.info);
+      if (meta.usage) usages.set(activeTurn,meta);
+    }
     const record = (kind:HistoryEvent["kind"], text:string) => events.push({position,
-      ...(activeTurn && kind !== "rollback" ? {turn:activeTurn} : {}),event:{id:"codex-event-" + position,kind,text}});
+      ...(activeTurn && kind !== "rollback" ? {turn:activeTurn} : {}),event:{id:"codex-event-" + position,kind,text,
+        ...(typeof value.timestamp === "string" ? {createdAt:value.timestamp} : {})}});
     if (value.type === "compacted") record("compaction",typeof p.message === "string" ? p.message : "Source replaced the context window.");
     if (value.type === "turn_context") record("context",stringifyWireJson(p,null,2));
     if (value.type === "response_item" && p.type === "message" && (p.role === "system" || p.role === "developer")) {
@@ -159,6 +168,8 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
       const msg: TranscriptMessage = { id, role, text, ...(at ? {createdAt: at} : {}), ...(assets.length ? {assets} : {}) };
       if (item.type === "Plan") msg.plan = {text,steps:[]};
       if (role === "assistant") {
+        const model = models.get(turnId);
+        if (model) msg.model = model;
         if (activity.length) msg.activity = activity.splice(0).join("\n\n");
         if (tools.length) msg.tools = tools.splice(0);
         lastAnswer = msg;
@@ -177,6 +188,7 @@ export function nativeTranscript(records: { value: Row; artifact?:string }[], cw
       if (files.size) lastAnswer.changedFiles = fileRows(files, cwd);
     }
     const duration = durations.get(turnId);
+    if (lastAnswer) Object.assign(lastAnswer,usages.get(turnId));
     if (lastAnswer && duration !== undefined) lastAnswer.durationMs = duration;
   }
   let next = 0;

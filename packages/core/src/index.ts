@@ -5,6 +5,7 @@ export * from "./session.js";
 export * from "./bundle.js";
 export * from "./file-changes.js";
 export * from "./assets.js";
+export * from "./metadata.js";
 export * from "./json.js";
 
 export function emptyLedger(): LossLedger {

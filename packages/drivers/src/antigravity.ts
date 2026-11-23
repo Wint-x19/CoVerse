@@ -141,7 +141,7 @@ export const antigravity: DriverPlugin = {
         if (failedTool && !result.response) throw driverError("Antigravity ended after a failed tool without a response: " + failedTool);
         const events: DriverEvent[] = [{ type: "session", id: string(result.conversation_id) }];
         events.push(...finalText(stepText, result.response));
-        return [...events, ...usage(result.usage), { type: "done" }];
+        return [...events, ...usage(result.usage).map(e => e.type === "usage" ? {...e,scope:"session" as const} : e), { type: "done" }];
       }
       throw driverError("Unsupported Antigravity event: " + record.event);
     };

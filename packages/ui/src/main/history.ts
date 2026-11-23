@@ -13,7 +13,7 @@ function historicalTools(turns: readonly Turn[], timestamp: string) {
   };
   for (const turn of turns) for (const block of turn.content) {
     if (block.type !== "tool_call") continue;
-    const tool = {id:block.id, name:block.name, state:"called", timestamp,
+    const tool = {id:block.id, name:block.name, state:"called", timestamp:turn.createdAt ?? timestamp,
       argumentsText:block.argumentsText ?? stringifyWireJson(block.arguments, null, 2)};
     add(turn, tool);
     byOrigin.set(key(turn.id, block.id), tool);
@@ -43,6 +43,7 @@ function historicalTools(turns: readonly Turn[], timestamp: string) {
 export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: string, timestamp: string, transcript?: CSR["transcript"]): ChatMessage[] {
   if (transcript) return transcript.map(m => ({
     id:m.id, role:m.role, content:m.text, createdAt:m.createdAt ?? timestamp, historical:true,
+    ...(m.createdAt ? {recordedTime:true} : {}), ...(m.model ? {model:m.model} : {}), ...(m.usage ? {usage:m.usage,usageScope:m.usageScope} : {}),
     ...(m.role === "assistant" ? {agent:sourceAgent} : {}), ...(m.activity ? {reasoning:m.activity} : {}),
     ...(m.changedFiles ? {changedFiles:m.changedFiles} : {}), ...(m.reviews ? {reviews:m.reviews} : {}),
     ...(m.assets?.length ? {assets:m.assets} : {}),
@@ -78,7 +79,7 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
       const text = turn.content.flatMap(b => b.type === "text" ? [b.text] : []).join("\n\n");
       if (text) event = {id:turn.id,kind:turn.origin?.kind === "compaction" ? "compaction" : turn.role === "developer" ? "developer" : "system",text};
     }
-    if (event) pending.push({...event,sourceRole:turn.role});
+    if (event) pending.push({...event,sourceRole:turn.role,...(turn.createdAt ? {createdAt:turn.createdAt} : {})});
     for (const block of turn.content) {
       if (block.type === "opaque" || block.type === "unknown") pending.push({id:turn.id + ":opaque:" + pending.length,
         kind:"opaque",text:block.type === "opaque" ? block.source : "Unknown source block"});
@@ -94,7 +95,10 @@ export function csrTurnsToChatMessages(turns: readonly Turn[], sourceAgent: stri
     const content = parts.join("\n\n");
     if (!content && !turn.childTrajectory && !turn.plan && !assets.length && !reasoning.length && !tools?.length && !turn.changedFiles?.length && !turn.reviews?.length) continue;
     const role = turn.role === "user" && (content || assets.length || turn.reviews?.length) ? "user" : "assistant";
-    const base = {id:turn.id, content, createdAt:timestamp, historical:true, ...(pending.length ? {before:pending.splice(0)} : {})};
+    const base = {id:turn.id,content,createdAt:turn.createdAt ?? timestamp,historical:true,
+      ...(turn.createdAt ? {recordedTime:true} : {}), ...(turn.model ? {model:turn.model} : {}),
+      ...(turn.usage ? {usage:turn.usage,usageScope:turn.usageScope} : {}),
+      ...(turn.durationMs !== undefined ? {durationMs:turn.durationMs} : {}), ...(pending.length ? {before:pending.splice(0)} : {})};
     const origin = turn.origin;
     const lineage = origin && {
       ...(origin.branchId && (branches.size > 1 || origin.kind === "subsession") ? {branchId:origin.branchId} : {}),

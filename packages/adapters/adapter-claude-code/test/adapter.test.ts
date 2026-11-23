@@ -9,6 +9,15 @@ it("imports official-reader validated text, reasoning and tool chains", async ()
   expect(r.session.turns[1]!.content.map(b => b.type)).toEqual(["reasoning", "tool_call"]);
   expect((await adapter.export(r.session)).artifacts.map(f => f.path)).toContain("context.md");
 });
+it("reads message timestamps, actual model switches and cache usage",async () => {
+  const rows = await fixture();
+  rows[3].timestamp = "2026-01-01T12:00:00Z";
+  Object.assign(rows[3].message,{model:"second-model",usage:{input_tokens:4,output_tokens:1,cache_read_input_tokens:0,cache_creation_input_tokens:2}});
+  const {session} = await adapter.import(input(rows));
+  expect(session.turns[1]?.model).toBe("sample-model");
+  expect(session.turns[3]).toMatchObject({model:"second-model",createdAt:rows[3].timestamp,
+    usage:{input:4,output:1,cachedInput:0,cacheWrite:2},usageScope:"message"});
+});
 it("keeps a TodoWrite list with its recorded status", async () => {
   const rows = await fixture();
   Object.assign(rows[1].message.content[1],{name:"TodoWrite",input:{todos:[{content:"Ship it",status:"completed"}]}});

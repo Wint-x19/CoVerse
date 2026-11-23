@@ -10,6 +10,20 @@ import { decodeWire, wireRoot } from "../src/wire.js";
 const require = createRequire(import.meta.url);
 const fixture = () => readFile(new URL("../../../../fixtures/antigravity/sqlite-2_32_1-step0/sample.db", import.meta.url));
 const files = (bytes: Uint8Array) => [{ path: "sample.db", bytes }];
+it("reads per-step timestamps, actual model name, elapsed time and usage counters", async () => {
+  const db = new (await sql).Database(await fixture());
+  try {
+    const encode = (name:string,obj:object) => wireRoot.lookupType(name).encode(wireRoot.lookupType(name).fromObject(obj)).finish();
+    const step = {type:15,status:3,planner_response:{response:"done"},metadata:{
+      created_at:{seconds:"123"},completed_at:{seconds:"123",nanos:700000000},
+      model_info:encode("ModelInfo",{display_name:"Sample model"}),model_usage:encode("ModelUsageStats",{input_tokens:"13",thinking_output_tokens:"2"}),
+    }};
+    db.run("UPDATE steps SET step_payload=? WHERE idx=3",[encode("Step",step)]);
+    const {session} = await adapter.import(files(db.export()));
+    expect(session.turns[3]).toMatchObject({createdAt:"1970-01-01T00:02:03.000Z",durationMs:700,model:"Sample model",
+      usage:{input:13,reasoning:2},usageScope:"message"});
+  } finally {db.close();}
+});
 it("opens embedded subtrajectory messages separately and verifies their declared parent", async () => {
   const db = new (await sql).Database(await fixture());
   try {

@@ -28,6 +28,17 @@ it("reconstructs a native fork at its byte boundary, separates hidden inputs and
   expect(imported.session.turns.some(t => t.content.some(c => c.type === "text" && c.text === "injected workspace"))).toBe(true);
 });
 const response = (payload: unknown) => ({ type: "response_item", payload });
+it("displays native model, elapsed time and last-request token usage without mixing cumulative totals", async () => {
+  const {session} = await adapter.import(encode([header,
+    {type:"turn_context",payload:{turn_id:"t",model:"demo-model"}},
+    completed("t",{id:"u",type:"UserMessage",content:[{type:"text",text:"hello"}]}),
+    {...completed("t",{id:"a",type:"AgentMessage",content:[{type:"text",text:"reply"}]}),timestamp:"2026-01-02T03:04:05Z"},
+    {type:"event_msg",payload:{type:"token_count",info:{last_token_usage:{input_tokens:3,output_tokens:2},total_token_usage:{input_tokens:420}}}},
+    {type:"event_msg",payload:{type:"task_complete",turn_id:"t",duration_ms:350}},
+  ]));
+  expect(session.transcript?.at(-1)).toMatchObject({model:"demo-model",createdAt:"2026-01-02T03:04:05Z",durationMs:350,
+    usage:{input:3,output:2},usageScope:"request"});
+});
 it("marks only the rolled-back source group and links the marker to the retained answer",async () => {
   const rows:unknown[] = [header];
   for (const key of ["keep","undo"]) rows.push({type:"event_msg",payload:{type:"task_started",turn_id:key}},

@@ -113,6 +113,8 @@ export type FilePreview =
   | { kind: "directory"; path: string; entries: string[] };
 
 export interface ChatMessage {
+  recordedTime?: boolean;
+  usageScope?: import("@coverse/core").MessageMetadata["usageScope"];
   childBranch?: string;
   lineage?: import("@coverse/core").MessageLineage;
   before?: import("@coverse/core").HistoryEvent[];
