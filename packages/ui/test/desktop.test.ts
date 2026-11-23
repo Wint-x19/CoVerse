@@ -7,6 +7,7 @@ import { AgentDriver, createDriverRegistry, DriverRegistry, type DriverPlugin } 
 import { pathToFileURL } from "node:url";
 import { groupByProject } from "../src/client/lib/projects.js";
 import {fileReference, fileTokens, locateQuote} from "../src/client/lib/file-references.js";
+import {reviewSegments} from "../src/client/lib/review-directives.js";
 import {
   createAdapterRegistry,
   IPC_CHANNELS,
@@ -155,6 +156,13 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("renders standalone code-review directives without interpreting quoted examples and malformed directives", () => {
+    const review = '::code-comment{title="[P1] Check range" body="First \\"note\\"." file="src/a.ts" start=3 end=4 priority=1}';
+    const first = "~~~md\n" + review + "\n~~~\n\n";
+    expect(reviewSegments(first + review + "\nEnd.")).toEqual([{text:first},
+      {title:"[P1] Check range",body:'First "note".',file:"src/a.ts",start:3,end:4},{text:"End."}]);
+    expect(reviewSegments("::code-comment{file=\"only\"}")).toEqual([{text:"::code-comment{file=\"only\"}"}]);
+  });
   it("locates historical review selections after edits and detects missing or ambiguous text", () => {
     expect(locateQuote("new\r\nline\r\nchosen\r\nlast", "chosen\nlast", 1)).toBe(3);
     expect(locateQuote("a\nsame\nc\nsame","same")).toBeUndefined();

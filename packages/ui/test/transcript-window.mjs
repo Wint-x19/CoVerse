@@ -22,7 +22,8 @@ try {
   await store.upsertSession({...session, messages: [
     {id: "u", role: "user", createdAt: at, content: "<instruction> [source](<two lines.md:2>)",
       reviews:[{path:"two lines.md",comment:"Recheck this line",selections:[{side:"modified",text:"second line",start:1}]}]},
-    {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)",
+    {id: "a", role: "assistant", agent: "codex", createdAt: at, content: "[source](two%20lines.md#L2)\n\n" +
+      '::code-comment{title="Check line" body="Recorded finding" file="two lines.md" start=2 end=2}',
       changedFiles: [{path:"two lines.md", added:1, removed:1, patches:["@@ -2 +2 @@\n-deleted historical line\n+added historical line"]}]},
   ]});
   registerIpcHandlers(ipcMain, service, {pickDirectory: async () => null, pickSessionFiles: async () => []});
@@ -50,6 +51,21 @@ try {
   }
   assert.match(await exercise("user-u"), /second line/);
   assert.match(await exercise("assistant-a"), /second line/);
+  const finding = await win.webContents.executeJavaScript('(' + (async () => {
+    const card = document.querySelector('[data-testid="message-assistant-a"] section');
+    if (!card?.textContent.includes("Recorded finding")) throw new Error("Missing review finding");
+    card.querySelector("button").click();
+    for (let i=0; i<100; i++) {
+      const line = document.querySelector('[role="dialog"] [data-file-line="2"]');
+      if (line) {
+        document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+        return line.textContent;
+      }
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    throw new Error("Review finding link did not open");
+  }).toString() + ')()');
+  assert.match(finding, /second line/);
   console.log("Verified file and line navigation from both message roles in Electron");
   const diff = await win.webContents.executeJavaScript('(' + (() => {
     const details = document.querySelector('[data-testid="message-assistant-a"] details');

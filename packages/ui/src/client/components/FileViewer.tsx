@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import type { FilePreview, FileScope } from "../../shared/types.js";
 import { api } from "@/lib/api";
 import { fileReference, fileTokens, linkFilePaths, locateQuote, type FileReference } from "@/lib/file-references";
+import {reviewSegments} from "@/lib/review-directives";
 import type { I18nMessages } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 
@@ -17,14 +18,21 @@ export function FileLink({target, children}: {target: Target; children: React.Re
 }
 
 export function MessageMarkdown({text}: {text: string}) {
-  return <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[linkFilePaths]}
+  return <>{reviewSegments(text).map((part, index) => "text" in part
+    ? <Markdown key={index} remarkPlugins={[remarkGfm]} rehypePlugins={[linkFilePaths]}
     urlTransform={(url, key) => key === "href" && fileReference(url) ? url : defaultUrlTransform(url)}
     components={{a: ({href, children}) => {
       const target = href && fileReference(href, true);
       if (target) return <FileLink target={target}>{children}</FileLink>;
       return /^https?:\/\//i.test(href ?? "")
         ? <a href={href} target="_blank" rel="noreferrer">{children}</a> : <span>{children}</span>;
-    }}}>{text}</Markdown>;
+    }}}>{part.text}</Markdown>
+    : <section key={index} className="my-2 rounded-md border border-[var(--border-subtle)] p-3">
+      <strong>{part.title}</strong><p>{part.body}</p>
+      <FileLink target={{path:part.file, ...(part.start ? {line:part.start} : {})}}>
+        {part.file}{part.start ? ":" + part.start : ""}{part.end && part.end !== part.start ? "–" + part.end : ""}
+      </FileLink>
+    </section>)}</>;
 }
 
 export function UserText({text}: {text: string}) {
