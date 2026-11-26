@@ -1,0 +1,28 @@
+name: 缺陷报告
+description: 报告可复现的转换、CLI 或桌面问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请使用合成示例。真实会话、引导包、密钥和私人路径请留在本机。安全问题请[私下报告](https://github.com/Wint-x19/CoVerse/security/advisories/new)。
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 请写明 CoVerse 版本或提交、操作系统，以及相关 Agent 或 CLI 版本。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 最小复现步骤
+      description: 请注明操作入口。转换问题请注明来源、目标及使用的合成样本。
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 预期结果与实际结果
+      description: 哪一步与预期不同？如有错误，请附上经过检查的最短错误信息。
+    validations:
+      required: true
