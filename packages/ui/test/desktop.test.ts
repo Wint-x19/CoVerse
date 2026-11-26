@@ -165,6 +165,17 @@ function createMockIpc(service: UiService, dialogs?: Partial<DesktopDialogs>) {
 }
 
 describe("CoVerse M4 desktop IPC & service", () => {
+  it("merges concurrent layout and language preferences and reads legacy settings", async () => {
+    const root = await makeTempDir("layout-");
+    const store = new UiStore(root);
+    await fs.writeFile(store.settingsPath, JSON.stringify({theme: "light"}));
+    const service = new UiService(createAdapterRegistry(), createFakeDrivers(), store, root);
+    expect(await service.getSettings()).toMatchObject({leftWidth:240, rightWidth:420, rightOpen:false});
+    await Promise.all([service.updateSettings({rightWidth:610}), service.updateSettings({language:"en"})]);
+    expect(await store.getSettings()).toMatchObject({theme:"light", rightWidth:610, language:"en"});
+    expect((await service.getCapabilities()).adapters[0]).toMatchObject({distribution:"builtin", packageVersion:expect.any(String)});
+  });
+
   it("opens existing records when a companion is missing while keeping continuation on the complete import path",async () => {
     const cwd = await makeTempDir("coverse-partial-"), store = new UiStore(cwd);
     const all = createAdapterRegistry(), original = all.get("antigravity");

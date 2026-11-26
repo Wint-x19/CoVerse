@@ -38,6 +38,7 @@ interface StreamingState {
 }
 
 const INITIAL_SETTINGS: AppSettings = {
+  leftWidth: 240, rightWidth: 420, leftOpen: true, rightOpen: false,
   theme: "dark",
   language: "zh-CN",
   disabledAdapters: [],
@@ -141,6 +142,7 @@ export function App() {
         }
       } catch (error) {
         setBannerError(error instanceof Error ? error.message : "Failed to update settings");
+        throw error;
       }
     },
     [loadCapabilities],

@@ -202,3 +202,8 @@ body,
   border-top: 1px solid var(--border-subtle);
   margin: 1.25em 0;
 }
+
+.cv-settings-details { font-size: 12px; color: var(--text-secondary); }
+.cv-settings-details summary { cursor: pointer; padding: 4px 0; }
+.cv-settings-details dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; padding: 14px 0; }
+.cv-settings-details dd { overflow-wrap: anywhere; color: var(--text-primary); }

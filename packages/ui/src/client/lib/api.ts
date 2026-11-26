@@ -67,6 +67,7 @@ export const api = {
   capabilities: (refresh = false): Promise<CapabilitiesResponse> =>
     unwrap("/capabilities", (b) => b.capabilities(refresh)),
 
+  nativeResume: (id: string) => unwrap("/sessions/resume", b => b.nativeResume(id)),
   getSettings: (): Promise<AppSettings> => unwrap("/settings", (b) => b.getSettings()),
 
   updateSettings: (patch: Partial<AppSettings>): Promise<AppSettings> =>

@@ -41,7 +41,8 @@ import type {
   UiSession,
   UploadedFilePayload,
 } from "../shared/types.js";
-import { UiStore } from "./store.js";
+import { builtinVersions } from "./versions.js";
+import { UiStore, readLayout } from "./store.js";
 import { csrTurnsToChatMessages,restoreHistory } from "./history.js";
 import {historyVersion,needsHistoryRefresh} from "../shared/history-version.js";
 import { updateToolActivity } from "../shared/tool-activity.js";
@@ -309,8 +310,8 @@ export class UiService {
   }
 
   async updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-    const current = await this.store.getSettings();
-    const next: AppSettings = {
+    const next = await this.store.updateSettings(current => ({
+      ...readLayout(patch, current),
       theme: patch.theme === "light" || patch.theme === "dark" ? patch.theme : current.theme,
       language: patch.language === "zh-CN" || patch.language === "en" ? patch.language : current.language,
       disabledAdapters: Array.isArray(patch.disabledAdapters)
@@ -324,13 +325,20 @@ export class UiService {
                 .filter(([, v]) => v.length > 0),
             )
           : current.driverExecutables,
-    };
-    await this.store.saveSettings(next);
-    this.modelCache.clear();
-    if (!this.customDriversInjected) {
+    }));
+    if (patch.driverExecutables) {
+      this.modelCache.clear();
       await this.ensureDriversConfigured();
     }
     return next;
+  }
+
+  async nativeResume(id: string) {
+    const session = await this.getSession(id);
+    if (!session.targetSessionId) return null;
+    const driver = (await this.ensureDriversConfigured()).get(session.agent);
+    const args = driver.plugin.resumeArgs?.(session.targetSessionId);
+    return args ? {command: driver.executable?.command ?? driver.plugin.command, args} : null;
   }
 
   async getCapabilities(refresh = false): Promise<CapabilitiesResponse> {
@@ -344,6 +352,8 @@ export class UiService {
       displayName: adapter.displayName,
       status: adapter.status,
       enabled: !disabled.has(adapter.id),
+      distribution: "builtin" as const,
+      packageVersion: builtinVersions.get(adapter.id) ?? null,
       supportedVersions: adapter.supportedVersions,
       capabilities: adapter.capabilities,
     }));
