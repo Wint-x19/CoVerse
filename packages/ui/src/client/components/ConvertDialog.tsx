@@ -291,6 +291,9 @@ export function ConvertDialog({
                   <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <div className="min-w-0">
                     <span className="font-mono">{inspectResult.previewError.code}</span>
+                    {inspectResult.previewError.path && (
+                      <span className="ml-1.5 font-mono opacity-70">{inspectResult.previewError.path}</span>
+                    )}
                     <span className="mx-1.5 opacity-40">·</span>
                     <span>{inspectResult.previewError.message}</span>
                   </div>
