@@ -37,6 +37,7 @@ export const IPC_CHANNELS = {
   revealFile:"coverse:file:reveal",
   previewFile: "coverse:file:preview",
   capabilities: "coverse:capabilities",
+  nativeResume: "coverse:sessions:native-resume",
   getSettings: "coverse:settings:get",
   updateSettings: "coverse:settings:update",
   listLocalSessions: "coverse:sessions:local",
@@ -93,6 +94,7 @@ export function registerIpcHandlers(
     wrap("/capabilities", () => service.getCapabilities(Boolean(refresh))),
   );
 
+  ipc.handle(IPC_CHANNELS.nativeResume, (_event, id) => wrap("/sessions/resume", () => service.nativeResume(String(id))));
   ipc.handle(IPC_CHANNELS.getSettings, () => wrap("/settings", () => service.getSettings()));
 
   ipc.handle(IPC_CHANNELS.updateSettings, (_event, patch) =>

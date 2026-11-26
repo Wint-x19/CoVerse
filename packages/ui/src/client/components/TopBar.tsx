@@ -11,6 +11,8 @@ interface TopBarProps {
   session: UiSession | null;
   sidebarOpen: boolean;
   inspectorOpen: boolean;
+  onDetails: () => void;
+  detailsOpen:boolean;
   t: I18nMessages;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
@@ -20,7 +22,7 @@ interface TopBarProps {
 export function TopBar({
   session,
   sidebarOpen,
-  inspectorOpen,
+  inspectorOpen, onDetails, detailsOpen,
   t,
   onToggleSidebar,
   onToggleInspector,
@@ -40,11 +42,9 @@ export function TopBar({
       )}
     >
       <div className="cv-no-drag flex min-w-0 items-center gap-2">
-        {!sidebarOpen && (
-          <Button variant="ghost" size="icon" aria-label="Show sidebar" onClick={onToggleSidebar}>
+        <Button variant="ghost" size="icon" aria-label={t.sessionsLabel} aria-expanded={sidebarOpen} onClick={onToggleSidebar}>
             <PanelLeft className="h-3.5 w-3.5" />
-          </Button>
-        )}
+        </Button>
 
         {session ? (
           <div className="flex min-w-0 items-center gap-2 text-[13px]">
@@ -69,28 +69,21 @@ export function TopBar({
         {handoff && (
           <button
             type="button"
-            onClick={onToggleInspector}
+            onClick={onDetails}
             data-testid="ledger-pill"
-            aria-label={t.ledger}
+            aria-label={t.detailsTitle} aria-expanded={detailsOpen}
             className={cn(
               "inline-flex h-7 items-center gap-2 rounded-md border px-2 font-mono text-[11.5px] transition-colors cursor-pointer",
-              inspectorOpen
+              detailsOpen
                 ? "border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-primary)]"
                 : "border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]",
             )}
           >
-            <span className="flex items-center gap-1" title={t.dropped}>
-              <span className={cn("h-1.5 w-1.5 rounded-full", handoff.losses.dropped > 0 ? "bg-[#e5484d]" : "bg-[var(--status-muted)]")} />
-              {handoff.losses.dropped}
-            </span>
-            <span className="flex items-center gap-1" title={t.downgraded}>
-              <span className={cn("h-1.5 w-1.5 rounded-full", handoff.losses.downgraded > 0 ? "bg-[#e5a93b]" : "bg-[var(--status-muted)]")} />
-              {handoff.losses.downgraded}
-            </span>
-            <span className="flex items-center gap-1" title={t.approximated}>
-              <span className={cn("h-1.5 w-1.5 rounded-full", handoff.losses.approximated > 0 ? "bg-[#5e6ad2]" : "bg-[var(--status-muted)]")} />
-              {handoff.losses.approximated}
-            </span>
+            <span>{t.detailsTitle}</span>
+            {session.bundlePending && !handoff.desktopSessionId && <span>{t.ready}</span>}
+            {handoff.desktopError && <span>{t.desktopPending}</span>}
+            {(["dropped","downgraded","approximated"] as const).filter(kind => handoff.losses[kind]>0).map(kind =>
+              <span key={kind}>{t[kind]} {handoff.losses[kind]}</span>)}
           </button>
         )}
 
@@ -113,7 +106,7 @@ export function TopBar({
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={t.inspector}
+                aria-label={t.filePanel} aria-expanded={inspectorOpen}
                 data-testid="inspector-toggle-btn"
                 onClick={onToggleInspector}
                 className={cn(inspectorOpen && "bg-[var(--bg-elevated)] text-[var(--text-primary)]")}
@@ -121,7 +114,7 @@ export function TopBar({
                 <PanelRight className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{t.inspector}</TooltipContent>
+            <TooltipContent side="bottom">{t.filePanel}</TooltipContent>
           </Tooltip>
         )}
       </div>

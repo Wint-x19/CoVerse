@@ -4,6 +4,10 @@ export type ThemeMode = "light" | "dark";
 export type LanguageCode = "zh-CN" | "en";
 
 export interface AppSettings {
+  leftWidth: number;
+  rightWidth: number;
+  leftOpen: boolean;
+  rightOpen: boolean;
   theme: ThemeMode;
   language: LanguageCode;
   disabledAdapters: string[];
@@ -29,6 +33,8 @@ export interface LocalSessionRef {
 }
 
 export interface AdapterSummary {
+  packageVersion: string | null;
+  distribution: "builtin";
   id: string;
   displayName: string;
   status: "scaffold" | "ready";
@@ -262,6 +268,7 @@ export interface CoverseDesktopBridge {
   previewFile(sessionId: string, path: string, scope: FileScope): Promise<IpcEnvelope<FilePreview>>;
   readonly platform: string;
   capabilities(refresh?: boolean): Promise<IpcEnvelope<CapabilitiesResponse>>;
+  nativeResume(id: string): Promise<IpcEnvelope<{ command: string; args: string[] } | null>>;
   getSettings(): Promise<IpcEnvelope<AppSettings>>;
   updateSettings(patch: Partial<AppSettings>): Promise<IpcEnvelope<AppSettings>>;
   listLocalSessions(agent?: string, cachedOnly?: boolean): Promise<IpcEnvelope<LocalSessionRef[]>>;

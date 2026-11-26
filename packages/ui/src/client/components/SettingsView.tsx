@@ -15,6 +15,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 interface SettingsViewProps {
+  initialDriver?: string;
   settings: AppSettings;
   adapters: AdapterSummary[];
   drivers: DriverSummary[];
@@ -28,7 +29,7 @@ interface SettingsViewProps {
 type SettingsTab = "general" | "adapters" | "drivers";
 
 export function SettingsView({
-  settings,
+  settings, initialDriver,
   adapters,
   drivers,
   refreshing,
@@ -37,18 +38,32 @@ export function SettingsView({
   onUpdateSettings,
   onRefreshCapabilities,
 }: SettingsViewProps) {
-  const [tab, setTab] = React.useState<SettingsTab>("general");
+  const [tab, setTab] = React.useState<SettingsTab>(initialDriver ? "drivers" : "general");
   const [execDrafts, setExecDrafts] = React.useState<Record<string, string>>(settings.driverExecutables);
 
   React.useEffect(() => {
     setExecDrafts(settings.driverExecutables);
   }, [settings.driverExecutables]);
 
+  const [saving, setSaving] = React.useState(false);
+  const [failure, setFailure] = React.useState("");
+  async function save(patch: Partial<AppSettings>) {
+    setSaving(true);
+    setFailure("");
+    try { await onUpdateSettings(patch); }
+    catch (error) { setFailure(error instanceof Error ? error.message : String(error)); }
+    finally { setSaving(false); }
+  }
+
+  React.useEffect(() => {
+    if (initialDriver) document.querySelector<HTMLElement>('[data-testid="driver-card-' + initialDriver + '"] input')?.focus();
+  },[initialDriver]);
+
   const toggleAdapter = async (id: string, currentlyEnabled: boolean) => {
     const next = new Set(settings.disabledAdapters);
     if (currentlyEnabled) next.add(id);
     else next.delete(id);
-    await onUpdateSettings({ disabledAdapters: [...next] });
+    await save({ disabledAdapters: [...next] });
   };
 
   const saveExecutable = async (id: string, value: string) => {
@@ -56,7 +71,7 @@ export function SettingsView({
     const trimmed = value.trim();
     if (trimmed) next[id] = trimmed;
     else delete next[id];
-    await onUpdateSettings({ driverExecutables: next });
+    await save({ driverExecutables: next });
   };
 
   const isMac = api.platform === "darwin";
@@ -141,6 +156,7 @@ export function SettingsView({
 
         <div className="flex-1 overflow-y-auto px-8 py-7">
           <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6">
+            {failure && <p role="alert" className="text-sm text-red-500">{failure}</p>}
             {tab === "general" && (
               <div className="flex flex-col divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
                 {/* Appearance */}
@@ -166,7 +182,7 @@ export function SettingsView({
                           role="radio"
                           aria-checked={active}
                           data-testid={`theme-${opt.id}`}
-                          onClick={() => void onUpdateSettings({ theme: opt.id })}
+                          onClick={() => void save({ theme: opt.id })}
                           className={cn(
                             "inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium transition-colors cursor-pointer",
                             active
@@ -204,7 +220,7 @@ export function SettingsView({
                           role="radio"
                           aria-checked={active}
                           data-testid={`lang-${opt.id}`}
-                          onClick={() => void onUpdateSettings({ language: opt.id })}
+                          onClick={() => void save({ language: opt.id })}
                           className={cn(
                             "inline-flex h-7 items-center rounded-md px-3 text-[12.5px] font-medium transition-colors cursor-pointer",
                             active
@@ -239,6 +255,7 @@ export function SettingsView({
 
                       <button
                         type="button"
+                        disabled={saving}
                         role="switch"
                         aria-checked={adapter.enabled}
                         data-testid={`adapter-toggle-${adapter.id}`}
@@ -260,18 +277,23 @@ export function SettingsView({
                       </button>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[11.5px] text-[var(--text-secondary)]">
-                      <span>{adapter.supportedVersions.join(", ") || "—"}</span>
-                      <span className="text-[var(--text-tertiary)]">
-                        {[
-                          adapter.capabilities.import ? "import" : null,
-                          adapter.capabilities.export ? "injection-bundle" : null,
-                          adapter.capabilities.nativeResume ? "native-resume" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                    </div>
+                    <details className="cv-settings-details">
+                      <summary>{t.versionInstall} · {t.builtin} {adapter.packageVersion}</summary>
+                      <dl>
+                        <dt>{t.adapterVersion}</dt><dd>{adapter.packageVersion ?? "—"}</dd>
+                        <dt>{t.formats}</dt><dd>{adapter.supportedVersions.join(", ") || "—"}</dd>
+                        <dt>{t.abilities}</dt><dd>{[adapter.capabilities.import && t.import, adapter.capabilities.export && t.exportBundle,
+                          adapter.capabilities.nativeResume && t.nativeCli].filter(Boolean).join(" · ")}</dd>
+                        <dt>CLI</dt><dd>{drivers.find(driver => driver.id === adapter.id)?.version || t.unavailable}
+                          <button type="button" className="ml-2 text-[var(--accent-text)]" onClick={() => {
+                            setTab("drivers");
+                            requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-testid="driver-card-' + adapter.id + '"] input')?.focus());
+                          }}>{t.driverConfig}</button></dd>
+                      </dl>
+                      <p>{t.manageDistribution}</p>
+                      <div className="mt-2 flex gap-2">{[t.addAdapter,t.updateAdapter,t.changeVersion,t.removeAdapter].map(label =>
+                        <Button key={label} size="xs" variant="outline" disabled>{label}</Button>)}</div>
+                    </details>
                   </div>
                 ))}
               </div>

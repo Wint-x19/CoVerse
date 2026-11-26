@@ -14,8 +14,13 @@ interface StreamingState {
   tools: ToolActivity[];
 }
 
+export interface ReadingPosition {top:number; follow:boolean}
+
 interface ThreadViewProps {
+  positions:Map<string,ReadingPosition>;
   session: UiSession;
+  branchId: string | undefined;
+  selectBranch: (id:string) => void;
   streaming: StreamingState | null;
   t: I18nMessages;
   onInspectHandoff: () => void;
@@ -37,6 +42,8 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
         <span>{t.toolCount(tools.length)}</span>
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
       </button>
+      {!open && tools.filter(tool => tool.state === "failed" || tool.results?.some(result => result.failed)).map((tool,index) =>
+        <p className="mt-1 text-xs text-red-500" key={index}>{tool.name} · {tool.results?.find(result => result.failed)?.text || tool.state}</p>)}
       {open && (
         <div className="mt-1.5 flex flex-col gap-1 border-l border-[var(--border-subtle)] pl-3">
           {tools.map((tool, index) => (
@@ -84,28 +91,12 @@ function ReasoningTrace({ text, t }: { text: string; t: I18nMessages }) {
   );
 }
 
-function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFiles"]>; t: I18nMessages }) {
-  const row = (f: typeof files[number]) => <div key={f.path} className="mt-2">
-    <div className="flex justify-between gap-4">
-      <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink>
-      {f.added !== null && f.removed !== null && <span>+{f.added} −{f.removed}</span>}
-    </div>
-    {f.patches?.length ? <details>
-      <summary className="cursor-pointer text-[var(--text-secondary)]">{t.viewDiff}</summary>
-      {f.patches.map((patch, index) => <pre key={index} className="my-2 max-h-96 overflow-auto rounded bg-[var(--bg-subtle)] p-2">
-        {patch.split("\n").map((line, number) => <span key={number} className={
-          line.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" :
-          line.startsWith("-") ? "text-red-600 dark:text-red-400" : undefined
-        }>{line}{"\n"}</span>)}
-      </pre>)}
-    </details> : <span className="text-[var(--text-tertiary)]">{f.patches ? t.noChanges : t.diffUnavailable}</span>}
-  </div>;
-  return <div className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-xs">
-    <span>{t.editedFiles(files.length)}　{files.every(f => f.added !== null && f.removed !== null) &&
-      ("+" + files.reduce((n, f) => n + (f.added ?? 0), 0) + " −" + files.reduce((n, f) => n + (f.removed ?? 0), 0))}</span>
-    {files.slice(0, 3).map(row)}
-    {files.length > 3 && <details className="mt-2"><summary className="cursor-pointer">{t.moreFiles(files.length - 3)}</summary>{files.slice(3).map(row)}</details>}
-  </div>;
+function ChangedFiles({files,t,occurrence}: {files:NonNullable<ChatMessage["changedFiles"]>;t:I18nMessages;occurrence?:string}) {
+  const render = (file:typeof files[number],index:number) =>
+    <div className="cv-change-row" key={index}><FileLink target={{path:file.path,change:file,...occurrence && {occurrence}}}>
+      <code>{file.path}</code></FileLink><span>{file.added !== null && file.removed !== null ? "+" + file.added + " −" + file.removed : "—"}</span></div>;
+  return <section className="cv-changes"><h4>{t.editedFiles(files.length)}</h4>{files.slice(0,3).map(render)}
+    {files.length > 3 && <details><summary>{t.moreFiles(files.length-3)}</summary>{files.slice(3).map(render)}</details>}</section>;
 }
 
 function PlanCard({plan,t}: {plan: NonNullable<ChatMessage["plan"]>; t:I18nMessages}) {
@@ -126,7 +117,7 @@ function ToolPlans({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages})
 }
 
 function ToolChanges({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages}) {
-  return tools?.map((tool,i) => tool.changedFiles?.length ? <ChangedFiles key={i} files={tool.changedFiles} t={t}/> : null);
+  return tools?.map((tool,i) => tool.changedFiles?.length ? <ChangedFiles key={i} occurrence={tool.id ?? String(i)} files={tool.changedFiles} t={t}/> : null);
 }
 
 function Sources({sources,t}: {sources:ChatMessage["sources"];t:I18nMessages}) {
@@ -143,7 +134,7 @@ function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMess
     <FileLink target={{path:review.path}}>{review.path}</FileLink>
     <p className="my-1 whitespace-pre-wrap">{review.comment}</p>
     {review.selections.map((selection, i) => <div key={i} className="mt-2 border-l pl-2">
-      <FileLink target={{path:review.path, ...(selection.text ? {quote:selection.text} : {}),
+      <FileLink target={{path:review.path, side:selection.side, ...(selection.text ? {quote:selection.text} : {}),
         ...(selection.start !== undefined ? {line:Math.max(1, selection.start)} : {}), ...(selection.end ? {endLine:selection.end} : {})}}>
         {t.reviewSide[selection.side]} {selection.start}{selection.end !== undefined && selection.end !== selection.start ? "–" + selection.end : ""}
       </FileLink>
@@ -280,23 +271,47 @@ function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
   </MessageOrigin.Provider>;
 }
 
-export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
-  const bottomRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [session.messages.length, streaming?.text.length, streaming?.reasoning.length, streaming?.tools.length]);
+export function ThreadView({ session, positions, branchId,selectBranch, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
+  const scroller = React.useRef<HTMLDivElement>(null);
+  const follow = React.useRef(true);
+  const lastScroll = React.useRef(0);
+  const [showLatest,setShowLatest] = React.useState(false);
+  const toBottom = () => {
+    const el = scroller.current;
+    if (el) {el.scrollTop = el.scrollHeight;lastScroll.current = el.scrollTop;}
+    follow.current = true;
+    setShowLatest(false);
+  };
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    const saved = positions.get(session.id);
+    if (el && saved && !saved.follow) {
+      follow.current = false;
+      el.scrollTop = saved.top;
+      lastScroll.current = el.scrollTop;
+      setShowLatest(true);
+    } else toBottom();
+  },[session.id,positions]);
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || !follow.current) return;
+    // A token can render after a scrollbar movement but before Chromium dispatches its scroll event.
+    if (el.scrollTop < lastScroll.current - 8 && el.scrollHeight - el.clientHeight - el.scrollTop > 36) {
+      follow.current = false;
+      setShowLatest(true);
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
+    lastScroll.current = el.scrollTop;
+  },[session.messages,streaming]);
 
   const handoff = session.handoff;
   const historicalMessages = session.messages.filter((m) => m.historical);
   const liveMessages = session.messages.filter((m) => !m.historical);
   const branches = conversationBranches(historicalMessages);
-  const [selection,setSelection] = React.useState<{sessionId:string; id:string} | null>(null);
-  const recent = historicalMessages.slice().reverse().find(m => m.lineage?.branchId && !m.lineage.subsession)?.lineage?.branchId;
-  const branchId = selection?.sessionId === session.id ? selection.id : recent ?? branches[0]?.id;
   const jump = (id:string) => {
     if (!session.messages.some(m => m.id === id)) return;
-    if (!document.getElementById("timeline-" + id)) setSelection({sessionId:session.id,id:""});
+    if (!document.getElementById("timeline-" + id)) selectBranch("");
     requestAnimationFrame(() => {
       const element = document.getElementById("timeline-" + id);
       element?.focus({preventScroll:true}); element?.scrollIntoView({block:"center"});
@@ -344,12 +359,21 @@ export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelat
   return (
     <JumpContext.Provider value={jump}>
     <RelatedContext.Provider value={onOpenRelated}>
-    <BrowseContext.Provider value={id => setSelection({sessionId:session.id,id})}>
-    <div className="flex-1 overflow-y-auto" data-testid="thread-view">
+    <BrowseContext.Provider value={selectBranch}>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div ref={scroller} className="flex-1 overflow-y-auto" data-testid="thread-view" onWheel={event => {
+      if (event.deltaY < 0) {follow.current=false;setShowLatest(true);}
+    }} onScroll={event => {
+      const el = event.currentTarget;
+      follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 36;
+      lastScroll.current = el.scrollTop;
+      positions.set(session.id,{top:el.scrollTop,follow:follow.current});
+      setShowLatest(!follow.current);
+    }}>
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
         {branches.length > 1 && <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">{t.browseBranch}
           <select aria-label={t.browseBranch} className="max-w-[75%] rounded border bg-[var(--bg-surface)] p-1"
-            value={branchId} onChange={e => setSelection({sessionId:session.id,id:e.target.value})}>
+            value={branchId} onChange={e => selectBranch(e.target.value)}>
             <option value="">{t.allBranches}</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.subsession ? t.subsession : b.id} · {b.sample}</option>)}
           </select>
@@ -391,8 +415,10 @@ export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelat
           </div>
         )}
 
-        <div ref={bottomRef} />
+
       </div>
+    </div>
+    {showLatest && <button type="button" className="cv-jump" onClick={toBottom}>↓ {t.latest}</button>}
     </div>
     </BrowseContext.Provider></RelatedContext.Provider></JumpContext.Provider>
   );

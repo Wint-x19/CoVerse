@@ -12,11 +12,24 @@ interface PersistedState {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  leftWidth: 240, rightWidth: 420, leftOpen: true, rightOpen: false,
   theme: "dark",
   language: "zh-CN",
   disabledAdapters: [],
   driverExecutables: {},
 };
+
+export function readLayout(values: Partial<AppSettings>, defaults = DEFAULT_SETTINGS) {
+  function width(value: unknown, min: number, max: number, fallback: number) {
+    return typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
+  }
+  return {
+    leftWidth: width(values.leftWidth, 170, 440, defaults.leftWidth),
+    rightWidth: width(values.rightWidth, 280, 1200, defaults.rightWidth),
+    leftOpen: typeof values.leftOpen === "boolean" ? values.leftOpen : defaults.leftOpen,
+    rightOpen: typeof values.rightOpen === "boolean" ? values.rightOpen : defaults.rightOpen,
+  };
+}
 
 export class UiStore {
   private writeQueue: Promise<void> = Promise.resolve();
@@ -102,6 +115,7 @@ export class UiStore {
       const raw = await fs.readFile(this.settingsPath, "utf8");
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       return {
+        ...readLayout(parsed),
         theme: parsed.theme === "light" ? "light" : "dark",
         language: parsed.language === "en" ? "en" : "zh-CN",
         disabledAdapters: Array.isArray(parsed.disabledAdapters)
@@ -124,8 +138,9 @@ export class UiStore {
     }
   }
 
-  async saveSettings(settings: AppSettings): Promise<AppSettings> {
+  async updateSettings(update: (current: AppSettings) => AppSettings): Promise<AppSettings> {
     return this.enqueue(async () => {
+      const settings = update(await this.getSettings());
       await this.writeJsonAtomic(this.settingsPath, settings);
       return settings;
     });

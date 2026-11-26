@@ -57,6 +57,7 @@ const bridge: CoverseDesktopBridge = {
 
   capabilities: (refresh) => invoke<CapabilitiesResponse>(IPC_CHANNELS.capabilities, Boolean(refresh)),
 
+  nativeResume: id => invoke<{command:string; args:string[]} | null>(IPC_CHANNELS.nativeResume, id),
   getSettings: () => invoke<AppSettings>(IPC_CHANNELS.getSettings),
 
   updateSettings: (patch) => invoke<AppSettings>(IPC_CHANNELS.updateSettings, patch),

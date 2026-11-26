@@ -17,7 +17,7 @@
 
 ## 何时使用 Computer Use
 
-对话记录的真实窗口回归在仓库根目录运行 `pnpm build` 后执行 `pnpm --filter @coverse/ui exec electron test/transcript-window.mjs`。脚本在独立的 Electron 窗口中点击消息链接、打开历史 diff、定位评审、跳转分支与关联会话，并验证图片解码、PDF 翻页、WebM 和缺件只读提示。文件选择器和外部浏览器用测试回调接收请求。[窗口用例](../packages/ui/test/transcript-window.mjs)
+对话记录的真实窗口回归在仓库根目录运行 `pnpm build` 后执行 `pnpm --filter @coverse/ui exec electron test/transcript-window.mjs`。脚本在独立的 Electron 窗口中点击消息链接、打开历史 diff、定位评审、跳转分支与关联会话，并验证图片解码、PDF 翻页、WebM 和缺件只读提示。此用例也覆盖多轮历史补丁、丢失文件、逐项批量结果、目标命令、侧栏宽度恢复、输入草稿和流式阅读。PowerShell 中设置 `$env:COVERSE_WINDOW_CAPTURE="1"` 后运行同一命令，可在可见真实窗口增加左右分隔线的指针拖动验收，并在本次隔离目录保存截图。文件选择器和外部浏览器用测试回调接收请求。[窗口用例](../packages/ui/test/transcript-window.mjs)
 
 Computer Use 指 Agent 通过可见窗口、鼠标和键盘操作真实客户端。默认先运行可重复的自动化测试。如果现有窗口自动化已经覆盖同一操作和可见结果，可以跳过重复点验。需要使用 Computer Use 时，按下面的步骤执行。
 

@@ -13,9 +13,10 @@ interface ImportDialogProps {
   open: boolean;
   adapters: AdapterSummary[];
   onImported: (session: UiSession) => void;
+  onStored:(session:UiSession) => void;
   t: I18nMessages;
   onOpenChange: (open: boolean) => void;
-  onSelectLocalSession: (session: LocalSessionRef) => void;
+  onSelectLocalSession: (session: LocalSessionRef, target?:string) => void;
   onPickedFiles: (files: PickedFile[]) => void;
 }
 
@@ -24,7 +25,7 @@ const sessionKey = (item: LocalSessionRef) => item.agent + ":" + item.path;
 export function ImportDialog({
   open,
   adapters,
-  onImported,
+  onImported,onStored,
   t,
   onOpenChange,
   onSelectLocalSession,
@@ -39,6 +40,7 @@ export function ImportDialog({
   const [omitOpaque, setOmitOpaque] = React.useState(false);
   const [progress, setProgress] = React.useState("");
   const [issues, setIssues] = React.useState<string[]>([]);
+  const [results,setResults] = React.useState<{item:LocalSessionRef; session?:UiSession; issue?:string; target:string}[]>([]);
   const generation = React.useRef(0);
 
   const adaptersRef = React.useRef(adapters);
@@ -83,6 +85,7 @@ export function ImportDialog({
     setAgentFilter("all");
     setSelected(new Set());
     setTarget("");
+    setResults([]);
     setOmitOpaque(false);
     setIssues([]);
     void load(true);
@@ -96,7 +99,7 @@ export function ImportDialog({
       if (!q) return true;
       return (
         item.title.toLowerCase().includes(q) ||
-        item.id.toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q) || agentLabel(item.agent).toLowerCase().includes(q) ||
         (item.cwd ? item.cwd.toLowerCase().includes(q) : false)
       );
     });
@@ -116,11 +119,10 @@ export function ImportDialog({
   async function importSelected() {
     const batch = sessions.filter(item => selected.has(sessionKey(item)));
     if (!batch.length || progress) return;
-    const messages: string[] = [];
+    const finished:typeof results = [];
     setIssues([]);
     for (const [index, item] of batch.entries()) {
       setProgress(t.importingBatch(index + 1, batch.length));
-      const label = [item.cwd, agentLabel(item.agent), item.title].filter(Boolean).join(" · ");
       try {
         const session = await api.convertSource({
           from: item.agent,
@@ -132,26 +134,27 @@ export function ImportDialog({
           materialize: true,
           ...(target && omitOpaque ? {omitOpaque: true} : {}),
         });
-        onImported(session);
+        onStored(session);
         select([item], false);
-        if (session.handoff?.desktopError) {
-          const error = session.handoff.desktopError;
-          messages.push(label + " · " + (error.code === "DESKTOP_OPEN" ? t.closeDesktop : error.message));
-        } else if (session.bundlePending && !session.handoff?.desktopSessionId) {
-          messages.push([label, t.pendingSync, session.handoff?.materializationError?.message].filter(Boolean).join(" · "));
-        }
+        const issue = session.handoff?.desktopError?.code === "DESKTOP_OPEN" ? t.closeDesktop :
+          session.handoff?.desktopError?.message ?? session.handoff?.materializationError?.message ??
+          (session.bundlePending && !session.handoff?.desktopSessionId ? t.pendingSync : "");
+        finished.push({item,session,target,...issue && {issue}});
       } catch (error) {
         const detail = error instanceof ApiClientError && error.diagnostic.path === "/cwd"
           ? t.locateProject
           : error instanceof ApiClientError && error.diagnostic.path && !error.diagnostic.path.startsWith("/")
             ? `${error.diagnostic.path}: ${error.message}`
             : error instanceof Error ? error.message : String(error);
-        messages.push(label + " · " + detail);
+        finished.push({item,issue:detail,target});
       }
     }
     setProgress("");
-    setIssues(messages);
-    if (!messages.length) onOpenChange(false);
+    setResults(previous => [...previous.filter(row => !finished.some(next => sessionKey(next.item) === sessionKey(row.item))),...finished]);
+    if (!results.length && finished.length === 1 && finished[0]?.session) {
+      onOpenChange(false);
+      onImported(finished[0].session);
+    }
   }
 
   const handleBrowseFiles = async () => {
@@ -257,14 +260,14 @@ export function ImportDialog({
                       </div>
 
                       <div className="flex shrink-0 flex-col items-end font-mono text-[11px] text-[var(--text-tertiary)]">
-                        <span>{relativeTime(item.updatedAt)}</span>
+                        <span>{relativeTime(item.updatedAt,t.locale)}</span>
                         <span>{formatBytes(item.size)}</span>
                       </div>
                     </label>
                     <Button variant="ghost" size="icon" aria-label={t.openIndividually + " · " + item.title}
                       title={t.openIndividually} disabled={Boolean(progress)} onClick={() => {
                         onOpenChange(false);
-                        onSelectLocalSession(item);
+                        onSelectLocalSession(item,target);
                       }}><Settings2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 ))}
@@ -272,6 +275,15 @@ export function ImportDialog({
             })
           )}
         </div>
+        {results.length > 0 && <section aria-label={t.batchResult} className="max-h-48 shrink-0 overflow-auto border-t px-4 py-2">
+          <h3 className="text-sm font-medium">{t.batchResult}</h3>
+          {results.map(row => <div key={sessionKey(row.item)} className="cv-batch-result">
+            <span><strong>{row.item.title}</strong><small>{row.item.cwd} · {agentLabel(row.item.agent)} → {agentLabel(row.target || row.item.agent)}</small></span>
+            <span>{row.issue || t.batchDone}</span><button className="cv-action" onClick={() => {
+              onOpenChange(false);
+              if (row.session) onImported(row.session); else onSelectLocalSession(row.item,row.target);
+            }}>{row.session ? t.openSession : t.openIndividually}</button></div>)}
+        </section>}
         {issues.length > 0 && <div role="alert" className="max-h-28 shrink-0 overflow-auto px-4 py-2 text-xs text-[var(--text-secondary)]">
           {issues.map((message, i) => <p key={i}>{message}</p>)}
         </div>}
