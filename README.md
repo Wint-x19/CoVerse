@@ -20,6 +20,8 @@
 
 ## 文档
 
+- [参与贡献](CONTRIBUTING.md) —— 报告问题、准备样本、验证改动与提交 PR
+- [安全报告](SECURITY.md) —— 私下报告涉及用户数据或访问边界的问题
 - [DESIGN.md](DESIGN.md) —— 可行性分析、难点与方案、工程架构、里程碑规划
 - [AGENTS.md](AGENTS.md) —— 工程协作规范（所有贡献者与 AI Agent 必读）
 
@@ -128,7 +130,7 @@ pnpm fixtures:check
 
 ## CI
 
-[CI 配置](.github/workflows/ci.yml) 覆盖 Windows/Linux 与 Node 20/22，固定依赖安装后运行 `pnpm check`。当前远端为 Gitee，GitHub Actions 配置不会在 Gitee 自动执行；Gitee 自建流水线应使用同一检查命令。
+GitHub Actions 在推送与 PR 上运行四组检查，覆盖 Windows、Linux 和 Node 20、22。各组按锁文件安装依赖，执行 `pnpm check` 并核对适配器列表。[CI 配置](.github/workflows/ci.yml)
 
 ## License
 

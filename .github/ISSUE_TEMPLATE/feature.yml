@@ -1,0 +1,18 @@
+name: 功能建议
+description: 讨论用户场景、格式兼容性与验收条件
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: 使用场景
+      description: 请描述想完成的操作、当前遇到的限制，以及涉及的协议、Agent 或桌面入口。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 期望行为
+      description: 如何从用户入口确认问题已经解决？请使用虚构数据举例。
+    validations:
+      required: true
