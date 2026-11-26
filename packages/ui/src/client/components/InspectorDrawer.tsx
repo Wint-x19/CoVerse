@@ -151,11 +151,11 @@ export function InspectorDrawer({ open, session, t, onClose, onSessionUpdated }:
   return (
     <aside
       data-testid="inspector-drawer"
-      className="flex h-full w-[340px] shrink-0 flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-sidebar)]"
+      className="absolute inset-0 z-10 flex flex-col overflow-auto bg-[var(--bg-app)]"
     >
       <div className="flex h-11 items-center justify-between border-b border-[var(--border-subtle)] px-3">
-        <span className="text-[12.5px] font-medium text-[var(--text-primary)]">{t.inspector}</span>
-        <Button variant="ghost" size="icon" aria-label="Close inspector" onClick={onClose}>
+        <span className="text-[12.5px] font-medium text-[var(--text-primary)]">{t.detailsTitle}</span>
+        <Button variant="ghost" size="icon" aria-label={t.back} onClick={onClose}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>

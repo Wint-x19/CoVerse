@@ -11,8 +11,7 @@ import type {
 } from "../shared/types.js";
 import { api, ApiClientError } from "@/lib/api";
 import { getMessages } from "@/lib/i18n";
-import { agentLabel, cn, filesToPayloads } from "@/lib/utils";
-import { AgentGlyph } from "@/components/AgentGlyph";
+import { filesToPayloads } from "@/lib/utils";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Composer } from "@/components/Composer";
 import { ConvertDialog, type PendingImportSource } from "@/components/ConvertDialog";
@@ -23,7 +22,9 @@ import { InspectorDrawer } from "@/components/InspectorDrawer";
 import { SettingsView } from "@/components/SettingsView";
 import { Sidebar } from "@/components/Sidebar";
 import { ThreadView } from "@/components/ThreadView";
-import { FileViewer } from "@/components/FileViewer";
+import { PaneDivider } from "@/components/PaneDivider";
+import {visibleBranch,conversationBranches} from "@/lib/branches";
+import { FileViewer, FilePanel } from "@/components/FileViewer";
 import {updateToolActivity} from "../shared/tool-activity.js";
 import {needsHistoryRefresh} from "../shared/history-version.js";
 import { TopBar } from "@/components/TopBar";
@@ -59,8 +60,22 @@ export function App() {
   const [draftCwd, setDraftCwd] = React.useState("");
 
   // Layout & modals
-  const [sidebarOpen, setSidebarOpen] = React.useState(true);
-  const [inspectorOpen, setInspectorOpen] = React.useState(false);
+  const {leftOpen:sidebarOpen,rightOpen:fileOpen} = settings;
+  const [detailsOpen,setDetailsOpen] = React.useState(false);
+  const [windowWidth,setWindowWidth] = React.useState(window.innerWidth);
+  const [branches,setBranches] = React.useState<Record<string,string>>({});
+  const [resizing,setResizing] = React.useState<{left?:number;right?:number}>({});
+  React.useEffect(() => {
+    const resized = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize",resized);
+    return () => window.removeEventListener("resize",resized);
+  },[]);
+  const maxLeft = Math.min(440,windowWidth - 480);
+  const leftWidth = Math.min(maxLeft,resizing.left ?? settings.leftWidth);
+  const maxRight = Math.min(1200,windowWidth-32);
+  const rightWidth = Math.min(maxRight,resizing.right ?? settings.rightWidth);
+  const overlay = windowWidth - (sidebarOpen ? leftWidth : 0) - rightWidth < 480;
+  const fileOpener = React.useRef<HTMLElement | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -136,7 +151,7 @@ export function App() {
     async (patch: Partial<AppSettings>) => {
       try {
         const updated = await api.updateSettings(patch);
-        setSettings(updated);
+        setSettings(previous => ({...previous,...Object.fromEntries(Object.keys(patch).map(k => [k,updated[k as keyof AppSettings]]))}));
         if ("disabledAdapters" in patch || "driverExecutables" in patch) {
           await loadCapabilities(true);
         }
@@ -153,6 +168,24 @@ export function App() {
     [sessions, activeSessionId],
   );
 
+  const history = React.useMemo(() => activeSession?.messages.filter(m => m.historical) ?? [],[activeSession]);
+  const branchId = (activeSession && branches[activeSession.id]) ?? history.slice().reverse().find(m => m.lineage?.branchId && !m.lineage.subsession)?.lineage?.branchId ?? conversationBranches(history)[0]?.id;
+  const displayed = React.useMemo(() => [...visibleBranch(history,branchId),...activeSession?.messages.filter(m => !m.historical) ?? []],[history,branchId,activeSession]);
+  const fileOpenRef = React.useRef(fileOpen);
+  fileOpenRef.current = fileOpen;
+  const saveLayout = (patch:Partial<AppSettings>) => {
+    if (patch.rightOpen !== undefined) fileOpenRef.current = patch.rightOpen;
+    setSettings(previous => ({...previous,...patch}));
+    void api.updateSettings(patch).catch(error => {setBannerError(String(error.message ?? error)); void loadSettings();});
+  };
+  const showFiles = () => {
+    if (document.activeElement instanceof HTMLElement && !document.activeElement.closest('[data-testid="file-panel"]')) fileOpener.current = document.activeElement;
+    if (!fileOpenRef.current) saveLayout({rightOpen:true});
+  };
+  const hideFiles = () => {
+    saveLayout({rightOpen:false});
+    requestAnimationFrame(() => fileOpener.current?.focus({preventScroll:true}));
+  };
   const waitingForDesktop = sessions.filter(session =>
     session.handoff?.desktopError?.code === "DESKTOP_OPEN" && !settings.disabledAdapters.includes(session.agent)
   ).map(session => session.id).join(",");
@@ -183,6 +216,13 @@ export function App() {
   // Global keyboard shortcuts (Cmd/Ctrl+K, Cmd/Ctrl+,, Escape)
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.key === "Escape" && (document.querySelector('[role="dialog"],[role="listbox"],[data-radix-popper-content-wrapper]'))) return;
+      if (event.key === "Escape" && !settingsOpen && (fileOpen || detailsOpen) && !paletteOpen && !importOpen && !convertOpen && !handoffOpen) {
+        event.preventDefault();
+        if (fileOpen) hideFiles(); else setDetailsOpen(false);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen((prev) => !prev);
@@ -214,7 +254,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [streaming, convertOpen, handoffOpen, paletteOpen, importOpen, settingsOpen]);
+  }, [streaming, convertOpen, handoffOpen, paletteOpen, importOpen, settingsOpen,fileOpen,detailsOpen]);
 
   const openDroppedFiles = React.useCallback(async (fileList: FileList | File[]) => {
     const list = Array.from(fileList);
@@ -312,13 +352,14 @@ export function App() {
   const handleNewSession = () => {
     setSettingsOpen(false);
     setActiveSessionId(null);
-    setInspectorOpen(false);
+    setDetailsOpen(false);
     setBannerError(null);
   };
 
   const handleSelectSession = (id: string) => {
     setSettingsOpen(false);
     setActiveSessionId(id);
+    setDetailsOpen(false);
     setBannerError(null);
     const selected = sessions.find(row => row.id === id);
     if (selected && needsHistoryRefresh(selected)) {
@@ -356,7 +397,7 @@ export function App() {
       setSessions((prev) => prev.filter((item) => item.id !== id));
       if (activeSessionId === id) {
         setActiveSessionId(null);
-        setInspectorOpen(false);
+        setDetailsOpen(false);
       }
     } catch (error) {
       setBannerError(error instanceof Error ? error.message : "Failed to delete session");
@@ -367,7 +408,7 @@ export function App() {
     upsertLocalSession(session);
     setSettingsOpen(false);
     setActiveSessionId(session.id);
-    setInspectorOpen(Boolean(session.handoff));
+    setDetailsOpen(Boolean(session.handoff));
     setBannerError(null);
   };
 
@@ -511,7 +552,7 @@ export function App() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <FileViewer session={activeSession} t={t}>
+      <FileViewer session={activeSession} messages={displayed} onOpen={showFiles}>
       {settingsOpen ? (
         <SettingsView
           settings={settings}
@@ -526,7 +567,7 @@ export function App() {
       ) : (
         <div className="flex h-full w-full overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]">
           {sidebarOpen && (
-            <Sidebar
+            <div className="relative shrink-0" style={{width:leftWidth}}><Sidebar
               sessions={sessions}
               activeSessionId={activeSessionId}
               drivers={drivers}
@@ -538,17 +579,19 @@ export function App() {
               onDeleteSession={handleDeleteSession}
               onOpenPalette={() => setPaletteOpen(true)}
               onOpenSettings={() => setSettingsOpen(true)}
-            />
+            /><PaneDivider side="left" width={leftWidth} min={170} max={maxLeft} label={t.resizeLeft}
+              onResize={left => setResizing({left})} onSave={leftWidth => {setResizing({});saveLayout({leftWidth});}}/></div>
           )}
 
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar
               session={activeSession}
               sidebarOpen={sidebarOpen}
-              inspectorOpen={inspectorOpen}
+              inspectorOpen={fileOpen}
+              onDetails={() => setDetailsOpen(!detailsOpen)}
               t={t}
-              onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-              onToggleInspector={() => setInspectorOpen((prev) => !prev)}
+              onToggleSidebar={() => saveLayout({leftOpen:!sidebarOpen})}
+              onToggleInspector={() => fileOpen ? hideFiles() : showFiles()}
               onOpenHandoff={() => setHandoffOpen(true)}
             />
 
@@ -569,47 +612,14 @@ export function App() {
               </div>
             )}
 
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <main className="flex min-w-0 flex-1 flex-col">
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              <main className="relative flex min-w-0 flex-1 flex-col">
                 {showEmptyStage ? (
                   <div
                     data-testid="empty-stage"
                     className="flex flex-1 flex-col items-center justify-center px-6 pb-16"
                   >
-                    <div
-                      role="tablist"
-                      aria-label="Select agent"
-                      className="mb-4 inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-0.5"
-                    >
-                      {drivers.map((driver) => {
-                        const selected = currentAgent === driver.id;
-                        return (
-                          <button
-                            key={driver.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={selected}
-                            data-testid={`agent-tab-${driver.id}`}
-                            onClick={() => void handleAgentChange(driver.id)}
-                            className={cn(
-                              "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors cursor-pointer",
-                              selected
-                                ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
-                                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-                            )}
-                          >
-                            <AgentGlyph agent={driver.id} className="h-3.5 w-3.5" />
-                            <span>{agentLabel(driver.id)}</span>
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full",
-                                driver.available ? "bg-[#3ecf8e]" : "bg-[var(--status-muted)]",
-                              )}
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <h1 className="mb-5 text-2xl font-semibold tracking-tight">{t.startChat}</h1>
 
                     <Composer
                       centered
@@ -635,18 +645,18 @@ export function App() {
                       className="mt-4 inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 font-mono text-[11.5px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)] cursor-pointer"
                     >
                       <FileUp className="h-3.5 w-3.5" />
-                      <span>{t.dropHint}</span>
+                      <span>{t.importExisting}</span>
                     </button>
                   </div>
                 ) : (
                   <>
                     <ThreadView
-                      session={activeSession!}
+                      session={activeSession!} branchId={branchId} selectBranch={id => setBranches(prev => ({...prev,[activeSession!.id]:id}))}
                       streaming={
                         isRunningActive && streaming ? streaming : null
                       }
                       t={t}
-                      onInspectHandoff={() => setInspectorOpen(true)}
+                      onInspectHandoff={() => setDetailsOpen(true)}
                       onOpenRelated={openRelated}
                     />
                     <div className="shrink-0 px-6 pb-5 pt-2 flex justify-center">
@@ -672,15 +682,19 @@ export function App() {
                     </div>
                   </>
                 )}
-              </main>
-
               <InspectorDrawer
-                open={inspectorOpen}
+                open={detailsOpen}
                 session={activeSession}
                 t={t}
-                onClose={() => setInspectorOpen(false)}
+                onClose={() => setDetailsOpen(false)}
                 onSessionUpdated={upsertLocalSession}
-              />
+              /></main>
+              {activeSession && fileOpen && <div data-overlay={overlay} className="cv-file-dock" style={{width:rightWidth}}>
+                <PaneDivider side="right" width={rightWidth} min={280} max={maxRight} label={t.resizeRight}
+                  onResize={right => setResizing({right})} onSave={rightWidth => {setResizing({});saveLayout({rightWidth});}}/>
+                <FilePanel key={activeSession.id} session={activeSession} messages={displayed} t={t} onClose={hideFiles}
+                  {...detailsOpen && {returnToDetails:hideFiles}}/>
+              </div>}
             </div>
           </div>
         </div>
@@ -724,7 +738,7 @@ export function App() {
       <CommandPalette
         open={paletteOpen}
         sessions={sessions}
-        hasActiveSession={Boolean(activeSession)}
+        hasActiveSession={Boolean(activeSession?.handoff)}
         canHandoff={Boolean(activeSession && !activeSession.readOnly && (activeSession.messages.length > 0 || activeSession.handoff))}
         t={t}
         onOpenChange={setPaletteOpen}
@@ -732,7 +746,7 @@ export function App() {
         onNewSession={handleNewSession}
         onImport={() => setImportOpen(true)}
         onHandoff={() => setHandoffOpen(true)}
-        onToggleInspector={() => setInspectorOpen((prev) => !prev)}
+        onToggleInspector={() => setDetailsOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       </FileViewer>

@@ -1,16 +1,18 @@
 import * as React from "react";
 import Markdown, {defaultUrlTransform} from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { FilePreview, FileScope, UiSession } from "../../shared/types.js";
+import type { FilePreview, FileScope, UiSession, ChatMessage } from "../../shared/types.js";
 import { api } from "@/lib/api";
 import { fileReference, fileTokens, linkFilePaths, locateQuote, type FileReference } from "@/lib/file-references";
 import {reviewSegments} from "@/lib/review-directives";
 import type { I18nMessages } from "@/lib/i18n";
-import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { FileText, Folder, GitCompareArrows, PanelRightClose, X } from "lucide-react";
+import {DiffPreview} from "./DiffPreview";
+import type {RecordedFileChange} from "@coverse/core";
 import type {RecordedAsset} from "@coverse/core";
 import {AssetPreview, imageMime} from "./AssetPreview";
 
-type Target = FileReference & {scope?: FileScope; asset?: RecordedAsset; messageId?: string; documentUri?:string};
+type Target = FileReference & {scope?: FileScope; asset?: RecordedAsset; messageId?: string; documentUri?:string; change?: RecordedFileChange; side?: string; occurrence?:string};
 const FileContext = React.createContext<(target: Target) => void>(() => {});
 export const MessageOrigin = React.createContext<string | undefined>(undefined);
 
@@ -106,7 +108,7 @@ function Preview({sessionId, target, open, t}: {
   if (result.kind === "media") return <AssetPreview url={result.url} type={result.mediaType} label={result.path} t={t}/>;
   if (result.kind === "directory") return <ul>{result.entries.map(entry => <li key={entry}>
     <button type="button" className="cursor-pointer hover:underline" onClick={() =>
-      open({path: result.path + "/" + entry})}>{entry}</button></li>)}</ul>;
+      open({path: result.path + "/" + entry,scope:target.scope ?? "project"})}>{entry}</button></li>)}</ul>;
   if (target.documentUri && /\.md$/i.test(target.path) && !target.line && !target.quote)
     return <div className="cv-prose"><MessageMarkdown text={result.content}/></div>;
   return <>{pickedPath && <p className="mb-2 break-all text-xs text-[var(--text-secondary)]">{pickedPath}</p>}
@@ -137,15 +139,48 @@ function HistoricalText({text,target,t}: {text:string;target:Target;t:I18nMessag
   </div>;
 }
 
-export function FileViewer({session, children, t}: {session:UiSession | null; children: React.ReactNode; t: I18nMessages}) {
-  const sessionId = session?.id;
-  const [selection, setSelection] = React.useState<{id: string; target: Target} | null>(null);
-  const open = (request: Target) => {
+type FileTab = {key:string; target:Target};
+type TabState = {tabs:FileTab[]; active:string};
+const EMPTY_TABS:TabState = {tabs:[],active:""};
+const WorkspaceContext = React.createContext<{
+  state:TabState;
+  activate:(key:string) => void;
+  closeTab:(key:string) => void;
+  open:(target:Target, parent?:Target) => void;
+  scroll:Map<string,number>;
+} | null>(null);
+
+function tabKey(target:Target) {
+  const source = target.change ? "diff" : target.asset?.location ?? target.scope ?? "project";
+  const version = target.change || target.asset || target.scope === "attachment" ? target.messageId : "";
+  return JSON.stringify([source,target.path.replaceAll("\\\\","/"),version,target.occurrence,target.asset?.sourceUri]);
+}
+
+export function FileViewer({session, children, onOpen, messages}: {
+  session:UiSession | null; children:React.ReactNode; onOpen:() => void; messages:ChatMessage[];
+}) {
+  const [bySession,setBySession] = React.useState<Record<string,TabState>>({});
+  const scroll = React.useRef(new Map<string,number>()).current;
+  const id = session?.id ?? "";
+  const state = bySession[id] ?? EMPTY_TABS;
+  const update = (change:(previous:TabState) => TabState) =>
+    setBySession(previous => ({...previous,[id]:change(previous[id] ?? EMPTY_TABS)}));
+  const open = (request:Target, parent?:Target) => {
     if (!session) return;
     let target = request;
-    if (!request.scope && !request.asset) {
+    if (request.side && request.side !== "file") {
+      const origin = messages.findIndex(message => message.id === request.messageId);
+      const candidates = messages.slice(0,origin+1).reverse();
+      for (const message of candidates) {
+        const changes = message.changedFiles?.length ? message.changedFiles : message.tools?.flatMap(tool => tool.changedFiles ?? []) ?? [];
+        const matches = changes.filter(change => change.path === request.path);
+        if (!matches.length) continue;
+        if (matches.length === 1 && matches[0]?.patches?.length) target = {...request,change:matches[0],messageId:message.id};
+        break;
+      }
+    }
+    if (!request.scope && !request.asset && !target.change) {
       let uri = request.path;
-      const parent = selection?.id === session.id ? selection.target : undefined;
       const documentUri = parent?.asset?.sourceUri ?? parent?.documentUri;
       if (documentUri) {
         try { uri = new URL(request.path,documentUri).href; } catch { /* Plain project paths also appear in archives. */ }
@@ -163,21 +198,130 @@ export function FileViewer({session, children, t}: {session:UiSession | null; ch
       else target = {...request,path:uri};
       if (origin) target.messageId = origin;
     }
-    setSelection({id:session.id,target});
+    const key = tabKey(target);
+    scroll.delete(id + key);
+    update(previous => ({
+      active:key,
+      tabs:[...previous.tabs.filter(tab => tab.key !== key),{key,target}],
+    }));
+    onOpen();
   };
-  const target = selection?.id === sessionId ? selection?.target : undefined;
-  return <FileContext.Provider value={open}>{children}
-    {sessionId && target && <Dialog open onOpenChange={visible => { if (!visible) setSelection(null); }}>
-      <DialogContent aria-describedby={undefined} className="max-w-[min(90vw,960px)]">
-        <DialogTitle className="mr-8 mb-3 break-all">{target.path}{target.line ? " · L" + target.line : ""}</DialogTitle>
-        <div className="max-h-[70vh] overflow-auto">
-          {target.asset ? target.asset.location === "text" ? target.asset.mediaType === "text/markdown" && !target.quote && !target.line
+  const activate = (key:string) => update(previous => ({...previous,active:key}));
+  const closeTab = (key:string) => update(previous => {
+    const tabs = previous.tabs.filter(tab => tab.key !== key);
+    scroll.delete(id + key);
+    return {tabs,active:key === previous.active ? tabs.at(-1)?.key ?? "" : previous.active};
+  });
+  return <WorkspaceContext.Provider value={{state,activate,closeTab,open,scroll}}>
+    <FileContext.Provider value={open}>{children}</FileContext.Provider>
+  </WorkspaceContext.Provider>;
+}
+
+function ProjectDirectory({sessionId, path, t}: {sessionId:string; path:string; t:I18nMessages}) {
+  const [entries, setEntries] = React.useState<string[]>([]);
+  const [error,setError] = React.useState("");
+  const [loading,setLoading] = React.useState(true);
+  React.useEffect(() => {
+    let current = true;
+    api.previewFile(sessionId,path,"project").then(preview => {
+      if (current && preview.kind === "directory") setEntries(preview.entries);
+    }).catch(cause => { if (current) setError(String(cause.message ?? cause)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => {current=false;};
+  },[sessionId,path]);
+  if (error) return <p role="alert">{error}</p>;
+  if (loading) return <p role="status">{t.loading}</p>;
+  return <ul className="cv-tree">{entries.map(entry => {
+    const child = path === "." ? entry : path + "/" + entry;
+    return <li key={entry}>{entry.endsWith("/") ? <DirectoryNode sessionId={sessionId} path={child.slice(0,-1)} name={entry} t={t}/> :
+      <FileLink target={{path:child,scope:"project"}}><FileText size={14}/>{entry}</FileLink>}</li>;
+  })}</ul>;
+}
+function DirectoryNode({name,...props}: {name:string;sessionId:string;path:string;t:I18nMessages}) {
+  const [expanded,setExpanded] = React.useState(false);
+  return <><button className="cv-tree-row" type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+    <Folder size={14}/>{name}</button>{expanded && <ProjectDirectory {...props}/>}</>;
+}
+
+function conversationFiles(messages:ChatMessage[]) {
+  return messages.flatMap((message,index) => {
+    const targets:Target[] = [];
+    const add = (target:Target) => targets.push({...target,messageId:message.id});
+    const changes = message.changedFiles?.length ? message.changedFiles.map(change => ({change})) :
+      message.tools?.flatMap((tool,i) => (tool.changedFiles ?? []).map(change => ({change,occurrence:tool.id ?? String(i)}))) ?? [];
+    for (const entry of changes) add({path:entry.change.path,...entry});
+    for (const asset of [...message.assets ?? [],...message.tools?.flatMap(tool => tool.results?.flatMap(result => result.assets ?? []) ?? []) ?? []]) {
+      if (asset.location === "attachment" || asset.location === "project") add({path:asset.value,scope:asset.location,...asset.sourceUri && {documentUri:asset.sourceUri}});
+      else add({path:asset.label ?? asset.sourceUri ?? asset.mediaType,asset});
+    }
+    const refs = new Map<string,FileReference>();
+    const text = message.content.replace(/!?\[[^\]\n]*\]\((?:<([^>\n]+)>|([^)\s]+))\)/g, (_,a:string,b:string) => {
+      const ref = fileReference(a ?? b,true);
+      if (ref) refs.set(ref.path,ref);
+      return " ";
+    });
+    for (const token of fileTokens(text)) if (token.reference) refs.set(token.reference.path,token.reference);
+    for (const review of message.reviews ?? []) refs.set(review.path,{path:review.path});
+    for (const ref of refs.values()) if (!targets.some(target => target.path === ref.path)) add(ref);
+    return targets.length ? [{id:message.id,number:index+1,targets}] : [];
+  });
+}
+
+export function FilePanel({session,messages,t,onClose,returnToDetails}: {
+  session:UiSession; messages:ChatMessage[]; t:I18nMessages; onClose:() => void; returnToDetails?:() => void;
+}) {
+  const {state,activate,closeTab,open,scroll} = React.useContext(WorkspaceContext)!;
+  const [project,setProject] = React.useState(false);
+  const tab = state.tabs.find(item => item.key === state.active);
+  const groups = React.useMemo(() => conversationFiles(messages),[messages]);
+  const target = tab?.target;
+  const pane = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const el = pane.current;
+    if (!el || !tab) return;
+    const key = session.id + tab.key;
+    const saved = scroll.get(key) ?? 0;
+    if (!saved) return;
+    const restore = () => { el.scrollTop = saved; if (el.scrollTop >= saved-1) observer.disconnect(); };
+    const observer = new ResizeObserver(restore);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    restore();
+    return () => observer.disconnect();
+  },[session.id,tab,scroll]);
+  return <aside data-testid="file-panel" aria-label={t.filePanel} className="cv-file-panel">
+    <header><strong>{t.filePanel}</strong><button type="button" data-testid="close-file-panel" aria-label={t.dismiss} onClick={onClose}><PanelRightClose size={16}/></button></header>
+    {returnToDetails && <button type="button" className="cv-action" onClick={returnToDetails}>← {t.returnDetails}</button>}
+    <div className="cv-file-tabs">
+      <button type="button" aria-pressed={!tab} onClick={() => activate("")}><Folder size={14}/>{t.files}</button>
+      {state.tabs.map(item => <div key={item.key} data-active={item.key === state.active}>
+        <button type="button" title={item.target.path} aria-pressed={item.key === state.active} onClick={() => activate(item.key)}>
+          {item.target.change ? <GitCompareArrows size={13}/> : <FileText size={13}/>}
+          <span>{item.target.path.split(/[\\/]/).at(-1) || item.target.path}</span>
+          {item.target.change && <small>#{messages.findIndex(m => m.id === item.target.messageId)+1 || "…"}</small>}
+        </button><button type="button" aria-label={t.dismiss + " " + item.target.path} onClick={() => closeTab(item.key)}><X size={12}/></button>
+      </div>)}
+    </div>
+    {tab && target ? <>
+      <div className="cv-file-heading"><span>{target.change ? t.historyDiff : target.asset || (target.scope && target.scope !== "project") ? t.archived : t.currentFile}</span>
+        <code>{target.path}{target.line ? " · L" + target.line : ""}</code>
+        {target.change && <button type="button" className="cv-action" onClick={() => open({path:target.path,scope:"project"})}>{t.openDisk}</button>}</div>
+      <div key={tab.key} className="cv-file-body" ref={pane} onScroll={event => scroll.set(session.id + tab.key,event.currentTarget.scrollTop)}>
+        <FileContext.Provider value={request => open(request,target)}><div>
+        {target.change ? <DiffPreview change={target.change} target={target} t={t}/> :
+          target.asset ? target.asset.location === "text" ? target.asset.mediaType === "text/markdown" && !target.quote && !target.line
             ? <div className="cv-prose"><MessageMarkdown text={target.asset.value}/></div>
             : <HistoricalText text={target.asset.value} target={target} t={t}/>
             : <AssetPreview url={target.asset.value} type={target.asset.mediaType} label={target.path} t={t}/>
-            : <Preview key={JSON.stringify([sessionId, target])} sessionId={sessionId} target={target} open={open} t={t}/>}
-        </div>
-      </DialogContent>
-    </Dialog>}
-  </FileContext.Provider>;
+          : <Preview sessionId={session.id} target={target} open={request => open(request,target)} t={t}/>}
+        </div></FileContext.Provider>
+      </div>
+    </> : <>
+      <div className="cv-file-switch"><button aria-pressed={!project} onClick={() => setProject(false)}>{t.sessionFiles}</button>
+        <button aria-pressed={project} onClick={() => setProject(true)}>{t.projectFiles}</button></div>
+      <div className="cv-file-body">{project ? <ProjectDirectory sessionId={session.id} path="." t={t}/> :
+        groups.length ? groups.map(group => <section className="cv-tree" key={group.id}><h4>{t.turnLabel} {group.number}</h4>
+          {group.targets.map((item,i) => <FileLink key={i} target={item}>{item.change ? <GitCompareArrows size={14}/> : <FileText size={14}/>} {item.path}</FileLink>)}
+        </section>) : <p>{t.noFiles}</p>}</div>
+    </>}
+  </aside>;
 }

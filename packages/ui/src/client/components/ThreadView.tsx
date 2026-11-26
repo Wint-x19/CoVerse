@@ -16,6 +16,8 @@ interface StreamingState {
 
 interface ThreadViewProps {
   session: UiSession;
+  branchId: string | undefined;
+  selectBranch: (id:string) => void;
   streaming: StreamingState | null;
   t: I18nMessages;
   onInspectHandoff: () => void;
@@ -84,28 +86,12 @@ function ReasoningTrace({ text, t }: { text: string; t: I18nMessages }) {
   );
 }
 
-function ChangedFiles({ files, t }: { files: NonNullable<ChatMessage["changedFiles"]>; t: I18nMessages }) {
-  const row = (f: typeof files[number]) => <div key={f.path} className="mt-2">
-    <div className="flex justify-between gap-4">
-      <FileLink target={{path: f.path}}><code>{f.path}</code></FileLink>
-      {f.added !== null && f.removed !== null && <span>+{f.added} −{f.removed}</span>}
-    </div>
-    {f.patches?.length ? <details>
-      <summary className="cursor-pointer text-[var(--text-secondary)]">{t.viewDiff}</summary>
-      {f.patches.map((patch, index) => <pre key={index} className="my-2 max-h-96 overflow-auto rounded bg-[var(--bg-subtle)] p-2">
-        {patch.split("\n").map((line, number) => <span key={number} className={
-          line.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" :
-          line.startsWith("-") ? "text-red-600 dark:text-red-400" : undefined
-        }>{line}{"\n"}</span>)}
-      </pre>)}
-    </details> : <span className="text-[var(--text-tertiary)]">{f.patches ? t.noChanges : t.diffUnavailable}</span>}
-  </div>;
-  return <div className="my-2 rounded-md border border-[var(--border-subtle)] p-3 text-xs">
-    <span>{t.editedFiles(files.length)}　{files.every(f => f.added !== null && f.removed !== null) &&
-      ("+" + files.reduce((n, f) => n + (f.added ?? 0), 0) + " −" + files.reduce((n, f) => n + (f.removed ?? 0), 0))}</span>
-    {files.slice(0, 3).map(row)}
-    {files.length > 3 && <details className="mt-2"><summary className="cursor-pointer">{t.moreFiles(files.length - 3)}</summary>{files.slice(3).map(row)}</details>}
-  </div>;
+function ChangedFiles({files,t,occurrence}: {files:NonNullable<ChatMessage["changedFiles"]>;t:I18nMessages;occurrence?:string}) {
+  const render = (file:typeof files[number],index:number) =>
+    <div className="cv-change-row" key={index}><FileLink target={{path:file.path,change:file,...occurrence && {occurrence}}}>
+      <code>{file.path}</code></FileLink><span>{file.added !== null && file.removed !== null ? "+" + file.added + " −" + file.removed : "—"}</span></div>;
+  return <section className="cv-changes"><h4>{t.editedFiles(files.length)}</h4>{files.slice(0,3).map(render)}
+    {files.length > 3 && <details><summary>{t.moreFiles(files.length-3)}</summary>{files.slice(3).map(render)}</details>}</section>;
 }
 
 function PlanCard({plan,t}: {plan: NonNullable<ChatMessage["plan"]>; t:I18nMessages}) {
@@ -126,7 +112,7 @@ function ToolPlans({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages})
 }
 
 function ToolChanges({tools,t}: {tools:ToolActivity[] | undefined;t:I18nMessages}) {
-  return tools?.map((tool,i) => tool.changedFiles?.length ? <ChangedFiles key={i} files={tool.changedFiles} t={t}/> : null);
+  return tools?.map((tool,i) => tool.changedFiles?.length ? <ChangedFiles key={i} occurrence={tool.id ?? String(i)} files={tool.changedFiles} t={t}/> : null);
 }
 
 function Sources({sources,t}: {sources:ChatMessage["sources"];t:I18nMessages}) {
@@ -143,7 +129,7 @@ function ReviewCards({reviews, t}: {reviews: ChatMessage["reviews"]; t: I18nMess
     <FileLink target={{path:review.path}}>{review.path}</FileLink>
     <p className="my-1 whitespace-pre-wrap">{review.comment}</p>
     {review.selections.map((selection, i) => <div key={i} className="mt-2 border-l pl-2">
-      <FileLink target={{path:review.path, ...(selection.text ? {quote:selection.text} : {}),
+      <FileLink target={{path:review.path, side:selection.side, ...(selection.text ? {quote:selection.text} : {}),
         ...(selection.start !== undefined ? {line:Math.max(1, selection.start)} : {}), ...(selection.end ? {endLine:selection.end} : {})}}>
         {t.reviewSide[selection.side]} {selection.start}{selection.end !== undefined && selection.end !== selection.start ? "–" + selection.end : ""}
       </FileLink>
@@ -280,7 +266,7 @@ function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
   </MessageOrigin.Provider>;
 }
 
-export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
+export function ThreadView({ session, branchId,selectBranch, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -291,12 +277,9 @@ export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelat
   const historicalMessages = session.messages.filter((m) => m.historical);
   const liveMessages = session.messages.filter((m) => !m.historical);
   const branches = conversationBranches(historicalMessages);
-  const [selection,setSelection] = React.useState<{sessionId:string; id:string} | null>(null);
-  const recent = historicalMessages.slice().reverse().find(m => m.lineage?.branchId && !m.lineage.subsession)?.lineage?.branchId;
-  const branchId = selection?.sessionId === session.id ? selection.id : recent ?? branches[0]?.id;
   const jump = (id:string) => {
     if (!session.messages.some(m => m.id === id)) return;
-    if (!document.getElementById("timeline-" + id)) setSelection({sessionId:session.id,id:""});
+    if (!document.getElementById("timeline-" + id)) selectBranch("");
     requestAnimationFrame(() => {
       const element = document.getElementById("timeline-" + id);
       element?.focus({preventScroll:true}); element?.scrollIntoView({block:"center"});
@@ -344,12 +327,12 @@ export function ThreadView({ session, streaming, t, onInspectHandoff,onOpenRelat
   return (
     <JumpContext.Provider value={jump}>
     <RelatedContext.Provider value={onOpenRelated}>
-    <BrowseContext.Provider value={id => setSelection({sessionId:session.id,id})}>
+    <BrowseContext.Provider value={selectBranch}>
     <div className="flex-1 overflow-y-auto" data-testid="thread-view">
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
         {branches.length > 1 && <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">{t.browseBranch}
           <select aria-label={t.browseBranch} className="max-w-[75%] rounded border bg-[var(--bg-surface)] p-1"
-            value={branchId} onChange={e => setSelection({sessionId:session.id,id:e.target.value})}>
+            value={branchId} onChange={e => selectBranch(e.target.value)}>
             <option value="">{t.allBranches}</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.subsession ? t.subsession : b.id} · {b.sample}</option>)}
           </select>

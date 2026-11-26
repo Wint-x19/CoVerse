@@ -59,7 +59,7 @@ try {
   await store.upsertSession({...session,id:"partial",targetSessionId:"linked-fixture",title:"Partial fixture",messages:[
     {id:"available",role:"user",content:"Kept part",createdAt:at,historical:true},
   ],readOnly:[{code:"MISSING_ATTACHMENT",path:"full.log",message:"Missing companion full.log",severity:"warning"}]});
-  win = new BrowserWindow({show: false, webPreferences: {
+  win = new BrowserWindow({width:1280,height:820,show: false, webPreferences: {
     preload: path.join(ui, "dist/preload/index.cjs"), sandbox: true, contextIsolation: true, backgroundThrottling:false,
   }});
   await win.loadFile(path.join(ui, "dist/renderer/index.html"));
@@ -73,13 +73,13 @@ try {
           if (el) return el;
           await new Promise(resolve => setTimeout(resolve, 50));
         }
-        throw new Error("Missing " + selector);
+        throw new Error("Missing " + selector + " · " + document.body.innerText.slice(-1400));
       }
       (await find('[data-testid="session-item-' + sessionId + '"]')).click();
       (await find('[data-testid="message-' + id + '"] button[title="two lines.md"]')).click();
       const line = await find('[data-file-line="2"]');
       const value = line.textContent;
-      (await find('[role="dialog"] button[aria-label="Close"]')).click();
+      (await find('[data-testid="close-file-panel"]')).click();
       return value;
     }).toString() + ')(' + JSON.stringify(id) + ',' + JSON.stringify(session.id) + ')');
   }
@@ -114,9 +114,9 @@ try {
     if (!card?.textContent.includes("Recorded finding")) throw new Error("Missing review finding");
     card.querySelector("button").click();
     for (let i=0; i<100; i++) {
-      const line = document.querySelector('[role="dialog"] [data-file-line="2"]');
+      const line = document.querySelector('[data-testid="file-panel"] [data-file-line="2"]');
       if (line) {
-        document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+        document.querySelector('[data-testid="close-file-panel"]').click();
         return line.textContent;
       }
       await new Promise(resolve => setTimeout(resolve, 30));
@@ -125,13 +125,16 @@ try {
   }).toString() + ')()');
   assert.match(finding, /second line/);
   console.log("Verified file and line navigation from both message roles in Electron");
-  const diff = await win.webContents.executeJavaScript('(' + (() => {
-    const details = [...document.querySelectorAll('[data-testid="message-assistant-a"] details')].find(el => el.querySelector("pre"));
-    details.querySelector("summary").click();
-    if (!details.open) throw new Error("Diff remained collapsed");
-    return details.querySelector("pre").innerText;
+  const diff = await win.webContents.executeJavaScript('(' + (async () => {
+    document.querySelector('[data-testid="message-assistant-a"] .cv-change-row button').click();
+    for (let i=0; i<100; i++) {
+      const lines = document.querySelectorAll(".cv-diff .diff-cell code");
+      if (lines.length) return [...lines].map(line => line.textContent);
+      await new Promise(resolve => setTimeout(resolve,30));
+    }
+    throw new Error("Historical diff did not open");
   }).toString() + ')()');
-  assert.match(diff, /-deleted historical line\n\+added historical line/);
+  assert.deepEqual(diff, ["@@ -2 +2 @@","-deleted historical line","+added historical line"]);
   console.log("Verified opening the historical patch in Electron");
   const tool = await win.webContents.executeJavaScript('(' + (async () => {
     const row = document.querySelector('[data-testid="message-assistant-a"]');
@@ -150,7 +153,7 @@ try {
     if (!review.innerText.includes("Recheck this line")) throw new Error("Review body missing");
     review.querySelector(":scope > div button").click();
     for (let i=0; i<100; i++) {
-      const highlighted = document.querySelector('[role="dialog"] [data-file-line="2"]');
+      const highlighted = document.querySelector('[data-testid="file-panel"] [data-file-line="2"]');
       if (highlighted) return highlighted.textContent;
       await new Promise(resolve => setTimeout(resolve, 30));
     }
@@ -163,23 +166,23 @@ try {
       for (let i=0; i<200; i++) {
         const element = document.querySelector(selector);
         if (element) return element;
-        const problem = document.querySelector('[role="dialog"] [role="alert"]');
+        const problem = document.querySelector('[data-testid="file-panel"] [role="alert"]');
         if (problem) throw new Error(problem.textContent);
         await new Promise(resolve => setTimeout(resolve,30));
       }
       throw new Error("Missing " + selector);
     }
-    const close = () => document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+    const close = () => document.querySelector('[data-testid="close-file-panel"]').click();
     close();
     (await find('button[title="Screenshot"]')).click();
-    const image = await find('[role="dialog"] img');
+    const image = await find('[data-testid="file-panel"] img');
     await image.decode();
     if (image.naturalWidth !== 1) throw new Error("Image did not decode");
     close();
     (await find('button[title="review.pdf"]')).click();
     const first = await find('canvas[data-rendered-page="1"]');
     const size = first.height;
-    document.querySelector('[role="dialog"] nav button:last-child').click();
+    document.querySelector('[data-testid="file-panel"] nav button:last-child').click();
     const next = await find('canvas[data-rendered-page="2"]');
     return [size,next.height];
   }).toString() + ')()');
@@ -197,10 +200,10 @@ try {
     + "45k3MMT/jm3/8WE8DijI//FRAKOmgQAoABECAAUQrAAYDNDKXCJbkCSPWkDpr/++Agv/gIL/4E/22ACjrYEAUADxAQAFEKwAGAAc"
     + "Q/f0AGDyjCD+645f/7xkq/8ZKv/Gf/L7+RMSPSSEABxTu2uRu4+zgQC3iveBAfGCAabwgQM=", "base64"));
   const width = await win.webContents.executeJavaScript('(' + (async () => {
-    document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+    document.querySelector('[data-testid="close-file-panel"]').click();
     document.querySelector('button[title="Walkthrough"]').click();
     for (let i=0; i<100; i++) {
-      const doc = document.querySelector('[role="dialog"] .cv-prose');
+      const doc = document.querySelector('[data-testid="file-panel"] .cv-prose');
       if (doc?.querySelector("h1")?.textContent === "Acceptance") {
         doc.querySelector('button[title="clip.webm"]').click();
         break;
@@ -208,19 +211,19 @@ try {
       await new Promise(resolve => setTimeout(resolve,30));
     }
     for (let i=0; i<150; i++) {
-      const media = document.querySelector('[role="dialog"] video');
+      const media = document.querySelector('[data-testid="file-panel"] video');
       if (media?.videoWidth) return media.videoWidth;
       await new Promise(resolve => setTimeout(resolve,30));
     }
-    throw new Error("Recording did not load");
+    throw new Error("Recording did not load: " + (document.querySelector('[data-testid="file-panel"]')?.innerText ?? "panel closed"));
   }).toString() + ')()');
   assert.equal(width,48);
   console.log("Verified opening a generated WebM recording in Electron");
   const located = await win.webContents.executeJavaScript('(' + (async () => {
-    document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+    document.querySelector('[data-testid="close-file-panel"]').click();
     document.querySelector('button[title="missing.md"]').click();
     for (let i=0; i<100; i++) {
-      const button = [...document.querySelectorAll('[role="dialog"] button')].find(el => el.textContent === "选择本机文件");
+      const button = [...document.querySelectorAll('[data-testid="file-panel"] button')].find(el => el.textContent === "选择本机文件");
       if (button) {button.click();break;}
       await new Promise(resolve => setTimeout(resolve,30));
     }
@@ -233,7 +236,7 @@ try {
   }).toString() + ')()');
   assert.match(located,/first line\nsecond line/);
   const partial = await win.webContents.executeJavaScript('(' + (async () => {
-    document.querySelector('[role="dialog"] button[aria-label="Close"]').click();
+    document.querySelector('[data-testid="close-file-panel"]').click();
     document.querySelector('button[title="linked-fixture"]').click();
     for (let i=0;i<100 && !document.body.innerText.includes("Missing companion full.log");i++) {
       await new Promise(resolve => setTimeout(resolve,30));
@@ -241,6 +244,35 @@ try {
     return [document.body.innerText.includes("Missing companion full.log"),!!document.querySelector('[data-testid="composer"]')];
   }).toString() + ')()');
   assert.deepEqual(partial,[true,false]);
+  async function until(script) {
+    for (let i=0;i<100;i++) {
+      if (await win.webContents.executeJavaScript(script)) return;
+      await new Promise(resolve => setTimeout(resolve,30));
+    }
+    throw Error("Timed out: " + script);
+  }
+  const js = script => win.webContents.executeJavaScript(script);
+  await js("document.querySelector('[data-testid=session-item-test-session]').click()");
+  await js("document.querySelector('[data-testid=inspector-toggle-btn]').click()");
+  await until("!!document.querySelector('[data-testid=file-panel]')");
+  await js("document.querySelector('.cv-file-tabs > button').click()");
+  await js("document.querySelector('.cv-file-switch button:last-child').click()");
+  await until(`!!document.querySelector('.cv-tree button[title="review.pdf"]')`);
+  await js("document.querySelector('.cv-divider.left').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
+  await js("document.querySelector('.cv-divider.right').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))");
+  await until("window.coverse.getSettings().then(r => r.data.leftWidth === 256 && r.data.rightWidth === 436)");
+  win.setSize(860,580);
+  await until("document.querySelector('.cv-file-dock')?.dataset.overlay === 'true'");
+  win.webContents.setZoomFactor(1.25);
+  await until("document.querySelector('[data-testid=topbar]').getBoundingClientRect().right <= innerWidth + 1");
+  win.webContents.setZoomFactor(1);
+  win.setSize(1280,820);
+  await until("document.querySelector('.cv-file-dock')?.dataset.overlay === 'false'");
+  await win.webContents.loadFile(path.join(ui,"dist/renderer/index.html"));
+  await until("!!document.querySelector('[data-testid=session-item-test-session]')");
+  await js("document.querySelector('[data-testid=session-item-test-session]').click()");
+  await until("document.querySelector('.cv-divider.right')?.getAttribute('aria-valuenow') === '436'");
+  console.log("Verified directory browsing, keyboard resizing, compact layout, zoom and persisted widths");
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

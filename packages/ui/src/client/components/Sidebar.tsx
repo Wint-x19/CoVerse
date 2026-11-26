@@ -46,7 +46,7 @@ export function Sidebar({
   return (
     <aside
       data-testid="sidebar"
-      className="flex h-full w-[236px] shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] select-none"
+      className="flex h-full w-full shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] select-none"
     >
       {/* Header (draggable native desktop titlebar region) */}
       <div
