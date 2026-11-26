@@ -2,7 +2,7 @@ import { decompress } from "fzstd";
 import { isRecord, parseJsonLines, SessionError, type Artifact, type FileSet } from "@coverse/core";
 
 const rolloutName = /\.jsonl(?:\.zst)?$/;
-export const verifiedWriters = new Set(["0.167.0-alpha.4.1", "0.169.0-alpha.11.1", "0.169.1", "0.171.0-alpha.13"]);
+export const verifiedWriters = new Set(["0.167.0-alpha.4.1", "0.169.0-alpha.11.1", "0.169.1", "0.171.0-alpha.13", "0.171.0-alpha.13.2"]);
 export function primaryLog(files: FileSet) {
   const logs = files.filter(f => rolloutName.test(f.path) && !f.path.startsWith("ancestors/"));
   if (logs.length !== 1) throw new SessionError("AMBIGUOUS_INPUT", "/input", "Supply one selected Codex rollout");

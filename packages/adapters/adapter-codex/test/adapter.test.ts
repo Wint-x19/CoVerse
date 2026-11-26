@@ -151,7 +151,7 @@ it("rejects unverified writers, corrupt input and broken tool associations", () 
   expect(() => adapter.import(encode([header, response({ type: "function_call_output", call_id: "orphan", output: "x" })]))).toThrow("no preceding call");
 });
 it("imports the observed desktop writers and preserves injected page context separately from tool results", async () => {
-  for (const cli_version of ["0.167.0-alpha.4.1", "0.171.0-alpha.13"]) {
+  for (const cli_version of ["0.167.0-alpha.4.1", "0.171.0-alpha.13", "0.171.0-alpha.13.2"]) {
     const rows = [{ ...header, payload: { ...header.payload, cli_version } }, ...sample.slice(1)];
     const result = await adapter.import(encode(rows));
     expect(result.session.turns.some(turn => turn.role === "user")).toBe(true);
