@@ -76,7 +76,10 @@ for (const [from, to] of selected) {
     assert.equal(target.handoff?.materializationError, undefined);
     assert.ok(target.targetSessionId && !target.bundlePending, "Target CLI registration is pending");
     assert.equal(path.relative(target.cwd, s.cwd), "");
-    assert.deepEqual(target.messages.map(m => [m.role, m.content]), s.expectedMessages);
+    // Some native clients store readable reasoning in its own assistant item before the reply.
+    const dialogue = target.messages.filter(m => !(m.role === "assistant" && !m.content && m.reasoning &&
+      !m.tools?.length && !m.assets?.length && !m.error));
+    assert.deepEqual(dialogue.map(m => [m.role, m.content]), s.expectedMessages);
     assert.equal(hash(await fs.readFile(s.file)), s.sha256, "Source changed during conversion");
     if (to === "antigravity" && process.platform === "win32") {
       assert.equal(target.handoff.desktopError, undefined);
