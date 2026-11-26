@@ -143,7 +143,9 @@ export function ImportDialog({
       } catch (error) {
         const detail = error instanceof ApiClientError && error.diagnostic.path === "/cwd"
           ? t.locateProject
-          : error instanceof Error ? error.message : String(error);
+          : error instanceof ApiClientError && error.diagnostic.path && !error.diagnostic.path.startsWith("/")
+            ? `${error.diagnostic.path}: ${error.message}`
+            : error instanceof Error ? error.message : String(error);
         finished.push({item,issue:detail,target});
       }
     }

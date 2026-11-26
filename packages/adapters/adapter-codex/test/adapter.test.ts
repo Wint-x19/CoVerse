@@ -158,12 +158,17 @@ it("imports the observed desktop writers and preserves injected page context sep
   }
   const page = { type: "function_call_output", namespace: "agent", name: "codex_apps_open_page", output: "Sample page" };
   const snapshot = { ...page, name: "codex_apps_selected_page_part_1_of_1", output: "Selected page contents" };
+  const tabs = { ...page, name: "browser_tabs", output: "Open browser tabs" };
   for (const cli_version of ["0.169.0-alpha.11.1", "0.171.0-alpha.13"]) {
     const current = { ...header, payload: { ...header.payload, cli_version } };
-    const result = await adapter.import(encode([current, response(page), response(snapshot)]));
-    expect(result.session.turns.slice(-2).map(t => t.content[0])).toEqual([page, snapshot].map(p =>
+    const result = await adapter.import(encode([current, response(page), response(snapshot), response(tabs)]));
+    expect(result.session.turns.slice(-3).map(t => t.content[0])).toEqual([page, snapshot, tabs].map(p =>
       ({ type: "text", text: `Historical Codex page context (${p.name}):\n${p.output}` })));
-    expect(result.ledger.downgraded.map(item => item.code)).toEqual(["PAGE_CONTEXT_AS_HISTORY", "PAGE_CONTEXT_AS_HISTORY"]);
+    expect(result.ledger.downgraded.map(item => item.code)).toEqual([
+      "PAGE_CONTEXT_AS_HISTORY",
+      "PAGE_CONTEXT_AS_HISTORY",
+      "PAGE_CONTEXT_AS_HISTORY",
+    ]);
     for (const invalid of [{ ...page, name: "unrecognized" }, { ...page, namespace: "functions" }, { ...page, call_id: "" }]) {
       expect(() => adapter.import(encode([current, response(invalid)]))).toThrow();
     }

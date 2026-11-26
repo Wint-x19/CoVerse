@@ -110,7 +110,7 @@ Windows 的 Antigravity 项目 URI 可能保留 8.3 短路径。匹配时对请�
 
 ### Codex 桌面页面上下文可跨 writer 复用同一记录形状
 
-2026-11-22 在 `0.169.0-alpha.11.1` 的一份原生 rollout 中复现缺少调用 ID 的导入错误。此前仅在 `0.171.0-alpha.13` 中识别桌面注入的页面上下文。修复后按记录结构识别，两种 writer 共享回归用例，普通工具结果继续校验调用关联。[Codex 适配器](../packages/adapters/adapter-codex/src/index.ts)
+2026-11-22 在 `0.169.0-alpha.11.1` 的一份原生 rollout 中复现缺少调用 ID 的导入错误。此前仅在 `0.171.0-alpha.13` 中识别桌面注入的页面上下文。修复后按记录结构识别，两种 writer 共享回归用例，普通工具结果继续校验调用关联。2026-11-26 在 `0.169.0-alpha.11.1` 与 `0.171.0-alpha.13` 的本地 rollout 中复现并核实同一结构的 `browser_tabs` 记录，一并纳入已验证桌面上下文名称集合。[Codex 适配器](../packages/adapters/adapter-codex/src/index.ts)
 
 Windows 打包版从导入窗口引用了该原始会话，显示 295 条消息。关闭并重启后重新打开历史，重复导入仍指向同一会话，源文件 SHA-256 一致。另用真实 Codex CLI 建立含随机回执的测试会话，从桌面分别验证 Codex 原生续聊和转换到 Claude Code 后的续聊。退出 CoVerse 后直接运行 Claude CLI，使用目标会话 ID 再次取回相同回执。以上验证使用本机已登录的 CLI。
 
