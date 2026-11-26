@@ -7,6 +7,7 @@ import {tokenMetadata} from "./metadata.js";
 import { buildInjectionBundle, emptyLedger, isRecord, parseJsonLines, requireString, SessionError, validateToolLinks, type ContentBlock, type CSR, type FileSet, type JsonValue, type SessionAdapter, type Turn } from "@coverse/core";
 
 export const formatVersion = "rollout-2026-11-17";
+const desktopContextNames = new Set(["codex_apps_open_page", "codex_apps_selected_page_part_1_of_1", "browser_tabs"]);
 const operationalEvents = new Set(["task_started", "task_complete", "task_aborted", "turn_aborted", "token_count", "thread_settings_applied", "item_started", "item_completed", "agent_message_delta", "agent_reasoning_delta", "exec_command_begin", "exec_command_end", "exec_command_output_delta", "mcp_tool_call_begin", "mcp_tool_call_end", "patch_apply_begin", "patch_apply_end", "user_message", "agent_message", "agent_reasoning", "agent_reasoning_raw_content", "context_compacted", "session_configured"]);
 function load(files: FileSet) {
   const file = primaryLog(files);
@@ -115,9 +116,9 @@ const adapter: SessionAdapter = {
         }
         case "function_call_output": case "custom_tool_call_output":
           if (p.output === undefined) throw new SessionError("INVALID_INPUT", path, "Missing tool output");
-          // Desktop supplies page context without a preceding assistant tool call.
+          // Desktop supplies page and browser tab context without a preceding assistant tool call.
           if (p.type === "function_call_output" && p.call_id === undefined && p.namespace === "agent" &&
-              (p.name === "codex_apps_open_page" || p.name === "codex_apps_selected_page_part_1_of_1") &&
+              desktopContextNames.has(String(p.name)) &&
               typeof p.output === "string") {
             add("system", [{ type: "text", text: `Historical Codex page context (${p.name}):\n${p.output}` }], p, line, kind);
             ledger.downgraded.push({ code: "PAGE_CONTEXT_AS_HISTORY", path, reason: "Desktop page context is preserved as historical text" });
