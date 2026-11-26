@@ -1,6 +1,8 @@
 import * as React from "react";
 import type {I18nMessages} from "@/lib/i18n";
 
+export const ReadingPage = React.createContext<{page:number; remember:(page:number) => void} | null>(null);
+
 const PdfPreview = React.lazy(() => import("./PdfPreview"));
 export function imageMime(type: string) {
   return /^image\/(?:\*|png|jpeg|gif|webp|avif|bmp|x-icon)$/i.test(type);

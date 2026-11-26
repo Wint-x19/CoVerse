@@ -338,7 +338,7 @@ export class UiService {
     if (!session.targetSessionId) return null;
     const driver = (await this.ensureDriversConfigured()).get(session.agent);
     const args = driver.plugin.resumeArgs?.(session.targetSessionId);
-    return args ? {command: driver.executable?.command ?? driver.plugin.command, args} : null;
+    return args ? {command: driver.executable?.command ?? driver.plugin.command, args:[...driver.executable?.prefix ?? [],...args]} : null;
   }
 
   async getCapabilities(refresh = false): Promise<CapabilitiesResponse> {

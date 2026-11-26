@@ -21,7 +21,7 @@ import { ImportDialog } from "@/components/ImportDialog";
 import { InspectorDrawer } from "@/components/InspectorDrawer";
 import { SettingsView } from "@/components/SettingsView";
 import { Sidebar } from "@/components/Sidebar";
-import { ThreadView } from "@/components/ThreadView";
+import { ThreadView, type ReadingPosition } from "@/components/ThreadView";
 import { PaneDivider } from "@/components/PaneDivider";
 import {visibleBranch,conversationBranches} from "@/lib/branches";
 import { FileViewer, FilePanel } from "@/components/FileViewer";
@@ -76,6 +76,7 @@ export function App() {
   const rightWidth = Math.min(maxRight,resizing.right ?? settings.rightWidth);
   const overlay = windowWidth - (sidebarOpen ? leftWidth : 0) - rightWidth < 480;
   const fileOpener = React.useRef<HTMLElement | null>(null);
+  const [settingsDriver,setSettingsDriver] = React.useState("");
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -89,6 +90,11 @@ export function App() {
   const [convertOpen, setConvertOpen] = React.useState(false);
 
   // Streaming execution
+  const readingPositions = React.useRef(new Map<string,ReadingPosition>()).current;
+  const [drafts,setDrafts] = React.useState<Record<string,string>>({});
+  const draftKey = activeSessionId ?? "new";
+  const sendLock = React.useRef(false);
+  const [starting,setStarting] = React.useState(false);
   const [streaming, setStreaming] = React.useState<StreamingState | null>(null);
   const [bannerError, setBannerError] = React.useState<string | null>(null);
 
@@ -218,7 +224,7 @@ export function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
       if (event.key === "Escape" && (document.querySelector('[role="dialog"],[role="listbox"],[data-radix-popper-content-wrapper]'))) return;
-      if (event.key === "Escape" && !settingsOpen && (fileOpen || detailsOpen) && !paletteOpen && !importOpen && !convertOpen && !handoffOpen) {
+      if (event.key === "Escape" && !settingsOpen && activeSessionId && (fileOpen || detailsOpen) && !paletteOpen && !importOpen && !convertOpen && !handoffOpen) {
         event.preventDefault();
         if (fileOpen) hideFiles(); else setDetailsOpen(false);
         return;
@@ -228,6 +234,7 @@ export function App() {
         setPaletteOpen((prev) => !prev);
       } else if ((event.metaKey || event.ctrlKey) && event.key === ",") {
         event.preventDefault();
+        setSettingsDriver("");
         setSettingsOpen((prev) => !prev);
       } else if (
         event.key === "Escape" &&
@@ -241,7 +248,7 @@ export function App() {
         setSettingsOpen(false);
       } else if (
         event.key === "Escape" &&
-        streaming &&
+        streaming && streaming.sessionId === activeSessionId &&
         !convertOpen &&
         !handoffOpen &&
         !paletteOpen &&
@@ -254,7 +261,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [streaming, convertOpen, handoffOpen, paletteOpen, importOpen, settingsOpen,fileOpen,detailsOpen]);
+  }, [streaming, convertOpen, handoffOpen, paletteOpen, importOpen, settingsOpen,fileOpen,detailsOpen,activeSessionId]);
 
   const openDroppedFiles = React.useCallback(async (fileList: FileList | File[]) => {
     const list = Array.from(fileList);
@@ -284,10 +291,11 @@ export function App() {
     setConvertOpen(true);
   }, []);
 
-  const handleSelectLocalSession = React.useCallback((ref: LocalSessionRef) => {
+  const handleSelectLocalSession = React.useCallback((ref: LocalSessionRef, target?:string) => {
     setPendingSource({
       items: [{ path: ref.path, name: ref.title, size: ref.size }],
       paths: [ref.path],
+      ...target && {target},
       ...(ref.cwd ? { originalCwd: ref.cwd } : {}),
     });
     setConvertOpen(true);
@@ -394,6 +402,8 @@ export function App() {
   const handleDeleteSession = async (id: string) => {
     try {
       await api.deleteSession(id);
+      readingPositions.delete(id);
+      setDrafts(previous => {const next = {...previous}; delete next[id]; return next;});
       setSessions((prev) => prev.filter((item) => item.id !== id));
       if (activeSessionId === id) {
         setActiveSessionId(null);
@@ -454,6 +464,9 @@ export function App() {
   };
 
   const handleSend = async (prompt: string) => {
+    if (sendLock.current || !prompt.trim()) return;
+    sendLock.current = true;
+    setStarting(true);
     setBannerError(null);
     let target = activeSession;
 
@@ -468,6 +481,7 @@ export function App() {
         setActiveSessionId(target.id);
       }
 
+      setDrafts(previous => ({...previous,[draftKey]:""}));
       const optimisticUser = {
         id: `pending_${Date.now()}`,
         role: "user" as const,
@@ -517,12 +531,15 @@ export function App() {
             );
           } else if (event.type === "done") {
             upsertLocalSession(event.session);
-          } else if (event.type === "error" && event.session) {
-            upsertLocalSession(event.session);
+          } else if (event.type === "error") {
+            if (event.session) upsertLocalSession(event.session);
+            if (event.diagnostic.code !== "CANCELLED") setDrafts(previous => ({...previous,[sessionId]:previous[sessionId] || prompt}));
           }
         },
       );
     } catch (error) {
+      const restoreKey = target?.id ?? draftKey;
+      setDrafts(previous => ({...previous,[restoreKey]:previous[restoreKey] || prompt}));
       if (error instanceof ApiClientError) {
         setBannerError(`${error.diagnostic.code}: ${error.diagnostic.message}`);
       } else {
@@ -534,6 +551,8 @@ export function App() {
       }
     } finally {
       setStreaming(null);
+      setStarting(false);
+      sendLock.current = false;
     }
   };
 
@@ -555,6 +574,7 @@ export function App() {
       <FileViewer session={activeSession} messages={displayed} onOpen={showFiles}>
       {settingsOpen ? (
         <SettingsView
+          initialDriver={settingsDriver}
           settings={settings}
           adapters={adapters}
           drivers={drivers}
@@ -578,7 +598,7 @@ export function App() {
               onImportClick={() => setImportOpen(true)}
               onDeleteSession={handleDeleteSession}
               onOpenPalette={() => setPaletteOpen(true)}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenSettings={() => {setSettingsDriver("");setSettingsOpen(true);}}
             /><PaneDivider side="left" width={leftWidth} min={170} max={maxLeft} label={t.resizeLeft}
               onResize={left => setResizing({left})} onSave={leftWidth => {setResizing({});saveLayout({leftWidth});}}/></div>
           )}
@@ -588,6 +608,7 @@ export function App() {
               session={activeSession}
               sidebarOpen={sidebarOpen}
               inspectorOpen={fileOpen}
+              detailsOpen={detailsOpen}
               onDetails={() => setDetailsOpen(!detailsOpen)}
               t={t}
               onToggleSidebar={() => saveLayout({leftOpen:!sidebarOpen})}
@@ -614,6 +635,7 @@ export function App() {
 
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
               <main className="relative flex min-w-0 flex-1 flex-col">
+                <div className="flex min-h-0 flex-1 flex-col" inert={detailsOpen}>
                 {showEmptyStage ? (
                   <div
                     data-testid="empty-stage"
@@ -628,9 +650,11 @@ export function App() {
                       drivers={drivers}
                       model={currentModel}
                       cwd={currentCwd}
-                      running={isRunningActive}
+                      value={drafts[draftKey] ?? ""} onDraft={value => setDrafts(previous => ({...previous,[draftKey]:value}))}
+                      busy={starting || Boolean(streaming)} running={isRunningActive}
                       t={t}
                       onAgentChange={handleAgentChange}
+                      onConfigure={() => {setSettingsDriver(currentAgent);setSettingsOpen(true);}}
                       onModelChange={handleModelChange}
                       onCwdChange={handleCwdChange}
                       onSend={handleSend}
@@ -651,7 +675,7 @@ export function App() {
                 ) : (
                   <>
                     <ThreadView
-                      session={activeSession!} branchId={branchId} selectBranch={id => setBranches(prev => ({...prev,[activeSession!.id]:id}))}
+                      session={activeSession!} positions={readingPositions} branchId={branchId} selectBranch={id => setBranches(prev => ({...prev,[activeSession!.id]:id}))}
                       streaming={
                         isRunningActive && streaming ? streaming : null
                       }
@@ -670,10 +694,12 @@ export function App() {
                         drivers={drivers}
                         model={currentModel}
                         cwd={currentCwd}
-                        running={isRunningActive}
+                        value={drafts[draftKey] ?? ""} onDraft={value => setDrafts(previous => ({...previous,[draftKey]:value}))}
+                      busy={starting || Boolean(streaming)} running={isRunningActive}
                         t={t}
                         onAgentChange={handleAgentChange}
-                        onModelChange={handleModelChange}
+                        onConfigure={() => {setSettingsDriver(currentAgent);setSettingsOpen(true);}}
+                      onModelChange={handleModelChange}
                         onCwdChange={handleCwdChange}
                         onSend={handleSend}
                         onStop={handleStop}
@@ -682,11 +708,12 @@ export function App() {
                     </div>
                   </>
                 )}
-              <InspectorDrawer
+              </div>
+              <InspectorDrawer key={activeSessionId ?? "none"}
                 open={detailsOpen}
                 session={activeSession}
                 t={t}
-                onClose={() => setDetailsOpen(false)}
+                onClose={() => {setDetailsOpen(false); requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-testid=composer-input]")?.focus());}}
                 onSessionUpdated={upsertLocalSession}
               /></main>
               {activeSession && fileOpen && <div data-overlay={overlay} className="cv-file-dock" style={{width:rightWidth}}>
@@ -705,6 +732,7 @@ export function App() {
       <ImportDialog
         open={importOpen}
         adapters={adapters}
+        onStored={upsertLocalSession}
         onImported={handleConvertedOrHandedOff}
         t={t}
         onOpenChange={setImportOpen}
@@ -747,7 +775,7 @@ export function App() {
         onImport={() => setImportOpen(true)}
         onHandoff={() => setHandoffOpen(true)}
         onToggleInspector={() => setDetailsOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => {setSettingsDriver("");setSettingsOpen(true);}}
       />
       </FileViewer>
     </TooltipProvider>

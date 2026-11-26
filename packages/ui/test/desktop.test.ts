@@ -53,6 +53,7 @@ function createFakeDriverPlugin(id: string): DriverPlugin {
   return {
     id,
     command: "node",
+    resumeArgs: id => ["--resume",id],
     verifiedVersions: ["fake 1.0.0"],
     invocation({ prompt, session, model }) {
       const script = [
@@ -784,6 +785,7 @@ describe("CoVerse M4 desktop IPC & service", () => {
     expect(conv.ok).toBe(true);
     if (!conv.ok) return;
 
+    expect(await invoke(IPC_CHANNELS.nativeResume, conv.data.id)).toEqual({ok:true,data:null});
     // 1. First turn injects bundle
     const run1 = await invoke(IPC_CHANNELS.runStart, "r1", {
       sessionId: conv.data.id,
@@ -796,6 +798,8 @@ describe("CoVerse M4 desktop IPC & service", () => {
     const done1 = events1.find((e) => e.type === "done");
     expect(done1?.type).toBe("done");
     if (done1?.type === "done") {
+      expect(await invoke(IPC_CHANNELS.nativeResume, conv.data.id)).toEqual({ok:true,
+        data:{command:process.execPath,args:["--resume",done1.session.targetSessionId]}});
       expect(done1.session.bundlePending).toBe(false);
       expect(done1.session.targetSessionId).toBe("11111111-2222-4333-8444-555555555555");
       expect(done1.session.messages.at(-1)?.content).toBe("echo:claude-code:injected:claude-sonnet-4-6");

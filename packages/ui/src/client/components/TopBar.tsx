@@ -12,6 +12,7 @@ interface TopBarProps {
   sidebarOpen: boolean;
   inspectorOpen: boolean;
   onDetails: () => void;
+  detailsOpen:boolean;
   t: I18nMessages;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
@@ -21,7 +22,7 @@ interface TopBarProps {
 export function TopBar({
   session,
   sidebarOpen,
-  inspectorOpen, onDetails,
+  inspectorOpen, onDetails, detailsOpen,
   t,
   onToggleSidebar,
   onToggleInspector,
@@ -41,11 +42,9 @@ export function TopBar({
       )}
     >
       <div className="cv-no-drag flex min-w-0 items-center gap-2">
-        {(
-          <Button variant="ghost" size="icon" aria-label={t.sessionsLabel} aria-expanded={sidebarOpen} onClick={onToggleSidebar}>
+        <Button variant="ghost" size="icon" aria-label={t.sessionsLabel} aria-expanded={sidebarOpen} onClick={onToggleSidebar}>
             <PanelLeft className="h-3.5 w-3.5" />
-          </Button>
-        )}
+        </Button>
 
         {session ? (
           <div className="flex min-w-0 items-center gap-2 text-[13px]">
@@ -72,16 +71,16 @@ export function TopBar({
             type="button"
             onClick={onDetails}
             data-testid="ledger-pill"
-            aria-label={t.ledger}
+            aria-label={t.detailsTitle} aria-expanded={detailsOpen}
             className={cn(
               "inline-flex h-7 items-center gap-2 rounded-md border px-2 font-mono text-[11.5px] transition-colors cursor-pointer",
-              inspectorOpen
+              detailsOpen
                 ? "border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text-primary)]"
                 : "border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]",
             )}
           >
             <span>{t.detailsTitle}</span>
-            {session.bundlePending && !handoff.desktopSessionId && <span>{t.pendingSync}</span>}
+            {session.bundlePending && !handoff.desktopSessionId && <span>{t.ready}</span>}
             {handoff.desktopError && <span>{t.desktopPending}</span>}
             {(["dropped","downgraded","approximated"] as const).filter(kind => handoff.losses[kind]>0).map(kind =>
               <span key={kind}>{t[kind]} {handoff.losses[kind]}</span>)}

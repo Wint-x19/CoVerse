@@ -22,7 +22,7 @@
   --border-strong: rgba(15, 17, 21, 0.16);
   --text-primary: #0f1115;
   --text-secondary: #5c6370;
-  --text-tertiary: #8c93a0;
+  --text-tertiary: #626b77;
   --btn-primary-bg: #111318;
   --btn-primary-fg: #ffffff;
   --btn-primary-hover: #252932;
@@ -53,7 +53,7 @@
   --border-strong: rgba(255, 255, 255, 0.15);
   --text-primary: #f7f8f8;
   --text-secondary: #8a8f98;
-  --text-tertiary: #5b6069;
+  --text-tertiary: #9198a3;
   --btn-primary-bg: #f7f8f8;
   --btn-primary-fg: #08090a;
   --btn-primary-hover: #ffffff;
@@ -258,3 +258,26 @@ body,
 .diff-pair>.diff-meta {grid-column:1/-1;}
 .diff-pair .diff-numbers {width:4ch;}
 button:focus-visible,summary:focus-visible,[role=separator]:focus-visible {outline:2px solid var(--accent-text);outline-offset:-2px;}
+
+.cv-details {position:absolute;inset:0;z-index:10;overflow:auto;background:var(--bg-app);font-size:13px;}
+.cv-details-inner {max-width:780px;margin:auto;padding:24px clamp(16px,4%,44px);}
+.cv-details h2 {font-size:20px;font-weight:600;}
+.cv-resume {padding:18px;margin:18px 0;border:1px solid var(--border-subtle);border-radius:10px;background:var(--bg-surface);}
+.cv-resume h3 {font-weight:600;font-size:15px;margin-bottom:10px;}
+.cv-resume>div {margin:12px 0;}
+.cv-resume p {color:var(--text-secondary);overflow-wrap:anywhere;margin:3px 0;}
+.cv-resume code {user-select:all;color:var(--text-primary);}
+
+.cv-jump {position:absolute;bottom:10px;left:50%;transform:translateX(-50%);border:1px solid var(--border-strong);border-radius:16px;background:var(--bg-surface);color:var(--text-primary);padding:5px 12px;font-size:12px;cursor:pointer;}
+
+.cv-options {padding:8px 10px;border:1px solid var(--border-subtle);border-radius:6px;font-size:12px;}
+.cv-options summary {cursor:pointer;color:var(--text-secondary);}
+.cv-options[open]>*+* {margin-top:8px;}
+.cv-batch-result {display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,1fr) auto;gap:10px;align-items:center;border-bottom:1px solid var(--border-subtle);padding:6px 0;font-size:12px;overflow-wrap:anywhere;}
+.cv-batch-result small {display:block;color:var(--text-secondary);}
+
+.cv-source-line {display:inline;line-height:1.75;}
+.cv-source-line::before {content:attr(data-number);display:inline-block;min-width:4ch;text-align:right;margin-right:1.5ch;color:var(--text-secondary);user-select:none;}
+.cv-file-body:focus-visible {outline:1px solid var(--accent-text);outline-offset:-1px;}
+
+.cv-details h2:focus {outline:none;}

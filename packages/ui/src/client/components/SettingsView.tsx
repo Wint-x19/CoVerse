@@ -15,6 +15,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 interface SettingsViewProps {
+  initialDriver?: string;
   settings: AppSettings;
   adapters: AdapterSummary[];
   drivers: DriverSummary[];
@@ -28,7 +29,7 @@ interface SettingsViewProps {
 type SettingsTab = "general" | "adapters" | "drivers";
 
 export function SettingsView({
-  settings,
+  settings, initialDriver,
   adapters,
   drivers,
   refreshing,
@@ -37,7 +38,7 @@ export function SettingsView({
   onUpdateSettings,
   onRefreshCapabilities,
 }: SettingsViewProps) {
-  const [tab, setTab] = React.useState<SettingsTab>("general");
+  const [tab, setTab] = React.useState<SettingsTab>(initialDriver ? "drivers" : "general");
   const [execDrafts, setExecDrafts] = React.useState<Record<string, string>>(settings.driverExecutables);
 
   React.useEffect(() => {
@@ -53,6 +54,10 @@ export function SettingsView({
     catch (error) { setFailure(error instanceof Error ? error.message : String(error)); }
     finally { setSaving(false); }
   }
+
+  React.useEffect(() => {
+    if (initialDriver) document.querySelector<HTMLElement>('[data-testid="driver-card-' + initialDriver + '"] input')?.focus();
+  },[initialDriver]);
 
   const toggleAdapter = async (id: string, currentlyEnabled: boolean) => {
     const next = new Set(settings.disabledAdapters);

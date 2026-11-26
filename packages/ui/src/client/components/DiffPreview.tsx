@@ -15,7 +15,8 @@ export function DiffPreview({change, target, t}: {change:RecordedFileChange; tar
     if (!target.line && !target.quote) return selected;
     const cited = target.quote?.replace(/\r\n?/g,"\n").trimEnd().split("\n");
     const candidates = lines.filter(row => row[side] !== undefined && (!cited || row.text.slice(1).includes(cited[0]!)));
-    const first = candidates.find(row => row[side] === target.line) ?? (cited && candidates.length === 1 ? candidates[0] : undefined);
+    const exact = candidates.filter(row => row[side] === target.line);
+    const first = exact.length === 1 ? exact[0] : cited && candidates.length === 1 ? candidates[0] : undefined;
     if (!first) return selected;
     const start = lines.indexOf(first);
     const count = cited?.length ?? Math.max(1, (target.endLine ?? target.line ?? 1) - (target.line ?? 1) + 1);
@@ -28,10 +29,12 @@ export function DiffPreview({change, target, t}: {change:RecordedFileChange; tar
     }
     return selected.size === count ? selected : new Set<DiffLine>();
   },[lines,side,target]);
-  const [limit, setLimit] = React.useState(500);
-  const firstSelected = lines.findIndex(row => selections.has(row));
-  const visible = lines.slice(0,Math.max(limit, firstSelected + selections.size + 1));
-  React.useEffect(() => { root.current?.querySelector("[data-selected]")?.scrollIntoView({block:"center"}); }, [selections,split]);
+  const pageSize = 500;
+  const anchor = Math.max(0,lines.findIndex(row => selections.has(row)));
+  const [offset,setOffset] = React.useState(Math.floor(anchor/pageSize)*pageSize);
+  React.useLayoutEffect(() => { setOffset(Math.floor(anchor/pageSize)*pageSize); },[anchor,target]);
+  const visible = lines.slice(offset,offset+pageSize);
+  React.useEffect(() => { root.current?.querySelector("[data-selected]")?.scrollIntoView({block:"center"}); }, [selections,split,offset]);
   function cell(row?: DiffLine, half?: "oldLine" | "newLine") {
     if (!row) return <div className="diff-cell"/>;
     return <div className={'diff-cell diff-' + row.kind} data-selected={selections.has(row) && (!half || half === side) ? true : undefined}>
@@ -47,6 +50,10 @@ export function DiffPreview({change, target, t}: {change:RecordedFileChange; tar
     {(target.line || target.quote) && !selections.size && <aside>{t.quoteMissing} <code>{target.quote}</code></aside>}
     {split ? pairDiffLines(visible).map((pair,i) => <div className="diff-pair" key={i}>{pair.meta ? cell(pair.meta) : <>{cell(pair.left,"oldLine")}{cell(pair.right,"newLine")}</>}</div>)
       : visible.map((row,i) => <React.Fragment key={i}>{cell(row)}</React.Fragment>)}
-    {visible.length < lines.length && <button type="button" className="cv-action" onClick={() => setLimit(visible.length + 500)}>+ {Math.min(500,lines.length-visible.length)} ↓</button>}
+    {lines.length > pageSize && <nav className="cv-diff-options">
+      <button disabled={offset === 0} onClick={() => setOffset(offset-pageSize)}>{t.previousPage}</button>
+      <span>{Math.floor(offset/pageSize)+1} / {Math.ceil(lines.length/pageSize)}</span>
+      <button disabled={offset+pageSize >= lines.length} onClick={() => setOffset(offset+pageSize)}>{t.nextPage}</button>
+    </nav>}
   </div>;
 }

@@ -1,3 +1,4 @@
+import * as React from "react";
 import { ArrowRight, FileUp, Link2, Plus, Search, Settings, Trash2 } from "lucide-react";
 import type { DriverSummary, UiSession } from "../../shared/types.js";
 import type { I18nMessages } from "@/lib/i18n";
@@ -43,6 +44,7 @@ export function Sidebar({
   onOpenPalette,
   onOpenSettings,
 }: SidebarProps) {
+  const [collapsed,setCollapsed] = React.useState<Set<string>>(new Set());
   return (
     <aside
       data-testid="sidebar"
@@ -103,19 +105,23 @@ export function Sidebar({
             <Search className="h-3 w-3" />
             <span>{t.search}</span>
           </span>
-          <kbd className="font-mono text-[10.5px] text-[var(--text-tertiary)]">⌘K</kbd>
+          <kbd className="font-mono text-[10.5px] text-[var(--text-tertiary)]">{api.platform === "darwin" ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       </div>
 
       {/* Session list */}
       <ScrollArea className="flex-1 px-2 py-1">
-        <div className="flex flex-col gap-0.5" role="list" aria-label="Sessions" data-testid="session-list">
+        <div className="flex flex-col gap-0.5" role="list" aria-label={t.sessionsLabel} data-testid="session-list">
           {groupByProject(sessions).map(group => (
             <div key={group.directory}>
-              <div title={group.directory} className="truncate px-2 pb-1 pt-3 font-mono text-[10.5px] text-[var(--text-tertiary)]">
-                {group.directory ? shortPath(group.directory) : t.unknownProject}
-              </div>
-              {group.sessions.map((session) => {
+              <button type="button" aria-expanded={!collapsed.has(group.directory)} onClick={() => setCollapsed(previous => {
+                const next = new Set(previous);
+                if (next.has(group.directory)) next.delete(group.directory); else next.add(group.directory);
+                return next;
+              })} title={group.directory} className="truncate px-2 pb-1 pt-3 font-mono text-[10.5px] text-[var(--text-tertiary)]">
+                {collapsed.has(group.directory) ? "▸ " : "▾ "}{group.directory ? shortPath(group.directory) : t.unknownProject}
+              </button>
+              {!collapsed.has(group.directory) && group.sessions.map((session) => {
                 const active = session.id === activeSessionId;
                 const running = session.id === runningSessionId;
                 return (
@@ -148,19 +154,20 @@ export function Sidebar({
                         <Link2 className="h-2.5 w-2.5 text-[var(--text-tertiary)]" aria-label="Reference" />
                       )}
                     </div>
-                    <span className="min-w-0 flex-1 truncate">{session.title}</span>
+                    <button type="button" title={session.title + " · " + session.cwd} aria-current={active ? "page" : undefined}
+                      className="min-w-0 flex-1 truncate text-left" onClick={event => {event.stopPropagation();onSelectSession(session.id);}}>{session.title}</button>
                     <span className="shrink-0 font-mono text-[10.5px] text-[var(--text-tertiary)] group-hover:hidden">
-                      {relativeTime(session.updatedAt)}
+                      {relativeTime(session.updatedAt,t.locale)}
                     </span>
                     <button
                       type="button"
-                      aria-label={`Delete ${session.title}`}
+                      aria-label={t.removeAdapter + " " + session.title}
                       data-testid={`delete-session-${session.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onDeleteSession(session.id);
+                        if (window.confirm(t.removeLocal)) onDeleteSession(session.id);
                       }}
-                      className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] group-hover:flex cursor-pointer"
+                      className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] group-hover:flex group-focus-within:flex cursor-pointer"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

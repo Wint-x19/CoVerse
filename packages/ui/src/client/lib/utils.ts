@@ -32,12 +32,12 @@ export function shortPath(value: string, maxSegments = 2): string {
   return `…/${parts.slice(-maxSegments).join("/")}`;
 }
 
-export function relativeTime(iso: string): string {
+export function relativeTime(iso: string, locale = "en"): string {
   const deltaSec = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
-  if (deltaSec < 60) return "now";
-  if (deltaSec < 3600) return `${Math.floor(deltaSec / 60)}m`;
-  if (deltaSec < 86400) return `${Math.floor(deltaSec / 3600)}h`;
-  return `${Math.floor(deltaSec / 86400)}d`;
+  if (deltaSec < 60) return locale === "zh-CN" ? "刚刚" : "now";
+  const [unit,size] = deltaSec < 3600 ? ["minute",60] as const :
+    deltaSec < 86400 ? ["hour",3600] as const : ["day",86400] as const;
+  return new Intl.RelativeTimeFormat(locale,{style:"narrow"}).format(-Math.floor(deltaSec/size),unit);
 }
 
 export async function filesToPayloads(fileList: FileList | File[]): Promise<UploadedFilePayload[]> {

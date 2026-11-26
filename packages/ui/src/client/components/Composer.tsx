@@ -20,12 +20,16 @@ interface ComposerProps {
   cwd: string;
   running: boolean;
   centered?: boolean;
+  value:string;
+  onDraft:(value:string) => void;
+  busy:boolean;
   t: I18nMessages;
   onAgentChange: (agent: string) => void;
   onModelChange: (model: string) => void;
   onCwdChange: (cwd: string) => void;
   onSend: (prompt: string) => void;
   onStop: () => void;
+  onConfigure:() => void;
   onImportClick: () => void;
 }
 
@@ -36,16 +40,15 @@ export function Composer({
   model,
   cwd,
   running,
-  centered = false,
+  centered = false, value, onDraft, busy,
   t,
   onAgentChange,
   onModelChange,
   onCwdChange,
   onSend,
-  onStop,
+  onStop,onConfigure,
   onImportClick,
 }: ComposerProps) {
-  const [value, setValue] = React.useState("");
   const [cwdDraft, setCwdDraft] = React.useState(cwd);
   const [cwdOpen, setCwdOpen] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -61,11 +64,10 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }, [value]);
 
+  const currentDriver = drivers.find((d) => d.id === agent);
+  const canSend = Boolean(value.trim() && !busy && currentDriver?.available);
   const submit = () => {
-    const trimmed = value.trim();
-    if (!trimmed || running) return;
-    setValue("");
-    onSend(trimmed);
+    if (canSend) onSend(value);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -75,7 +77,6 @@ export function Composer({
     }
   };
 
-  const currentDriver = drivers.find((d) => d.id === agent);
   const models = currentDriver?.models ?? [];
 
   return (
@@ -86,15 +87,18 @@ export function Composer({
         centered ? "max-w-[680px]" : "max-w-[740px]",
       )}
     >
+      {currentDriver && !currentDriver.available && <div className="flex items-center justify-between gap-2 border-b px-3 py-2 text-xs">
+        <span>{agentLabel(agent)} CLI · {t.unavailable}</span><button type="button" className="cv-action" onClick={onConfigure}>{t.driverConfig}</button>
+      </div>}
       <textarea
         ref={textareaRef}
         rows={centered ? 3 : 2}
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => onDraft(event.target.value)}
         onKeyDown={handleKeyDown}
         disabled={running}
         placeholder={t.messageAgent(agentLabel(agent))}
-        aria-label="Prompt"
+        aria-label={t.messageAgent(agentLabel(agent))}
         data-testid="composer-input"
         className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none disabled:opacity-60"
       />
@@ -227,7 +231,7 @@ export function Composer({
               type="button"
               variant="secondary"
               size="icon"
-              aria-label="Stop"
+              aria-label={t.stopMessage}
               data-testid="composer-stop-btn"
               onClick={onStop}
               className="h-7 w-7 rounded-md"
@@ -238,9 +242,9 @@ export function Composer({
             <Button
               type="button"
               size="icon"
-              aria-label="Send"
+              aria-label={t.sendMessage}
               data-testid="composer-send-btn"
-              disabled={!value.trim() || (currentDriver !== undefined && !currentDriver.available)}
+              disabled={!canSend}
               onClick={submit}
               className="h-7 w-7 rounded-md"
             >

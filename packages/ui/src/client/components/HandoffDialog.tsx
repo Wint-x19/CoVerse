@@ -49,7 +49,7 @@ export function HandoffDialog({
       (d) => d.available && d.id !== session.agent && enabledExport.some((a) => a.id === d.id),
     );
     const anyOther = enabledExport.find((a) => a.id !== session.agent);
-    setTo(availableOther?.id ?? anyOther?.id ?? enabledExport[0]?.id ?? session.agent);
+    setTo(availableOther?.id ?? anyOther?.id ?? enabledExport[0]?.id ?? "");
   }, [open, session, drivers, adapters]);
 
   if (!session) return null;
@@ -59,7 +59,7 @@ export function HandoffDialog({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!to) return;
+    if (!to || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -83,8 +83,8 @@ export function HandoffDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="handoff-dialog" className="max-w-[440px]">
+    <Dialog open={open} onOpenChange={next => {if (!submitting) onOpenChange(next);}}>
+      <DialogContent data-testid="handoff-dialog" hideClose={submitting} className="max-h-[90vh] max-w-[460px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t.handoffSession}</DialogTitle>
         </DialogHeader>
@@ -132,6 +132,8 @@ export function HandoffDialog({
             </Select>
           </div>
 
+          <p className="text-xs text-[var(--text-secondary)]">{materialize && targetDriver?.available ? t.expectedNative : t.expectedBundle}</p>
+          <details className="cv-options" open={error?.path === "/cwd" || undefined}><summary>{t.moreOptions}</summary>
           <div className="flex items-center gap-1.5">
             <Input
               value={cwd}
@@ -176,6 +178,7 @@ export function HandoffDialog({
             </label>
           )}
 
+          </details>
           {to === "antigravity" && materialize && targetDriver?.available && <p className="text-xs text-[var(--text-secondary)]">{t.desktopHint}</p>}
           {error && (
             <div
@@ -192,7 +195,7 @@ export function HandoffDialog({
           )}
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="ghost" disabled={submitting} onClick={() => onOpenChange(false)}>
               {t.cancel}
             </Button>
             <Button type="submit" disabled={submitting || !to} data-testid="handoff-submit-btn">

@@ -10,9 +10,10 @@ import { FileText, Folder, GitCompareArrows, PanelRightClose, X } from "lucide-r
 import {DiffPreview} from "./DiffPreview";
 import type {RecordedFileChange} from "@coverse/core";
 import type {RecordedAsset} from "@coverse/core";
-import {AssetPreview, imageMime} from "./AssetPreview";
+import {AssetPreview, imageMime, ReadingPage} from "./AssetPreview";
 
 type Target = FileReference & {scope?: FileScope; asset?: RecordedAsset; messageId?: string; documentUri?:string; change?: RecordedFileChange; side?: string; occurrence?:string};
+const RestorePosition = React.createContext(false);
 const FileContext = React.createContext<(target: Target) => void>(() => {});
 export const MessageOrigin = React.createContext<string | undefined>(undefined);
 
@@ -109,7 +110,7 @@ function Preview({sessionId, target, open, t}: {
   if (result.kind === "directory") return <ul>{result.entries.map(entry => <li key={entry}>
     <button type="button" className="cursor-pointer hover:underline" onClick={() =>
       open({path: result.path + "/" + entry,scope:target.scope ?? "project"})}>{entry}</button></li>)}</ul>;
-  if (target.documentUri && /\.md$/i.test(target.path) && !target.line && !target.quote)
+  if (/\.md$/i.test(target.path) && !target.line && !target.quote)
     return <div className="cv-prose"><MessageMarkdown text={result.content}/></div>;
   return <>{pickedPath && <p className="mb-2 break-all text-xs text-[var(--text-secondary)]">{pickedPath}</p>}
     <HistoricalText text={result.content} target={target} t={t}/></>;
@@ -117,25 +118,31 @@ function Preview({sessionId, target, open, t}: {
 
 function HistoricalText({text,target,t}: {text:string;target:Target;t:I18nMessages}) {
   const selected = React.useRef<HTMLDivElement>(null);
+  const restoring = React.useContext(RestorePosition);
   const lines = text.split(/\r\n|\n|\r/);
   const located = target.quote ? locateQuote(text, target.quote, target.line) : target.line;
-  React.useEffect(() => { selected.current?.scrollIntoView({block:"center"}); }, [text,located]);
+  React.useEffect(() => { if (located && !restoring) selected.current?.scrollIntoView({block:"center"}); }, [text,located,target,restoring]);
   const line = located ?? 1;
   // Keep very large text previews selectable without mounting a DOM element for each line.
   const index = Math.min(line - 1, lines.length - 1);
   const count = target.quote && located ? target.quote.trimEnd().split(/\r\n|\n|\r/).length :
     Math.max(1,(target.endLine ?? line) - line + 1);
   const end = Math.min(lines.length,index + count);
+  function renderLines(start:number,stop:number) {
+    if (lines.length > 4000) return <pre>{lines.slice(start,stop).join("\n") || " "}</pre>;
+    return lines.slice(start,stop).map((value,i) =>
+      <span className="cv-source-line" data-number={start+i+1} key={start+i}>{value || " "}{i+start+1 < stop ? "\n" : ""}</span>);
+  }
   return <div className="font-mono text-xs whitespace-pre">
     {line > lines.length && <p role="status">{t.missingLine(line, lines.length)}</p>}
     {target.quote && located === undefined && <aside className="my-2 whitespace-pre-wrap border-l pl-2">
       <p role="status">{t.quoteMissing}</p><pre>{target.quote}</pre>
     </aside>}
-    {index > 0 && <pre>{lines.slice(0, index).join("\n") + "\n"}</pre>}
+    {index > 0 && renderLines(0,index)}
     <div ref={selected} data-file-line={index + 1} className={located ? "bg-[var(--bg-hover)]" : undefined}>
-      {located && <span className="mr-2 select-none text-[var(--accent-text)]">{index + 1}</span>}{lines.slice(index,end).join("\n") || " "}
+      {renderLines(index,end)}
     </div>
-    {end < lines.length && <pre>{lines.slice(end).join("\n")}</pre>}
+    {end < lines.length && renderLines(end,lines.length)}
   </div>;
 }
 
@@ -147,6 +154,7 @@ const WorkspaceContext = React.createContext<{
   activate:(key:string) => void;
   closeTab:(key:string) => void;
   open:(target:Target, parent?:Target) => void;
+  pages:Map<string,number>;
   scroll:Map<string,number>;
 } | null>(null);
 
@@ -160,6 +168,7 @@ export function FileViewer({session, children, onOpen, messages}: {
   session:UiSession | null; children:React.ReactNode; onOpen:() => void; messages:ChatMessage[];
 }) {
   const [bySession,setBySession] = React.useState<Record<string,TabState>>({});
+  const pages = React.useRef(new Map<string,number>()).current;
   const scroll = React.useRef(new Map<string,number>()).current;
   const id = session?.id ?? "";
   const state = bySession[id] ?? EMPTY_TABS;
@@ -186,33 +195,42 @@ export function FileViewer({session, children, onOpen, messages}: {
         try { uri = new URL(request.path,documentUri).href; } catch { /* Plain project paths also appear in archives. */ }
       }
       const origin = request.messageId ?? parent?.messageId;
-      const index = session.messages.findIndex(message => message.id === origin);
-      const messages = index < 0 ? session.messages.slice().reverse() :
-        [...session.messages.slice(0,index+1).reverse(),...session.messages.slice(index+1)];
-      const asset = messages.flatMap(m => m.assets ?? []).find(a => a.sourceUri && (a.sourceUri === uri || a.sourceUri === request.path));
+      const index = messages.findIndex(message => message.id === origin);
+      const ordered = index < 0 ? messages.slice().reverse() :
+        [...messages.slice(0,index+1).reverse(),...messages.slice(index+1)];
+      const asset = ordered.flatMap(m => [...m.assets ?? [],...m.tools?.flatMap(tool => tool.results?.flatMap(result => result.assets ?? []) ?? []) ?? []]).find(a => a.sourceUri && (a.sourceUri === uri || a.sourceUri === request.path));
       if (asset && (asset.location === "text" || asset.location === "embedded" || asset.location === "remote"))
         target = {...request,path:asset.label ?? uri,asset};
       else if (asset) target = {...request,path:asset.value,scope:asset.location === "attachment" ? "attachment" : "project",...(asset.sourceUri ? {documentUri:asset.sourceUri} : {})};
       else if (documentUri && session.handoff?.files.some(f => f.path === "source/" + request.path))
         target = {...request,scope:"attachment"};
-      else target = {...request,path:uri};
+      else if (parent && !parent.asset && !documentUri && !/^(?:[\\/]|[a-z][\w+.-]*:)/i.test(request.path)) {
+        const directory = parent.path.replaceAll("\\","/").split("/").slice(0,-1);
+        for (const part of request.path.replaceAll("\\","/").split("/")) {
+          if (part === "." || !part) continue;
+          if (part === ".." && directory.length && directory.at(-1) !== "..") directory.pop();
+          else directory.push(part);
+        }
+        target = {...request,path:directory.join("/"),scope:parent.scope ?? "project"};
+      } else target = {...request,path:uri};
       if (origin) target.messageId = origin;
     }
     const key = tabKey(target);
-    scroll.delete(id + key);
+    if (target.line || target.quote) scroll.delete(id + key);
     update(previous => ({
       active:key,
-      tabs:[...previous.tabs.filter(tab => tab.key !== key),{key,target}],
+      tabs:previous.tabs.some(tab => tab.key === key) ? previous.tabs.map(tab => tab.key === key ? {key,target} : tab) : [...previous.tabs,{key,target}],
     }));
     onOpen();
   };
   const activate = (key:string) => update(previous => ({...previous,active:key}));
   const closeTab = (key:string) => update(previous => {
+    pages.delete(id + key);
     const tabs = previous.tabs.filter(tab => tab.key !== key);
     scroll.delete(id + key);
     return {tabs,active:key === previous.active ? tabs.at(-1)?.key ?? "" : previous.active};
   });
-  return <WorkspaceContext.Provider value={{state,activate,closeTab,open,scroll}}>
+  return <WorkspaceContext.Provider value={{state,activate,closeTab,open,scroll,pages}}>
     <FileContext.Provider value={open}>{children}</FileContext.Provider>
   </WorkspaceContext.Provider>;
 }
@@ -270,7 +288,7 @@ function conversationFiles(messages:ChatMessage[]) {
 export function FilePanel({session,messages,t,onClose,returnToDetails}: {
   session:UiSession; messages:ChatMessage[]; t:I18nMessages; onClose:() => void; returnToDetails?:() => void;
 }) {
-  const {state,activate,closeTab,open,scroll} = React.useContext(WorkspaceContext)!;
+  const {state,activate,closeTab,open,scroll,pages} = React.useContext(WorkspaceContext)!;
   const [project,setProject] = React.useState(false);
   const tab = state.tabs.find(item => item.key === state.active);
   const groups = React.useMemo(() => conversationFiles(messages),[messages]);
@@ -280,6 +298,7 @@ export function FilePanel({session,messages,t,onClose,returnToDetails}: {
     const el = pane.current;
     if (!el || !tab) return;
     const key = session.id + tab.key;
+    el.focus({preventScroll:true});
     const saved = scroll.get(key) ?? 0;
     if (!saved) return;
     const restore = () => { el.scrollTop = saved; if (el.scrollTop >= saved-1) observer.disconnect(); };
@@ -305,7 +324,8 @@ export function FilePanel({session,messages,t,onClose,returnToDetails}: {
       <div className="cv-file-heading"><span>{target.change ? t.historyDiff : target.asset || (target.scope && target.scope !== "project") ? t.archived : t.currentFile}</span>
         <code>{target.path}{target.line ? " · L" + target.line : ""}</code>
         {target.change && <button type="button" className="cv-action" onClick={() => open({path:target.path,scope:"project"})}>{t.openDisk}</button>}</div>
-      <div key={tab.key} className="cv-file-body" ref={pane} onScroll={event => scroll.set(session.id + tab.key,event.currentTarget.scrollTop)}>
+      <div key={tab.key} tabIndex={-1} aria-label={target.path} className="cv-file-body" ref={pane} onScroll={event => scroll.set(session.id + tab.key,event.currentTarget.scrollTop)}>
+        <RestorePosition.Provider value={(scroll.get(session.id+tab.key) ?? 0)>0}><ReadingPage.Provider value={{page:pages.get(session.id + tab.key) ?? 1,remember:page => pages.set(session.id + tab.key,page)}}>
         <FileContext.Provider value={request => open(request,target)}><div>
         {target.change ? <DiffPreview change={target.change} target={target} t={t}/> :
           target.asset ? target.asset.location === "text" ? target.asset.mediaType === "text/markdown" && !target.quote && !target.line
@@ -313,7 +333,7 @@ export function FilePanel({session,messages,t,onClose,returnToDetails}: {
             : <HistoricalText text={target.asset.value} target={target} t={t}/>
             : <AssetPreview url={target.asset.value} type={target.asset.mediaType} label={target.path} t={t}/>
           : <Preview sessionId={session.id} target={target} open={request => open(request,target)} t={t}/>}
-        </div></FileContext.Provider>
+        </div></FileContext.Provider></ReadingPage.Provider></RestorePosition.Provider>
       </div>
     </> : <>
       <div className="cv-file-switch"><button aria-pressed={!project} onClick={() => setProject(false)}>{t.sessionFiles}</button>

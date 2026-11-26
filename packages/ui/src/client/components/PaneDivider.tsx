@@ -11,7 +11,8 @@ interface PaneDividerProps {
 }
 
 export function PaneDivider({side,width,min,max,label,onResize,onSave}:PaneDividerProps) {
-  const drag = React.useRef<{x:number; width:number; value:number} | null>(null);
+  const listeners = React.useRef<AbortController | null>(null);
+  React.useEffect(() => () => listeners.current?.abort(),[]);
   const sign = side === "left" ? 1 : -1;
   const clamp = (n:number) => Math.min(max,Math.max(min,n));
   const commit = (value:number) => { onResize(value); onSave(value); };
@@ -25,16 +26,29 @@ export function PaneDivider({side,width,min,max,label,onResize,onSave}:PaneDivid
     }}
     onPointerDown={event => {
       if (event.button !== 0) return;
-      event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = {x:event.clientX,width,value:width};
-    }}
-    onPointerMove={event => {
-      if (!drag.current) return;
-      drag.current.value = clamp(drag.current.width + (event.clientX - drag.current.x) * sign);
-      onResize(drag.current.value);
-    }}
-    onLostPointerCapture={() => {
-      if (drag.current) onSave(drag.current.value);
-      drag.current = null;
+      event.preventDefault();
+      const divider = event.currentTarget;
+      divider.focus({preventScroll:true});
+      const origin = event.clientX, pointer = event.pointerId;
+      let current = width;
+      listeners.current?.abort();
+      const controller = new AbortController();
+      listeners.current = controller;
+      const options = {capture:true,signal:controller.signal};
+      const resize = (move:PointerEvent) => {
+        if (move.pointerId !== pointer) return;
+        current = clamp(width + (move.clientX - origin) * sign);
+        onResize(current);
+      };
+      const finish = () => {
+        controller.abort();
+        onSave(current);
+      };
+      window.addEventListener("pointermove",resize,options);
+      window.addEventListener("pointerup",up => {if (up.pointerId === pointer) {resize(up);finish();}},options);
+      window.addEventListener("pointercancel",cancel => {if (cancel.pointerId === pointer) finish();},options);
+      window.addEventListener("blur",finish,options);
+      if (divider.hasPointerCapture(pointer)) return;
+      try {divider.setPointerCapture(pointer);} catch { /* Window listeners still track desktop mouse input. */ }
     }}/>;
 }

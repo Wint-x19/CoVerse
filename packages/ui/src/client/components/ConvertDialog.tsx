@@ -24,6 +24,7 @@ export interface PendingImportSource {
   paths?: string[];
   files?: UploadedFilePayload[];
   originalCwd?: string;
+  target?:string;
 }
 
 interface ConvertDialogProps {
@@ -101,7 +102,8 @@ export function ConvertDialog({
 
         // Default target to same agent (no forced conversion; user may switch to any other agent)
         const enabledExport = adapters.filter((a) => a.enabled && a.capabilities.export);
-        if (detected && enabledExport.some((a) => a.id === detected)) {
+        if (source.target && enabledExport.some(a => a.id === source.target)) setTo(source.target);
+        else if (detected && enabledExport.some((a) => a.id === detected)) {
           setTo(detected);
         } else {
           const firstAvailable = drivers.find(
@@ -144,7 +146,7 @@ export function ConvertDialog({
 
   const handleConvert = async (event: React.SyntheticEvent, viewOnly=false) => {
     event.preventDefault();
-    if (!to || !source) return;
+    if (!to || !source || converting) return;
     setConverting(true);
     setError(null);
     try {
@@ -173,8 +175,8 @@ export function ConvertDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="convert-dialog" className="max-w-[480px]">
+    <Dialog open={open} onOpenChange={next => {if (!converting) onOpenChange(next);}}>
+      <DialogContent data-testid="convert-dialog" hideClose={converting} className="max-h-[90vh] max-w-[500px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isReferenceImport ? t.importSession : t.convertSession}</DialogTitle>
         </DialogHeader>
@@ -274,6 +276,7 @@ export function ConvertDialog({
                     <span className="text-[var(--text-primary)]">{inspectResult.preview.agentFormatVersion}</span>
                     <span>{t.turns(inspectResult.preview.turns)}</span>
                   </span>
+                  <span>{t.sourceLoss} · {(["dropped","downgraded","approximated"] as const).map(k => t[k] + " " + inspectResult.preview!.losses[k]).join(" · ")}</span>
                   {isReferenceImport && (
                     <span className="inline-flex items-center gap-1 text-[#3ecf8e]" data-testid="reference-indicator">
                       <Link2 className="h-3 w-3" />
@@ -294,7 +297,9 @@ export function ConvertDialog({
                 </div>
               )}
 
+              {!isReferenceImport && <p className="text-xs text-[var(--text-secondary)]">{materialize && targetDriver?.available ? t.expectedNative : t.expectedBundle}</p>}
               <div className="grid grid-cols-1 gap-2.5">
+                <details className="cv-options" open={error?.path === "/cwd" || undefined}><summary>{t.moreOptions}</summary>
                 <div className="flex items-center gap-1.5">
                   <Input
                     value={cwd}
@@ -328,6 +333,7 @@ export function ConvertDialog({
                   testId="convert-model-picker"
                 />
 
+                </details>
                 {!isReferenceImport &&
                   ((inspectResult?.preview?.opaqueBlocks && inspectResult.preview.opaqueBlocks.length > 0) ||
                     error?.code === "UNINTERPRETED_CONTENT") && (
@@ -396,7 +402,7 @@ export function ConvertDialog({
               catch (cause) { setError({code:"PICK_FAILED",path:"/files",message:String(cause),severity:"error"}); }
             }}>{t.addCompanions}</Button>}
             {inspectResult?.canReadPartial && <Button type="button" disabled={converting} onClick={e => void handleConvert(e,true)}>{t.readAvailable}</Button>}
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="ghost" disabled={converting} onClick={() => onOpenChange(false)}>
               {t.cancel}
             </Button>
             <Button

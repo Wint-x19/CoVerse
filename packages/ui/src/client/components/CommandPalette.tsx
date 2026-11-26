@@ -112,7 +112,7 @@ export function CommandPalette({
     const sessionItems: PaletteItem[] = sessions.map((session) => ({
       id: `session-${session.id}`,
       label: session.title,
-      meta: agentLabel(session.agent),
+      meta: agentLabel(session.agent) + " · " + session.cwd,
       icon: <AgentGlyph agent={session.agent} className="text-[var(--text-secondary)]" />,
       onSelect: () => {
         onSelectSession(session.id);
@@ -178,7 +178,7 @@ export function CommandPalette({
             autoFocus
             className="flex-1 bg-transparent text-[13.5px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
           />
-          <kbd className="font-mono text-[10.5px] text-[var(--text-tertiary)]">ESC</kbd>
+          <kbd className="max-w-[48%] truncate font-mono text-[10.5px] text-[var(--text-tertiary)]">ESC</kbd>
         </div>
 
         <div className="max-h-[300px] overflow-y-auto p-1.5">
@@ -199,7 +199,7 @@ export function CommandPalette({
                 {item.icon}
                 <span className="truncate">{item.label}</span>
               </span>
-              {item.meta && <span className="shrink-0 font-mono text-[11px] text-[var(--text-tertiary)]">{item.meta}</span>}
+              {item.meta && <span title={item.meta} className="max-w-[48%] truncate font-mono text-[11px] text-[var(--text-tertiary)]">{item.meta}</span>}
             </button>
           ))}
         </div>

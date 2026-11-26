@@ -14,7 +14,10 @@ interface StreamingState {
   tools: ToolActivity[];
 }
 
+export interface ReadingPosition {top:number; follow:boolean}
+
 interface ThreadViewProps {
+  positions:Map<string,ReadingPosition>;
   session: UiSession;
   branchId: string | undefined;
   selectBranch: (id:string) => void;
@@ -39,6 +42,8 @@ function ToolTrace({ tools, t }: { tools: ToolActivity[]; t: I18nMessages }) {
         <span>{t.toolCount(tools.length)}</span>
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
       </button>
+      {!open && tools.filter(tool => tool.state === "failed" || tool.results?.some(result => result.failed)).map((tool,index) =>
+        <p className="mt-1 text-xs text-red-500" key={index}>{tool.name} · {tool.results?.find(result => result.failed)?.text || tool.state}</p>)}
       {open && (
         <div className="mt-1.5 flex flex-col gap-1 border-l border-[var(--border-subtle)] pl-3">
           {tools.map((tool, index) => (
@@ -266,12 +271,39 @@ function TimelineMessage({message,t}: {message:ChatMessage;t:I18nMessages}) {
   </MessageOrigin.Provider>;
 }
 
-export function ThreadView({ session, branchId,selectBranch, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
-  const bottomRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [session.messages.length, streaming?.text.length, streaming?.reasoning.length, streaming?.tools.length]);
+export function ThreadView({ session, positions, branchId,selectBranch, streaming, t, onInspectHandoff,onOpenRelated }: ThreadViewProps) {
+  const scroller = React.useRef<HTMLDivElement>(null);
+  const follow = React.useRef(true);
+  const lastScroll = React.useRef(0);
+  const [showLatest,setShowLatest] = React.useState(false);
+  const toBottom = () => {
+    const el = scroller.current;
+    if (el) {el.scrollTop = el.scrollHeight;lastScroll.current = el.scrollTop;}
+    follow.current = true;
+    setShowLatest(false);
+  };
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    const saved = positions.get(session.id);
+    if (el && saved && !saved.follow) {
+      follow.current = false;
+      el.scrollTop = saved.top;
+      lastScroll.current = el.scrollTop;
+      setShowLatest(true);
+    } else toBottom();
+  },[session.id,positions]);
+  React.useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || !follow.current) return;
+    // A token can render after a scrollbar movement but before Chromium dispatches its scroll event.
+    if (el.scrollTop < lastScroll.current - 8 && el.scrollHeight - el.clientHeight - el.scrollTop > 36) {
+      follow.current = false;
+      setShowLatest(true);
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
+    lastScroll.current = el.scrollTop;
+  },[session.messages,streaming]);
 
   const handoff = session.handoff;
   const historicalMessages = session.messages.filter((m) => m.historical);
@@ -328,7 +360,16 @@ export function ThreadView({ session, branchId,selectBranch, streaming, t, onIns
     <JumpContext.Provider value={jump}>
     <RelatedContext.Provider value={onOpenRelated}>
     <BrowseContext.Provider value={selectBranch}>
-    <div className="flex-1 overflow-y-auto" data-testid="thread-view">
+    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div ref={scroller} className="flex-1 overflow-y-auto" data-testid="thread-view" onWheel={event => {
+      if (event.deltaY < 0) {follow.current=false;setShowLatest(true);}
+    }} onScroll={event => {
+      const el = event.currentTarget;
+      follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 36;
+      lastScroll.current = el.scrollTop;
+      positions.set(session.id,{top:el.scrollTop,follow:follow.current});
+      setShowLatest(!follow.current);
+    }}>
       <div className="mx-auto flex w-full max-w-[740px] flex-col gap-6 px-6 py-6">
         {branches.length > 1 && <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">{t.browseBranch}
           <select aria-label={t.browseBranch} className="max-w-[75%] rounded border bg-[var(--bg-surface)] p-1"
@@ -374,8 +415,10 @@ export function ThreadView({ session, branchId,selectBranch, streaming, t, onIns
           </div>
         )}
 
-        <div ref={bottomRef} />
+
       </div>
+    </div>
+    {showLatest && <button type="button" className="cv-jump" onClick={toBottom}>↓ {t.latest}</button>}
     </div>
     </BrowseContext.Provider></RelatedContext.Provider></JumpContext.Provider>
   );
